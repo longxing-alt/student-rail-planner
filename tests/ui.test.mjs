@@ -441,6 +441,20 @@ async function main() {
   A('自动排序后折返消失', !$('chainCheck').textContent.includes('回头路'));
   A('自动排序后联程合并=1次', $('totals').querySelector('.total-box .num').textContent.startsWith('1 /'));
 
+  G('T26. 区间优化: ⭐最优置顶 + 候选行写明具体路线');
+  await w.eval('renderOpt()');
+  const optRows = () => [...w.document.querySelectorAll('#optList .opt-row')];
+  const r0 = optRows()[0];
+  A('最优方案置顶(第一行含⭐)', r0.textContent.includes('⭐'));
+  A('第一行是最优候选', r0.querySelector('b').textContent.includes('⭐'));
+  A('候选行写明具体路线(学校→…→新家)', r0.textContent.includes('石家庄') && r0.textContent.includes('→'));
+  A('路线带学生票/全价标记', r0.textContent.includes('学生票') || r0.textContent.includes('全价'));
+  A('当前区间行也写具体路线', $('optCurrent').textContent.includes('→') && $('optCurrent').textContent.includes('学生票'));
+  await w.eval('setOptMode("near")');
+  A('离家最近视图下最优仍置顶', optRows()[0].textContent.includes('⭐'));
+  await w.eval('setOptMode("save")');
+  A('切回最省次数视图恢复', optRows()[0].textContent.includes('⭐'));
+
 
 
 

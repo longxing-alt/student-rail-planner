@@ -252,6 +252,10 @@ input[type=range]{width:100%;accent-color:var(--blue)}
 .opt-main{flex:1;min-width:160px}
 .opt-main b{font-size:13.5px}
 .opt-main .sub{font-size:11.5px;color:var(--muted)}
+.opt-route{font-size:12px;color:var(--muted);margin-top:2px;line-height:1.6}
+.opt-route .r-ok{color:#16a34a;font-weight:600}
+.opt-route .r-warn{color:#d97706;font-weight:600}
+.opt-route .r-bad{color:#dc2626;font-weight:600}
 .opt-meta{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 .opt-used{font-size:16px;font-weight:800;font-variant-numeric:tabular-nums}
 
@@ -1126,6 +1130,24 @@ function homePoint() {
   return null;
 }
 
+function chainRouteStr(S, cc) {
+  if (!cc) return null;
+  let s = esc(S.name);
+  cc.segs.forEach(sg => {
+    s += ' → ' + esc(sg.to) + (sg.inInt
+      ? '<span class="r-ok">✅ 学生票</span>'
+      : '<span class="r-bad">⚠️ 全价</span>');
+  });
+  return s;
+}
+function tripRouteStr(res) {
+  if (!res || !res.perTrip || !res.perTrip.length) return null;
+  const lbl = { direct: '直达', edge: '边缘', transfer: '中转', full: '全价' };
+  const cls = { direct: 'r-ok', edge: 'r-warn', transfer: 'r-ok', full: 'r-bad' };
+  return res.perTrip.map(tp =>
+    esc(tp.text || tp.name || '') + ' <span class="' + (cls[tp.plan.mode] || '') + '">' +
+    (lbl[tp.plan.mode] || tp.plan.mode) + '</span>').join(' · ');
+}
 function renderOpt() {
   if (!state.school || !state.home) return;
   const cur = evalAll();
@@ -1135,13 +1157,14 @@ function renderOpt() {
   for (const s of STATIONS) {
     const S = state.school.station;
     if (s[0] === S.name) continue;
-    let r;
+    let r, cc = null, res = null;
     if (state.chainMode) {
-      const cc = chainEval(S, stToObj(s), state.trips.map(t => t.station));
-      r = cc && cc.ok ? { used: state.chainRound ? 2 : 1, covered: 1, direct: 0, transfer: 1, fail: 0 }
+      cc = chainEval(S, stToObj(s), state.trips.map(t => t.station));
+      r = cc && cc.ok ? { used: state.chainRound ? 2 : 1, covered: state.trips.length, direct: 0, transfer: 1, fail: 0 }
         : { used: 0, covered: 0, direct: 0, transfer: 0, fail: 1 };
     } else {
-      r = evalWith(stToObj(s));
+      res = evalWith(stToObj(s));
+      r = res;
     }
     if (!r) continue;
     cands.push({
@@ -1149,6 +1172,7 @@ function renderOpt() {
       used: r.used, covered: r.covered, direct: r.direct, transfer: r.transfer, fail: r.fail,
       sameCity: state.home.station && s[1] === state.home.station.city,
       kmHome: homePt ? dist({ lat: s[2], lon: s[3] }, homePt) : NaN,
+      cc, res,
     });
   }
   const mode = state.optMode || 'save';
@@ -1164,16 +1188,22 @@ function renderOpt() {
   } else {
     list.sort((a, b) => ((b.sameCity ? 1 : 0) - (a.sameCity ? 1 : 0)) || (kmOf(a) - kmOf(b)));
   }
-  const top = list.slice(0, 8);
   const smart = smartBest();
   const smartName = smart ? smart.s[0] : null;
+  let top = list.slice(0, 8);
+  // ⭐ 最优方案固定置顶（任何视图下都排第一），其余按当前视图排序
+  const bestIdx = top.findIndex(c => c.st[0] === smartName);
+  if (bestIdx > 0) { const b = top.splice(bestIdx, 1)[0]; top = [b, ...top]; }
   const tabs = ['<div class="map-tools" style="margin-top:0">' +
     '<span class="lbl">排序视图：</span>' +
     tabBtn('save', '最省次数') + tabBtn('full', '覆盖全部') + tabBtn('near', '离家最近') + '</div>'];
   document.getElementById('optCurrent').innerHTML =
     '<div class="opt-row cur"><div class="opt-main"><b>🎯 当前区间</b>' +
     '<div class="sub">学校 ' + esc(state.school.station ? state.school.station.name + ' · ' + state.school.station.city : state.school.text) +
-    ' ↔ 家 ' + esc(state.home.station ? state.home.station.name + ' · ' + state.home.station.city : state.home.text) + '</div></div>' +
+    ' ↔ 家 ' + esc(state.home.station ? state.home.station.name + ' · ' + state.home.station.city : state.home.text) + '</div>' +
+    '<div class="opt-route">' + (state.chainMode
+      ? (chainRouteStr(state.school.station, chainEvalCurrent()) || '')
+      : (tripRouteStr(cur) || '')) + '</div></div>' +
     '<div class="opt-meta"><span class="opt-used num-blue">' + cur.used + ' 次</span>' +
     '<span class="chip chip-green">覆盖 ' + cur.covered + '/' + state.trips.length + '</span>' +
     '<span class="chip chip-blue">直达 ' + cur.direct + '</span><span class="chip chip-orange">中转 ' + cur.transfer + '</span>' +
@@ -1188,7 +1218,10 @@ function renderOpt() {
     return '<div class="opt-row ' + (isBest ? 'best' : '') + '">' +
       '<div class="opt-main"><b>' + (isBest ? '⭐ ' : '') + esc(c.st[0]) + ' · ' + esc(c.st[1]) + '</b>' +
       '<div class="sub">' + (c.sameCity ? '<span style="color:#6ee7b7">与家庭同城，可直接作为区间端点</span> · ' : '') +
-      '距家 ' + (isFinite(c.kmHome) ? Math.round(c.kmHome) : '—') + ' km</div></div>' +
+      '距家 ' + (isFinite(c.kmHome) ? Math.round(c.kmHome) : '—') + ' km</div>' +
+      '<div class="opt-route">' + (state.chainMode
+        ? (chainRouteStr(state.school.station, c.cc) || '')
+        : (tripRouteStr(c.res) || '')) + '</div></div>' +
       '<div class="opt-meta"><span class="opt-used ' + (c.used <= cur.used ? 'num-green' : 'num-red') + '">' + c.used + ' 次</span>' +
       diffBadge +
       '<span class="chip chip-green">覆盖 ' + c.covered + '/' + state.trips.length + '</span>' +
@@ -1206,7 +1239,13 @@ function setOptMode(m) { state.optMode = m; renderOpt(); }
 /* 智能最优：在不减少覆盖行程数的前提下，消耗次数最少；同次数取同城/最近 */
 function smartBest() {
   if (!state.school || !state.home || !state.trips.length) return null;
-  const cur = evalAll();
+  let cur;
+  if (state.chainMode) {
+    const cc = chainEvalCurrent();
+    cur = { covered: cc && cc.ok ? state.trips.length : 0, used: cc && cc.ok ? (state.chainRound ? 2 : 1) : 0 };
+  } else {
+    cur = evalAll();
+  }
   if (!cur) return null;
   const homePt = homePoint();
   let best = null;
@@ -1215,7 +1254,7 @@ function smartBest() {
     let r;
     if (state.chainMode) {
       const cc = chainEval(state.school.station, stToObj(s), state.trips.map(t => t.station));
-      r = cc && cc.ok ? { used: state.chainRound ? 2 : 1, covered: 1 } : { used: 0, covered: 0 };
+      r = cc && cc.ok ? { used: state.chainRound ? 2 : 1, covered: state.trips.length } : { used: 0, covered: 0 };
     } else {
       r = evalWith(stToObj(s));
     }
