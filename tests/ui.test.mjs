@@ -381,6 +381,20 @@ async function main() {
   await w.eval('state.touched = true; state.resultFloated = false; renderAll();');
   A('用户操作后完成匹配自动上浮', $('wsResult').classList.contains('float-up'));
 
+  G('T24. 未完成三步不显示结果区');
+  await w.eval('state.trips.forEach(t => removeTrip(t.id))');
+  await wait(300);
+  A('清空行程后结果区隐藏', $('totals').style.display === 'none' && $('chainPreview').style.display === 'none');
+  A('占位提示显示', $('resultPlaceholder').style.display === 'block');
+  await w.eval('setHomeFromStation("长沙南")');
+  $('schoolInput').value = '武汉';
+  await w.eval('searchPlace("school")');
+  $('tripInput').value = '岳阳';
+  await w.eval('addTrip()');
+  await wait(400);
+  A('完成三步后结果区恢复', $('totals').style.display !== 'none' && $('resultPlaceholder').style.display === 'none');
+
+
 
 
   G('T21. 引导对齐向导步骤');

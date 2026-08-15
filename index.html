@@ -425,6 +425,9 @@ footer b{color:var(--text)}
 
       <!-- 结果 -->
       <div class="ws-result" id="wsResult">
+        <div id="resultPlaceholder" style="display:none;text-align:center;padding:36px 10px;color:var(--muted);font-size:14px">
+          完成 <b>① 学校</b> → <b>② 家</b> → <b>③ 想去哪</b> 后<br>这里自动显示：✅ 能去哪 · 扣几次 · 怎么改
+        </div>
         <div class="ws-top">
           <div class="ws-used"><b id="usedBig">–</b><span>次 / 预算 <span id="budgetBig">4</span></span></div>
           <div class="hint" id="resultHint">设置区间并添加目的地后，这里实时计算。</div>
@@ -1652,6 +1655,12 @@ function chainAutoSort() {
 }
 
 function renderAll() {
+  // 完成三步(学校+家+至少一个地点)才显示结果区; 未完成只留占位
+  const done = state.school && state.school.station && state.home && state.home.station && state.trips.length > 0;
+  const resIds = ['demoTip', 'chainPreview', 'chainCheck', 'routeLine', 'totals', 'banners', 'tripRows', 'advice', 'casesBox'];
+  resIds.forEach(id => { const e = document.getElementById(id); if (e) e.style.display = done ? '' : 'none'; });
+  const ph = document.getElementById('resultPlaceholder');
+  if (ph) ph.style.display = done ? 'none' : 'block';
   // 演示提示：仅在仍是初始演示数据(武汉↔长沙南 + 岳阳/重庆)时展示，用户一改动即隐藏
   const demoTip = document.getElementById('demoTip');
   const isDemo =
