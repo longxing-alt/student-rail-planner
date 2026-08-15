@@ -139,7 +139,7 @@ input[type=range]{width:100%;accent-color:var(--blue)}
   .wz-step:hover{border-color:#d6d3d1}
   .wz-step.active{background:linear-gradient(135deg,#06b6d4,#10b981);color:#fff;border-color:transparent;transform:scale(1.05);box-shadow:0 3px 10px rgba(13,148,136,.3)}
   .wz-step.active b{color:#fff}
-  .wz-step.done{color:var(--green);border-color:rgba(22,163,74,.4)}
+  .wz-step.done{color:#0f766e;background:var(--blue-soft);border-color:rgba(13,148,136,.35)}
   .wz-done{display:none;font-weight:800}
   .wz-step.done .wz-done{display:inline}
   .wz-arrow{color:#d4d4d8;font-weight:700;transition:transform .3s}
@@ -166,15 +166,17 @@ input[type=range]{width:100%;accent-color:var(--blue)}
   .hot-chip.ok:hover{background:#dcfce7;border-color:#22c55e;color:#166534}
   .hot-chip.edge{color:#b45309;border-color:rgba(217,119,6,.4);background:var(--orange-soft)}
   .hot-chip.edge:hover{background:#fef3c7;border-color:#f59e0b;color:#92400e}
-  /* 站点胶囊链条 */
+  /* 站点进度条 */
+.route-chain{display:flex;align-items:flex-start;gap:0;padding:16px 4px 8px;justify-content:center}
+.rc-node{display:flex;flex-direction:column;align-items:center;gap:3px;width:76px;flex:none}
+.rc-dot{width:16px;height:16px;border-radius:50%;border:3px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.25);flex:none}
+.rc-dot.start{background:linear-gradient(135deg,#0ea5e9,#0d9488)}
+.rc-dot.mid{background:linear-gradient(135deg,#22d3ee,#0d9488)}
+.rc-dot.end{background:linear-gradient(135deg,#34d399,#059669)}
+.rc-name{font-size:12px;font-weight:700;white-space:nowrap;color:var(--text)}
+.rc-tag{font-size:9.5px;color:var(--muted)}
+.rc-seg{flex:1;min-width:24px;height:6px;border-radius:3px;margin:8px 2px 0}
 
-.route-chain{display:flex;align-items:center;gap:0;padding:16px 4px 6px;flex-wrap:wrap;justify-content:center}
-.chain-node{display:inline-flex;flex-direction:column;align-items:center;gap:2px;padding:8px 14px;border-radius:12px;font-size:13.5px;font-weight:700;color:#fff;white-space:nowrap;box-shadow:0 2px 8px rgba(0,0,0,.08)}
-.chain-node em{font-style:normal;font-size:10.5px;font-weight:600;opacity:.85}
-.chain-node.start{background:linear-gradient(135deg,#0ea5e9,#0d9488)}
-.chain-node.mid{background:linear-gradient(135deg,#22d3ee,#0d9488)}
-.chain-node.end{background:linear-gradient(135deg,#34d399,#059669)}
-.chain-seg{flex:1;min-width:26px;height:4px;border-radius:2px;margin:0 4px}
 .chain-seg-tip{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;margin:10px 0 4px}
 .seg-tip-item{font-size:12px;color:var(--muted);display:inline-flex;align-items:center;gap:5px}
 .seg-tip-item i{width:8px;height:8px;border-radius:50%;display:inline-block}
@@ -1234,10 +1236,10 @@ function renderChain() {
       const isStart = i === 0, isEnd = i === nodes.length - 1;
       const sg = segs2[i - 1];
       const segColor = sg ? (sg.inInt ? '#22c55e' : '#ef4444') : '#d4d4d8';
-      const nodeCls = isStart ? 'start' : isEnd ? 'end' : 'mid';
-      const nodeLabel = isStart ? '学校' : isEnd ? (state.chainEnd ? '终点' : '家') : '途经';
-      return (i > 0 ? '<span class="chain-seg" style="background:' + segColor + '"></span>' : '') +
-        '<span class="chain-node ' + nodeCls + '">' + esc(n.name) + '<em>' + nodeLabel + '</em></span>';
+      const dotCls = isStart ? 'start' : isEnd ? 'end' : 'mid';
+      const tag = isStart ? '学校' : isEnd ? (state.chainEnd ? '终点' : '家') : '途经';
+      return (i > 0 ? '<span class="rc-seg" style="background:' + segColor + '"></span>' : '') +
+        '<span class="rc-node"><span class="rc-dot ' + dotCls + '"></span><span class="rc-name">' + esc(n.name) + '</span><span class="rc-tag">' + tag + '</span></span>';
     }).join('') +
     '</div>' +
     '<div class="chain-seg-tip">' +
