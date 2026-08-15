@@ -124,7 +124,23 @@ input[type=range]{width:100%;accent-color:var(--blue)}
 .advice.good{background:var(--green-soft);border-color:rgba(22,163,74,.22);color:var(--green)}
 .advice b{color:var(--text)}
 
-/* 站点胶囊链条 */
+  /* 区间可视化线 */
+  .iv-box{margin:12px 0 4px}
+  .iv-line{display:flex;align-items:center;gap:10px}
+  .iv-node{font-size:13px;font-weight:700;white-space:nowrap;padding:6px 10px;border-radius:9px;color:#fff}
+  .iv-s{background:#4f46e5}.iv-h{background:#059669}
+  .iv-track{position:relative;flex:1;height:34px}
+  .iv-zone{position:absolute;top:50%;left:0;right:0;height:6px;transform:translateY(-50%);border-radius:3px;
+    background:linear-gradient(90deg,rgba(79,70,229,.25),rgba(5,150,105,.45))}
+  .iv-pt{position:absolute;top:50%;width:12px;height:12px;border-radius:50%;transform:translate(-50%,-50%);
+    border:2px solid #fff;box-shadow:0 1px 3px rgba(0,0,0,.3)}
+  .iv-legend{font-size:11.5px;color:var(--muted);margin-top:4px}
+  .hot-chip.ok{color:#15803d;border-color:rgba(22,163,74,.4);background:var(--green-soft)}
+  .hot-chip.ok:hover{background:#dcfce7;border-color:#22c55e;color:#166534}
+  .hot-chip.edge{color:#b45309;border-color:rgba(217,119,6,.4);background:var(--orange-soft)}
+  .hot-chip.edge:hover{background:#fef3c7;border-color:#f59e0b;color:#92400e}
+  /* 站点胶囊链条 */
+
 .route-chain{display:flex;align-items:center;gap:0;padding:16px 4px 6px;flex-wrap:wrap;justify-content:center}
 .chain-node{display:inline-flex;flex-direction:column;align-items:center;gap:2px;padding:8px 14px;border-radius:12px;font-size:13.5px;font-weight:700;color:#fff;white-space:nowrap;box-shadow:0 2px 8px rgba(0,0,0,.08)}
 .chain-node em{font-style:normal;font-size:10.5px;font-weight:600;opacity:.85}
@@ -322,6 +338,8 @@ footer b{color:var(--text)}
           </div>
         </div>
         <div class="hot-line"><span class="lbl">热门：</span><span id="quickChips"></span></div>
+        <div id="zoneCities" class="hot-line"></div>
+        <div id="intervalViz" class="iv-box"></div>
         <div class="chain-mini" id="chainControls" style="display:none">
           <span class="chain-tag">🔗 串联路线</span>
           <button class="btn btn-ghost btn-sm" onclick="chainAutoSort()">🪄 自动排序</button>
@@ -1216,7 +1234,7 @@ function renderChain() {
       : used > 0 ? '<div class="ok-banner">✅ 整条路线 ' + used + ' 次（' + (state.chainRound ? '往返' : '单程') + '），预算内可用，剩余 ' + remain + ' 次。</div>' : '') +
     (!ok ? '<div class="warn-banner">⚠️ 当前路线存在折返/超区间/绕行超标，12306 联程可能无法合并出票。请调整顺序或改用"独立行程"。</div>' : '');
   document.getElementById('tripRows').innerHTML = '';
-  document.getElementById('routeLine').innerHTML = '';
+  renderIntervalViz();
   renderAdvice();
   renderCases();
 }
@@ -1231,10 +1249,10 @@ document.addEventListener('click', () => {
 });
 /* ---------- 动画聚焦引导 ---------- */
 const GUIDE_STEPS = [
-  { sel: '#schoolInput', num: '1', title: '设置区间 · 学校', text: '填学校地址 —— <b>固定不动</b>（须与学信网一致）。', pos: 'bottom' },
-  { sel: '#homeInput', num: '2', title: '设置区间 · 家', text: '填"家" —— <b>12306 里可随便改、不限次数</b>，改完立即生效，这就是优化区间的钥匙。', pos: 'bottom' },
-  { sel: '#tripInput', num: '3', title: '添加想去的地方', text: '输入城市（或点下方<b>热门城市</b>）。支持"<b>天津→济南</b>"指定出发地，默认串成联程路线整条只扣 1 次。', pos: 'bottom' },
-  { sel: '#routeLine', num: '4', title: '看结果', text: '<b>🟢 绿=学生票</b>、🟠 橙=区间边缘（可能被查）、<b>🔴 红=全价</b>。下方建议告诉你"把家改到哪"，照做即可。', pos: 'top' },
+  { sel: '#schoolInput', num: '1', title: '填学校', text: '填你的学校，固定不动。', pos: 'bottom' },
+  { sel: '#homeInput', num: '2', title: '填家', text: '填你家（或想去的地方），可随便改。', pos: 'bottom' },
+  { sel: '#tripInput', num: '3', title: '加想去的地方', text: '点下面 <b>✅ 区间内可去</b> 的城市，或直接输入。', pos: 'bottom' },
+  { sel: '#intervalViz', num: '4', title: '看区间线', text: '🟢 绿=能去 · 🟠 橙=可能被查 · 🔴 红=不能。改"家"就能换一片绿。', pos: 'top' },
 ];
 let guideIdx = 0;
 function startGuide() {
@@ -1305,7 +1323,54 @@ function closeGuide() {
   try { sessionStorage.setItem('spr_guide_done', '1'); } catch (e) { }
 }
 
+/* ---------- 区间画图 + 区间内可去推荐 ---------- */
+function renderIntervalViz() {
+  const el = document.getElementById('intervalViz');
+  const S = state.school && state.school.station, H = state.home && state.home.station;
+  if (!S || !H) { el.innerHTML = ''; renderZoneCities(null, null); return; }
+  const L = dist(S, H);
+  const pts = state.trips.map(t => {
+    if (!t.station) return '';
+    const { t: tt } = corridor(S, H, t.station);
+    const left = Math.min(96, Math.max(4, (tt + 0.05) / 1.1 * 100));
+    const c = corridor(S, H, t.station);
+    const inCore = tt >= -0.05 && tt <= 1.05 && c.p <= Math.max(60, 0.32 * L);
+    const inEdge = !inCore && tt >= -0.5 && tt <= 1.5 && c.p <= Math.max(90, 0.45 * L);
+    const color = inCore ? '#22c55e' : inEdge ? '#f59e0b' : '#ef4444';
+    return '<span class="iv-pt" style="left:' + left + '%;background:' + color + '" title="' +
+      esc(t.station.name) + (inCore ? ' 区间内' : inEdge ? ' 边缘' : ' 超区间') + '"></span>';
+  }).join('');
+  el.innerHTML =
+    '<div class="iv-line"><span class="iv-node iv-s">🔒 ' + esc(S.name) + '</span>' +
+    '<span class="iv-track"><span class="iv-zone"></span>' + pts + '</span>' +
+    '<span class="iv-node iv-h">' + esc(H.name) + ' 🔓</span></div>' +
+    '<div class="iv-legend">🟢 区间内可去 · 🟠 边缘（可能被查）· 🔴 超区间</div>';
+  renderZoneCities(S, H, L);
+}
+function renderZoneCities(S, H, L) {
+  const el = document.getElementById('zoneCities');
+  if (!S || !H) { el.innerHTML = ''; return; }
+  const ok = [], edge = [];
+  for (const st of STATIONS) {
+    if (st[0] === S.name || st[0] === H.name) continue;
+    if (st[1] === S.city || st[1] === H.city) continue;
+    const P = { lat: st[2], lon: st[3] };
+    const { t: tt, p } = corridor(S, H, P);
+    const inCore = tt >= -0.05 && tt <= 1.05 && p <= Math.max(60, 0.32 * L);
+    const inEdge = !inCore && tt >= -0.5 && tt <= 1.5 && p <= Math.max(90, 0.45 * L);
+    if (inCore) ok.push(st); else if (inEdge) edge.push(st);
+  }
+  ok.sort((a, b) => ((b[4] ? 1 : 0) - (a[4] ? 1 : 0)));
+  edge.sort((a, b) => ((b[4] ? 1 : 0) - (a[4] ? 1 : 0)));
+  const okList = ok.slice(0, 6), edgeList = edge.slice(0, 2);
+  if (!okList.length && !edgeList.length) { el.innerHTML = ''; return; }
+  el.innerHTML = '<span class="lbl">✅ 区间内可去：</span>' +
+    okList.map(s => '<button class="hot-chip ok" onclick="quickAdd(\'' + s[1] + '\')">' + s[0] + '</button>').join('') +
+    (edgeList.length ? '<span class="lbl" style="margin-left:6px">⚠️ 边缘可试：</span>' +
+      edgeList.map(s => '<button class="hot-chip edge" onclick="quickAdd(\'' + s[1] + '\')">' + s[0] + '</button>').join('') : '');
+}
 /* ---------- 结果直线图：哪段学生票 / 哪段全价 ---------- */
+
 function renderRouteLine() {
   const el = document.getElementById('routeLine');
   if (!state.school || !state.home) { el.innerHTML = ''; return; }
@@ -1507,6 +1572,7 @@ function renderAll() {
     document.getElementById('tripRows').innerHTML = '';
     document.getElementById('routeLine').innerHTML = '';
     document.getElementById('advice').innerHTML = '';
+    renderIntervalViz();
     renderTrips();
     renderMap();
     return;
@@ -1522,6 +1588,7 @@ function renderAll() {
     '区间：<b>' + esc(state.school.station ? state.school.station.name : state.school.text) + '</b> ↔ <b>' +
     esc(state.home.station ? state.home.station.name : state.home.text) + '</b>';
   renderTotals(res);
+  renderIntervalViz();
   renderRouteLine();
   renderAdvice();
   renderCases();

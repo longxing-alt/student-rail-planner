@@ -239,13 +239,13 @@ async function main() {
   A('地图选点模式已移除', $all('.map-mode').length === 0 && !($all('.map-tools')[0] || {textContent:''}).textContent.includes('设学校'));
   A('首次访问 spotlight 引导显示', $('spotlight').style.display === 'block');
   await wait(450); // 等聚焦框动画定位(380ms)
-  A('第1步: 设置区间·学校', $('spotTitle').textContent.includes('设置区间') && $('spotText').textContent.includes('学校') && $('spotHole').style.width !== '');
+  A('第1步: 填学校', $('spotTitle').textContent.includes('填学校') && $('spotText').textContent.includes('学校') && $('spotHole').style.width !== '');
   await w.eval('nextSpot()');
   A('第2步: 家', $('spotTitle').textContent.includes('家'));
   await w.eval('nextSpot()');
   A('第3步: 添加目的地', $('spotTitle').textContent.includes('想去的地方'));
   await w.eval('nextSpot()');
-  A('第4步: 看结果(直线图)', $('spotTitle').textContent.includes('看结果'));
+  A('第4步: 看区间线', $('spotTitle').textContent.includes('看区间线'));
   A('最后一步显示完成按钮', $('spotDone').style.display !== 'none');
   await w.eval('closeGuide()');
   A('完成后 spotlight 隐藏', $('spotlight').style.display === 'none');
@@ -318,6 +318,25 @@ async function main() {
   await wait(400);
   A('案例渲染含超区间案例', $('casesInner').textContent.includes('超区间'));
   A('试买判断提示存在', $('advice').textContent.includes('先试买判断'));
+
+  G('T19. 区间画图 + 区间内可去推荐');
+  await w.eval('setChainMode(false)');
+  await w.eval('state.trips.forEach(t => removeTrip(t.id))');
+  await w.eval('setHomeFromStation("长沙南")');
+  $('schoolInput').value = '武汉';
+  await w.eval('searchPlace("school")');
+  await wait(400);
+  A('区间线渲染(学校/家节点)', $('intervalViz').innerHTML.includes('iv-line') && $('intervalViz').textContent.includes('武汉') && $('intervalViz').textContent.includes('长沙南'));
+  A('区间内可去推荐出现', $('zoneCities').innerHTML.includes('区间内可去') && $('zoneCities').querySelectorAll('.hot-chip').length > 0);
+  const chipCount = $('zoneCities').querySelectorAll('.hot-chip').length;
+  A('推荐城市≥2', chipCount >= 2, '实际 ' + chipCount);
+  // 模拟"不会用"的旅客: 点第一个推荐城市
+  const firstChip = $('zoneCities').querySelector('.hot-chip');
+  const cityName = firstChip.textContent;
+  await w.eval('quickAdd("' + cityName + '")');
+  await wait(400);
+  A('点推荐城市后行程出现', $all('.trip-row').length === 1 && $all('.trip-row')[0].textContent.includes(cityName));
+
 
   console.log(`\n结果: ${pass} 通过, ${fail} 失败`);
   process.exit(fail ? 1 : 0);
