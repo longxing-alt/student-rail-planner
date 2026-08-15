@@ -1288,7 +1288,7 @@ const GUIDE_STEPS = [
   { sel: '#schoolInput', num: '1', title: '填学校', text: '填你的学校，固定不动。', pos: 'bottom' },
   { sel: '#homeInput', num: '2', title: '填家', text: '填你家（或想去的地方），可随便改。', pos: 'bottom' },
   { sel: '#tripInput', num: '3', title: '加想去的地方', text: '点下面 <b>✅ 区间内可去</b> 的城市，或直接输入。', pos: 'bottom' },
-  { sel: '#intervalViz', num: '4', title: '看区间线', text: '🟢 绿=能去 · 🟠 橙=可能被查 · 🔴 红=不能。改"家"就能换一片绿。', pos: 'top' },
+  { sel: '#intervalViz', num: '4', title: '看区间线', text: '🟢 绿=能去 · 🟠 橙=可能被查 · 🔴 红=不能。改"家"就能换一片绿。', pos: 'bottom' },
 ];
 let guideIdx = 0;
 function startGuide() {
@@ -1321,14 +1321,17 @@ function showSpotStep() {
     state.guideStep = selStep[step.sel];
     renderWizard();
   }
+  // 聚焦目标: 输入行(更宽更准), 第4步为区间线容器
+  const target = (el.closest && el.closest('.input-row')) || el;
+  void target.offsetWidth; // 面板切换后强制同步布局, 避免旧 rect
   const hole = document.getElementById('spotHole');
   hole.style.opacity = 0; // 先隐藏, 精确定位后再淡入, 避免闪烁
   const place = () => {
-    const r = el.getBoundingClientRect();
-    hole.style.left = (r.left - 10) + 'px';
-    hole.style.top = (r.top - 10) + 'px';
-    hole.style.width = (r.width + 20) + 'px';
-    hole.style.height = (r.height + 20) + 'px';
+    const r = target.getBoundingClientRect();
+    hole.style.left = (r.left - 12) + 'px';
+    hole.style.top = (r.top - 12) + 'px';
+    hole.style.width = (r.width + 24) + 'px';
+    hole.style.height = (r.height + 24) + 'px';
     hole.style.opacity = 1;
     const card = document.getElementById('spotCard');
     const above = step.pos === 'top';
@@ -1339,9 +1342,10 @@ function showSpotStep() {
     void card.offsetWidth; // 重启动画
     card.style.animation = '';
   };
-  const r0 = el.getBoundingClientRect();
+  // 面板已切换, 此时测量才是真实位置
+  const r0 = target.getBoundingClientRect();
   const inView = r0.top >= 40 && r0.bottom <= (window.innerHeight || 900) - 40;
-  if (inView) { place(); } else { scrollToElSettled(el, place); }
+  if (inView) { place(); } else { scrollToElSettled(target, place); }
   document.getElementById('spotTitle').innerHTML =
     '<span class="st-num">' + step.num + '</span>' + step.title;
   document.getElementById('spotText').innerHTML = step.text;
