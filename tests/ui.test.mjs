@@ -307,6 +307,20 @@ async function main() {
   A('终点标签更新', $('chainEndLabel').textContent.includes('广州'));
   await w.eval('state.chainEnd = null; renderAll();');
 
+  G('T18. 案例库');
+  const caseCount = await w.eval('REAL_CASES.length');
+  A('案例库 15 条', caseCount >= 15, '实际 ' + caseCount);
+  await w.eval('setChainMode(false)');
+  await w.eval('state.trips.forEach(t => removeTrip(t.id))');
+  await w.eval('setHomeFromStation("济南西")');
+  $('schoolInput').value = '崇左南';
+  await w.eval('searchPlace("school")');
+  $('tripInput').value = '天津→济南';
+  await w.eval('addTrip()');
+  await wait(400);
+  A('案例渲染含超区间案例', $('advice').textContent.includes('超区间'));
+  A('试买判断提示存在', $('advice').textContent.includes('先试买判断'));
+
   console.log(`\n结果: ${pass} 通过, ${fail} 失败`);
   process.exit(fail ? 1 : 0);
 }
