@@ -361,6 +361,20 @@ async function main() {
   A('回点步骤0 学校面板恢复', $all('.wz-panel')[0].style.display !== 'none');
   await w.eval('setGuideStep(2)');
 
+  G('T21. 引导对齐向导步骤');
+  await w.eval('startGuide()');
+  await wait(450);
+  A('引导第1步: 学校面板可见', $all('.wz-panel')[0].style.display !== 'none');
+  await w.eval('nextSpot()');
+  await wait(450);
+  A('引导第2步: 家面板自动切换可见', $all('.wz-panel')[1].style.display !== 'none', $all('.wz-panel')[1].style.display);
+  A('聚焦框已定位(非0宽)', $('spotHole').style.width !== '' && $('spotHole').style.width !== '0px');
+  await w.eval('nextSpot()');
+  await wait(450);
+  A('引导第3步: 目的地面板可见', $all('.wz-panel')[2].style.display !== 'none');
+  await w.eval('closeGuide()');
+
+
 
 
   console.log(`\n结果: ${pass} 通过, ${fail} 失败`);
