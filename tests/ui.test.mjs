@@ -289,7 +289,7 @@ async function main() {
   $('tripInput').value = '长沙';
   await w.eval('addTrip()');
   await wait(300);
-  A('5天规则提示存在(日历天)', $('chainControls').textContent.includes('5 个日历天'));
+  A('5天规则提示存在(日历天)', $('fiveDayTip').style.display === 'block' && $('fiveDayTip').textContent.includes('5 个日历天'));
   A('默认单程(串联)', $('chainRoundLabel').textContent.includes('单程'));
   const firstId = await w.eval('state.trips[0].id');
   const secondId = await w.eval('state.trips[1].id');
