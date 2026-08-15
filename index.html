@@ -205,9 +205,13 @@
   /* ---------- 出行计划 ---------- */
   .trip-add{display:flex;gap:8px;margin-bottom:14px}
   .chips-quick{display:flex;gap:7px;flex-wrap:wrap;margin-bottom:16px}
-  .trip-row{display:flex;align-items:center;gap:12px;padding:11px 13px;border:1px solid var(--line);
+  .trip-row{display:flex;align-items:center;gap:9px;padding:9px 11px;border:1px solid var(--line);
             border-radius:12px;background:#fafafa;margin-bottom:8px;flex-wrap:wrap;transition:border-color .15s,background .15s}
   .trip-row:hover{border-color:#d6d3d1;background:#fff}
+  .drag-handle{color:#d4d4d8;cursor:grab;font-size:14px;user-select:none;flex:none;padding:0 2px}
+  .drag-handle:hover{color:#a1a1aa}
+  .trip-row.drag-over{border-color:#6366f1;background:#eef2ff;box-shadow:0 0 0 2px rgba(99,102,241,.25)}
+  .trip-row[draggable="true"]{cursor:grab}
   .trip-idx{width:22px;height:22px;border-radius:7px;display:grid;place-items:center;font-size:11.5px;font-weight:700;
             background:var(--accent-soft);color:#4338ca;flex:none}
   .trip-main{flex:1;min-width:150px}
@@ -410,7 +414,7 @@
                 <span class="sw-label" id="chainRoundLabel">单程 = 1次</span>
               </label>
             </div>
-            <div id="chainPreview" style="font-size:13px;line-height:1.9"></div>
+            <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px"><span style="font-size:12.5px;color:var(--muted)">终点（不去家就改成想去的地方）：</span><b id="chainEndLabel" style="font-size:13px">家</b><button class="btn btn-ghost btn-sm" onclick="setChainEnd()">✏️ 改终点</button></div><div style="font-size:12px;color:#9a3412;background:rgba(251,146,60,.08);border:1px solid rgba(251,146,60,.3);border-radius:10px;padding:7px 10px;margin-bottom:8px">⏱ <b>联程 5 天规则</b>：整段行程从<b>出发日</b>到<b>结束日</b>必须在 <b>5 个日历天</b>内完成（按天数算，不是按 120 小时算）——跨天即算一天。</div><div id="chainPreview" style="font-size:13px;line-height:1.9"></div>
             <div id="chainCheck" style="font-size:12.5px;margin-top:6px;color:var(--muted)"></div>
           </div>
           <div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap;align-items:center" id="batchBtns">
@@ -661,6 +665,7 @@ const state = {
   optMode: 'save',
   optBestName: null,
   chainMode: true,    // 联程默认: 多个目的地按顺序串成一条联程路线(整条1次)
+  chainEnd: null,     // 串联路线终点(默认=家, 可改为任意想去的地方)
   chainRound: false,  // 串联模式下整条路线: 单程=1次 / 往返=2次
   _tid: 0,
 };
@@ -809,7 +814,8 @@ function chainEval(S, H, stList) {
   };
 }
 function chainEvalCurrent() {
-  return chainEval(state.school && state.school.station, state.home && state.home.station, state.trips.map(t => t.station));
+  const end = state.chainEnd || (state.home && state.home.station);
+  return chainEval(state.school && state.school.station, end, state.trips.map(t => t.station));
 }
 // ==== PURE LOGIC END ====
 
@@ -1017,56 +1023,80 @@ function renderTotals(res) {
 function renderTrips() {
   const el = document.getElementById('tripList');
   if (!state.trips.length) { el.innerHTML = '<div style="color:var(--muted);font-size:13px;padding:6px 2px">还没有行程，添加或点击下方热门城市 👇</div>'; return; }
+  const row = (tp, i, main, chip, extra) =>
+    '<div class="trip-row fade-in" draggable="true" ondragstart="tripDragStart(event,' + tp.id + ')" ondragover="tripDragOver(event,' + tp.id + ')" ondrop="tripDrop(event,' + tp.id + ')" ondragend="tripDragEnd()">' +
+    '<div class="drag-handle" title="拖动排序">≡</div>' +
+    '<div class="trip-idx">' + (i + 1) + '</div>' +
+    '<div class="trip-main">' + main + '</div>' + chip + extra + '</div>';
   if (state.chainMode) {
     const c = chainEvalCurrent();
     el.innerHTML = state.trips.map((tp, i) => {
       const seg = c ? c.segs[i] : null;
-      return '<div class="trip-row fade-in">' +
-        '<div class="trip-idx">' + (i + 1) + '</div>' +
-        '<div class="trip-main"><b>' + esc(tp.text) + '</b>' +
-        '<div class="sub">车站：' + esc(tp.station ? tp.station.name + ' · ' + tp.station.city : '坐标点') +
-        (seg ? ' · 本段 ' + seg.km + ' km' : '') + '</div></div>' +
-        '<span class="chip ' + (seg && seg.inInt ? 'chip-green' : 'chip-red') + '">' + (seg && seg.inInt ? '✓ 区间内' : '⚠ 区间外') + '</span>' +
-        '<button class="btn btn-ghost btn-sm" title="上移" onclick="moveTrip(' + tp.id + ',-1)">↑</button>' +
-        '<button class="btn btn-ghost btn-sm" title="下移" onclick="moveTrip(' + tp.id + ',1)">↓</button>' +
-        '<button class="btn btn-ghost btn-sm" title="设置出发地" onclick="editFrom(' + tp.id + ')">✈️</button>' +
-      '<button class="btn btn-ghost btn-sm" onclick="panTo(' + i + ')">📍</button>' +
-        '<button class="btn btn-danger btn-sm" onclick="removeTrip(' + tp.id + ')">✕</button></div>';
+      const prev = i === 0 ? (state.school && state.school.station ? state.school.station.name : '学校') : state.trips[i - 1].station.name;
+      const main = '<b>' + esc(tp.text) + '</b>' +
+        '<div class="sub">' + esc(prev) + ' → ' + esc(tp.station ? tp.station.name : '坐标点') + (seg ? ' · ' + seg.km + ' km' : '') + '</div>';
+      const chip = '<span class="chip ' + (seg && seg.inInt ? 'chip-green' : 'chip-red') + '">' + (seg && seg.inInt ? '✓ 区间内' : '⚠ 区间外') + '</span>';
+      return row(tp, i, main, chip,
+        '<button class="btn btn-ghost btn-sm" onclick="panTo(' + i + ')">📍</button>' +
+        '<button class="btn btn-danger btn-sm" onclick="removeTrip(' + tp.id + ')">✕</button>');
     }).join('');
     return;
   }
+  const res = evalAll();
   el.innerHTML = state.trips.map((tp, i) => {
-    const res = evalAll();
     const t = res.perTrip[i];
     const p = t.plan;
-    const badge = p.mode === 'direct' ? '<span class="chip chip-blue">直达 · 1次/单程</span>'
-      : p.mode === 'transfer' ? '<span class="chip chip-orange">中转 经' + esc(p.station.name) + ' · 1次/单程</span>'
-      : '<span class="chip chip-red">全价 · 0次</span>';
-    return '<div class="trip-row fade-in">' +
-      '<div class="trip-idx">' + (i + 1) + '</div>' +
-      '<div class="trip-main"><b>' + esc(tp.text) + '</b>' +
-      '<div class="sub">' + (tp.from
-        ? '出发：' + esc(tp.from.name) + ' → 目的地：' + esc(tp.station ? tp.station.name + ' · ' + tp.station.city : '坐标点')
-        : '车站：' + esc(tp.station ? tp.station.name + ' · ' + tp.station.city : '坐标点')) +
-      ' · 直达里程 ' + Math.round(p.direct) + ' km</div></div>' +
-      badge +
+    const badge = p.mode === 'direct' ? '<span class="chip chip-green">✓ 直达</span>'
+      : p.mode === 'transfer' ? '<span class="chip chip-blue">中转 经' + esc(p.station.name) + '</span>'
+      : '<span class="chip chip-red">✕ 全价</span>';
+    const fromName = tp.from ? tp.from.name : (state.school && state.school.station ? state.school.station.name : '学校');
+    const main = '<b>' + esc(tp.text) + '</b>' +
+      '<div class="sub">' + esc(fromName) + ' → ' + esc(tp.station ? tp.station.name : '坐标点') + ' · ' + Math.round(p.direct) + ' km</div>';
+    const chip = badge +
       '<span class="chip ' + (t.used === 0 ? 'chip-red' : 'chip-violet') + '">' + t.used + ' 次</span>' +
       '<label class="switch" title="点击切换 往返/单程">' +
       '<input type="checkbox" ' + (tp.round ? 'checked' : '') + ' onchange="toggleRound(' + tp.id + ')">' +
       '<span class="bar"></span>' +
-      '<span class="sw-label">' + (tp.round ? '往返 = 2次' : '单程 = 1次') + '</span></label>' +
+      '<span class="sw-label">' + (tp.round ? '往返×2' : '单程×1') + '</span></label>';
+    return row(tp, i, main, chip,
+      '<button class="btn btn-ghost btn-sm" title="设置出发地" onclick="editFrom(' + tp.id + ')">✈️</button>' +
       '<button class="btn btn-ghost btn-sm" onclick="panTo(' + i + ')">📍</button>' +
-      '<button class="btn btn-danger btn-sm" onclick="removeTrip(' + tp.id + ')">✕</button></div>';
+      '<button class="btn btn-danger btn-sm" onclick="removeTrip(' + tp.id + ')">✕</button>');
   }).join('');
 }
 
-/* 家的有效坐标：优先 point，非法时回退车站坐标，避免 NaN 渲染 */
+/* ---------- 拖拽排序 ---------- */
+let dragId = null;
+function tripDragStart(e, id) { dragId = id; if (e.dataTransfer) e.dataTransfer.effectAllowed = 'move'; }
+function tripDragOver(e, id) {
+  e.preventDefault();
+  if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
+  document.querySelectorAll('.trip-row').forEach(r => r.classList.remove('drag-over'));
+  if (e.currentTarget) e.currentTarget.classList.add('drag-over');
+}
+function tripDrop(e, id) {
+  e.preventDefault();
+  document.querySelectorAll('.trip-row').forEach(r => r.classList.remove('drag-over'));
+  if (dragId == null || dragId === id) { dragId = null; return; }
+  const i = state.trips.findIndex(t => t.id === dragId);
+  const j = state.trips.findIndex(t => t.id === id);
+  if (i < 0 || j < 0) { dragId = null; return; }
+  const [item] = state.trips.splice(i, 1);
+  state.trips.splice(j, 0, item);
+  dragId = null;
+  renderAll();
+}
+function tripDragEnd() {
+  dragId = null;
+  document.querySelectorAll('.trip-row').forEach(r => r.classList.remove('drag-over'));
+}
+
 function homePoint() {
   const h = state.home;
   if (!h) return null;
-  const p = h.point, s = h.station;
+  const p = h.point, st = h.station;
   if (p && isFinite(p.lat) && isFinite(p.lon)) return { lat: +p.lat, lon: +p.lon };
-  if (s && isFinite(s.lat) && isFinite(s.lon)) return { lat: +s.lat, lon: +s.lon };
+  if (st && isFinite(st.lat) && isFinite(st.lon)) return { lat: +st.lat, lon: +st.lon };
   return null;
 }
 
@@ -1182,10 +1212,11 @@ function renderChain() {
   const ok = !!(c && c.ok);
   const used = ok ? (state.chainRound ? 2 : 1) : 0;
   const remain = state.budget - used;
-  // 路线预览
-  const names = [S.name, ...state.trips.map(t => t.station.name), H.name];
+  const end = state.chainEnd || H;
+  const names = [S.name, ...state.trips.map(t => t.station.name), end.name];
   document.getElementById('chainPreview').innerHTML =
     '<b style="color:var(--text)">' + names.map(n => esc(n)).join(' → ') + '</b>';
+  document.getElementById('chainEndLabel').textContent = state.chainEnd ? state.chainEnd.name + '（' + state.chainEnd.city + '）' : '家';
   // 校验明细
   let check = '';
   if (!c) {
@@ -1408,6 +1439,17 @@ function renderAdvice() {
     '<div class="advice ' + (allGood ? 'good' : '') + '">💡 ' + t + '</div>').join('');
 }
 
+function setChainEnd() {
+  const cur = state.chainEnd ? state.chainEnd.name : (state.home && state.home.station ? state.home.station.name : '家');
+  const q = (window.prompt ? window.prompt('终点城市（留空 = 家）：', cur) : '') || '';
+  if (!q.trim()) { state.chainEnd = null; renderAll(); return; }
+  resolvePlace(q.trim()).then(rf => {
+    if (!rf) { setStatus('❌ 未能解析终点 "' + q.trim() + '"'); return; }
+    state.chainEnd = rf.station || { name: rf.label, lat: rf.point.lat, lon: rf.point.lon };
+    setStatus('终点已设为：' + state.chainEnd.name);
+    renderAll();
+  });
+}
 function setChainMode(on) {
   state.chainMode = !!on;
   document.querySelectorAll('.mode-btn').forEach(b => b.classList.toggle('active', b.dataset.mode === (on ? 'chain' : 'solo')));
@@ -1525,7 +1567,7 @@ async function addTrip() {
     if (!rf) { setStatus('❌ 未能解析出发地 "' + fromQ + '"'); return; }
     from = rf.station || { name: rf.label, lat: rf.point.lat, lon: rf.point.lon };
   }
-  state.trips.push({ id: ++state._tid, text: q, from, point: r.point, station: r.station, round: true });
+  state.trips.push({ id: ++state._tid, text: q, from, point: r.point, station: r.station, round: false }); // 默认单程
   document.getElementById('tripInput').value = '';
   setStatus('✅ 已添加：' + (from ? fromQ + ' → ' : '') + toQ + (from ? '（自定义出发地）' : ''));
   renderAll();
@@ -1545,7 +1587,7 @@ function editFrom(id) {
 }
 function addTripWith(pt, station) {
   const nm = station ? station.name + ' · ' + station.city : pt.lat.toFixed(2) + ',' + pt.lng.toFixed(2);
-  state.trips.push({ id: ++state._tid, text: nm, point: { lat: pt.lat, lon: pt.lng }, station, round: true });
+  state.trips.push({ id: ++state._tid, text: nm, point: { lat: pt.lat, lon: pt.lng }, station, round: false });
   setStatus('✅ 已添加目的地：' + nm);
   renderAll();
   fitAll();
@@ -1603,7 +1645,7 @@ function initQuickChips() {
 async function quickAdd(city) {
   const r = await resolvePlace(city);
   if (!r) return;
-  state.trips.push({ id: ++state._tid, text: city, point: r.point, station: r.station, round: true });
+  state.trips.push({ id: ++state._tid, text: city, point: r.point, station: r.station, round: false });
   renderAll(); fitAll();
 }
 function bindEvents() {

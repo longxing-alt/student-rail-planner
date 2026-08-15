@@ -61,10 +61,13 @@ const G = name => console.log(`\n== ${name} ==`);
 function syncTripsToLogic() {
   state.trips = $all('.trip-row').map((row, i) => {
     const text = row.querySelector('.trip-main b').textContent;
-    const sub = row.querySelector('.trip-main .sub').textContent; // "车站：北京西 · 北京 · ..."
-    const stName = sub.split('车站：')[1] ? sub.split('车站：')[1].split(' · ')[0] : null;
-    const st = ST[stName] ? o(stName) : null;
-    return { id: i + 1, text, station: st, round: row.querySelector('.switch input').checked };
+    const sub = row.querySelector('.trip-main .sub').textContent; // "武汉 → 岳阳东 · 181 km"
+    let stName = null;
+    const arrow = sub.split(' → ');
+    if (arrow.length >= 2) stName = arrow[1].split(' · ')[0];
+    const st = stName && ST[stName] ? o(stName) : null;
+    const sw = row.querySelector('.switch input');
+    return { id: i + 1, text, station: st, round: sw ? sw.checked : false };
   });
   return state.trips;
 }
@@ -119,7 +122,7 @@ async function main() {
   A('UI 总计=逻辑总计', pageUsed() === exp3.used, `${pageUsed()} vs ${exp3.used}`);
   A('结果提示含 贵阳北', $('resultHint').textContent.includes('贵阳北'));
 
-  G('T4. 添加行程 成都(往返)');
+  G('T4. 添加行程 成都(默认单程)');
   $('tripInput').value = '成都';
   await w.eval('addTrip()');
   A('行程行=3(演示2+成都)', $all('.trip-row').length === 3, $all('.trip-row').length);
@@ -133,8 +136,8 @@ async function main() {
   G('T5. 切换成都 → 单程');
   await w.eval('toggleRound(' + state.trips.find(t => t.text === '成都').id + ')');
   syncTripsToLogic(); const exp5 = evalWith(o('贵阳北'));
-  A('UI 总计=逻辑总计(往返→单程 少一次)', pageUsed() === exp5.used, `${pageUsed()} vs ${exp5.used}`);
-  A('成都行显示 单程', $all('.trip-row')[2].querySelector('.switch').textContent.includes('单程'));
+  A('UI 总计=逻辑总计(单程→往返 多一次)', pageUsed() === exp5.used, `${pageUsed()} vs ${exp5.used}`);
+  A('默认单程, 切换后显示 往返', $all('.trip-row')[2].querySelector('.switch').textContent.includes('往返'));
 
   G('T6. 删除成都');
   await w.eval('removeTrip(' + state.trips.find(t => t.text === '成都').id + ')');
@@ -260,12 +263,12 @@ async function main() {
   A('添加成功', !!lr && lr.text === '天津→济南', lr && lr.text);
   A('出发地已解析为天津站', lr && lr.from && lr.from.name === '天津', lr && lr.from && lr.from.name);
   A('目的地为济南西', lr && lr.station && lr.station.name === '济南西', lr && lr.station && lr.station.name);
-  A('行程行显示出发地', $all('.trip-row').at(-1).textContent.includes('出发：天津'));
+  A('行程行显示出发地', $all('.trip-row').at(-1).textContent.includes('天津 → 济南'));
   await w.eval('removeTrip(' + lr.id + ')');
   $('tripInput').value = '济南';
   await w.eval('addTrip()');
   await wait(300);
-  A('无出发地行程默认从学校出发', $all('.trip-row').at(-1).textContent.includes('车站：') && !$all('.trip-row').at(-1).textContent.includes('出发：'));
+  A('无出发地行程默认从学校出发', $all('.trip-row').at(-1).textContent.includes('北京西 → 济南'));
   const tid = await w.eval('state.trips.at(-1).id');
   await w.eval('removeTrip(' + tid + ')');
   $('tripInput').value = '济南';
@@ -278,6 +281,30 @@ async function main() {
   const fromName = await w.eval('state.trips.find(t => t.id === ' + tid2 + ').from && state.trips.find(t => t.id === ' + tid2 + ').from.name');
   A('editFrom 设置出发地郑州', fromName === '郑州东', fromName);
   await w.eval('removeTrip(' + tid2 + ')');
+
+  G('T17. 拖拽排序 + 串联终点 + 5天规则');
+  await w.eval('state.chainRound = false; setChainMode(true)');
+  await w.eval('state.trips.forEach(t => removeTrip(t.id))');
+  $('tripInput').value = '郑州';
+  await w.eval('addTrip()');
+  $('tripInput').value = '长沙';
+  await w.eval('addTrip()');
+  await wait(300);
+  A('5天规则提示存在(日历天)', $('chainControls').textContent.includes('5 个日历天'));
+  A('默认单程(串联)', $('chainRoundLabel').textContent.includes('单程'));
+  const firstId = await w.eval('state.trips[0].id');
+  const secondId = await w.eval('state.trips[1].id');
+  await w.eval('tripDragStart({}, ' + firstId + ')');
+  await w.eval('tripDrop({preventDefault(){}}, ' + secondId + ')');
+  A('拖拽后顺序反转(长沙在前)', (await w.eval('state.trips[0].text')) === '长沙');
+  w.prompt = () => '广州';
+  await w.eval('setChainEnd()');
+  await wait(400);
+  const endName = await w.eval('state.chainEnd && state.chainEnd.name');
+  A('终点可改为广州(不去家)', endName === '广州南', endName);
+  A('预览含广州终点', $('chainPreview').textContent.includes('广州'));
+  A('终点标签更新', $('chainEndLabel').textContent.includes('广州'));
+  await w.eval('state.chainEnd = null; renderAll();');
 
   console.log(`\n结果: ${pass} 通过, ${fail} 失败`);
   process.exit(fail ? 1 : 0);
