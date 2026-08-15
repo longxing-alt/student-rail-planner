@@ -92,7 +92,7 @@ async function main() {
   A('默认串联模式开启', $('chainControls').style.display === 'block', $('chainControls').style.display);
   A('行程行=2(岳阳+重庆)', $all('.trip-row').length === 2, $all('.trip-row').length);
   A('串联: 路线不可合并(重庆超区间) → 0次', pageUsed() === 0);
-  A('直线图渲染(含红色全价段)', $('routeLine').innerHTML.includes('route-bar') && $('routeLine').innerHTML.includes('#ef4444'));
+  A('胶囊链条渲染(含红色超区间段)', $('chainPreview').innerHTML.includes('route-chain') && $('chainPreview').innerHTML.includes('#ef4444'));
   A('建议条: 提示把家改到重庆', $('advice').textContent.includes('改到') && $('advice').textContent.includes('重庆'));
   A('优化候选=9(当前+8)', $all('.opt-row').length === 9, $all('.opt-row').length);
   A('页面无 NaN/undefined', !visibleBadText());

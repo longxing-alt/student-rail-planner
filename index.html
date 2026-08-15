@@ -313,11 +313,12 @@ footer b{color:var(--text)}
             </div>
           </div>
           <div class="ws-field">
-            <label>想去的地方 <span id="planHint" style="font-weight:400;color:var(--muted);font-size:11.5px"></span></label>
+            <label>想去的地方</label>
             <div class="input-row">
               <input id="tripInput" type="text" placeholder="北京 / 天津→济南 / 从武汉到长沙">
               <button class="btn btn-primary" onclick="addTrip()">添加</button>
             </div>
+            <div id="planHint" style="font-size:11.5px;color:var(--muted);margin-top:5px"></div>
           </div>
         </div>
         <div class="hot-line"><span class="lbl">热门：</span><span id="quickChips"></span></div>
@@ -1186,12 +1187,11 @@ function renderChain() {
   if (!c) {
     check = '请先添加目的地。';
   } else {
-    check = c.segs.map((s, i) =>
-      (i + 1) + '. ' + esc(s.from) + ' → ' + esc(s.to) + '：' + s.km + ' km ' +
-      (s.inInt ? '<span style="color:#16a34a">✅ 学生票</span>' : '<span style="color:#c2410c">⚠️ 超区间</span>')).join('<br>');
+    const okN = c.segs.filter(x => x.inInt).length;
+    const badN = c.segs.length - okN;
+    check = '<b>' + okN + ' 段学生票 · ' + badN + ' 段超区间</b> · 全程 ' + c.total + ' km';
     if (c.foldback) check += '<br><span style="color:#c2410c">⚠️ 路线走了回头路，12306 联程不会合并——调整顺序</span>';
     if (c.maxRatio > state.ratio) check += '<br><span style="color:#c2410c">⚠️ 绕路太多（' + c.maxRatio + '×），购票会提示"区间不符"——减少绕路或改家到中间城市</span>';
-    check += '<br>全程 ' + c.total + ' km';
   }
   document.getElementById('chainCheck').innerHTML = check;
   // 往返开关同步
@@ -1200,8 +1200,7 @@ function renderChain() {
   document.getElementById('chainRoundLabel').textContent = state.chainRound ? '往返 = 2次' : '单程 = 1次';
   // 总计
   document.getElementById('resultHint').innerHTML =
-    '🔗 串联路线：整条路线按联程计 <b>' + used + ' 次</b>' +
-    (state.chainRound ? '（往返）' : '（单程）') + ' · 中转绕行上限 ' + state.ratio.toFixed(2) + '×';
+    '整条路线按联程计 <b>' + used + ' 次</b>' + (state.chainRound ? '（往返）' : '（单程）');
   document.getElementById('totals').innerHTML =
     '<div class="total-box"><div class="num ' + (used > state.budget ? 'num-red' : 'num-blue') + '">' + used +
     '<span style="font-size:14px;color:var(--muted)"> / ' + state.budget + '</span></div><div class="lbl">整条路线消耗</div></div>' +
@@ -1217,7 +1216,7 @@ function renderChain() {
       : used > 0 ? '<div class="ok-banner">✅ 整条路线 ' + used + ' 次（' + (state.chainRound ? '往返' : '单程') + '），预算内可用，剩余 ' + remain + ' 次。</div>' : '') +
     (!ok ? '<div class="warn-banner">⚠️ 当前路线存在折返/超区间/绕行超标，12306 联程可能无法合并出票。请调整顺序或改用"独立行程"。</div>' : '');
   document.getElementById('tripRows').innerHTML = '';
-  renderRouteLine();
+  document.getElementById('routeLine').innerHTML = '';
   renderAdvice();
   renderCases();
 }
@@ -1303,7 +1302,7 @@ function prevSpot() {
 }
 function closeGuide() {
   document.getElementById('spotlight').style.display = 'none';
-  try { localStorage.setItem('spr_guide_done', '1'); } catch (e) { }
+  try { sessionStorage.setItem('spr_guide_done', '1'); } catch (e) { }
 }
 
 /* ---------- 结果直线图：哪段学生票 / 哪段全价 ---------- */
@@ -1460,8 +1459,8 @@ function setChainMode(on) {
   document.getElementById('chainControls').style.display = on ? 'block' : 'none';
   document.getElementById('batchBtns').style.display = on ? 'none' : 'flex';
   document.getElementById('planHint').textContent = on
-    ? '串联路线：目的地按顺序串成一条联程路线，整条只扣 1 次（往返 2 次）。用 ↑↓ 或"自动排序"调整顺序。'
-    : '独立行程：每个目的地单独扣次。也可切换为"串联路线"——多个目的地按顺序串成一条联程路线，整条只扣 1 次。';
+    ? '默认串联成一条联程路线，整条只扣 1 次（往返 2 次）'
+    : '独立行程：每个目的地单独扣次';
   renderAll();
 }
 function toggleChainRound() {
@@ -1520,8 +1519,8 @@ function renderAll() {
     return;
   }
   document.getElementById('resultHint').innerHTML =
-    '当前区间：<b>' + esc(state.school.station ? state.school.station.name : state.school.text) + '</b> ↔ <b>' +
-    esc(state.home.station ? state.home.station.name : state.home.text) + '</b> · 中转绕行上限 <b>' + state.ratio.toFixed(2) + '×</b>';
+    '区间：<b>' + esc(state.school.station ? state.school.station.name : state.school.text) + '</b> ↔ <b>' +
+    esc(state.home.station ? state.home.station.name : state.home.text) + '</b>';
   renderTotals(res);
   renderRouteLine();
   renderAdvice();
@@ -1676,7 +1675,7 @@ async function init() {
   }
   setChainMode(true);
   let gd = false;
-  try { gd = localStorage.getItem('spr_guide_done') === '1'; } catch (e) { }
+  try { gd = sessionStorage.getItem('spr_guide_done') === '1'; } catch (e) { }
   if (!gd) startGuide();
   renderAll();
   fitAll();
