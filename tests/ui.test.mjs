@@ -217,7 +217,7 @@ async function main() {
   A('串联控件显示', $('chainControls').style.display === 'block');
   A('批量按钮隐藏', $('batchBtns').style.display === 'none');
   A('路线预览含箭头串联', $('chainPreview').textContent.includes('北京西') && $('chainPreview').textContent.includes('→') && $('chainPreview').textContent.includes('贵阳北'));
-  A('校验含区间内标记', $('chainCheck').textContent.includes('区间内'));
+  A('校验含学生票标记', $('chainCheck').textContent.includes('学生票'));
   A('串联总计=1次(单程)', $('totals').querySelector('.total-box .num').textContent.startsWith('1 /'));
   A('串联无折返警告', !$('chainCheck').textContent.includes('折返'));
   await w.eval('chainAutoSort()');
@@ -226,7 +226,7 @@ async function main() {
   A('整条路线往返=2次', $('totals').querySelector('.total-box .num').textContent.startsWith('2 /'));
   A('往返标签', $('chainRoundLabel').textContent.includes('往返'));
   await w.eval('state.trips.reverse(); renderAll();');
-  A('反序出现折返警告', $('chainCheck').textContent.includes('折返'));
+  A('反序出现回头路警告', $('chainCheck').textContent.includes('回头路'));
   await w.eval('setChainMode(false)');
   A('切回独立模式控件隐藏', $('chainControls').style.display === 'none');
 

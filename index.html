@@ -712,15 +712,22 @@ function directCovered(S, H, D) {
 function planTrip(S, H, O, D) {
   const direct = dist(O, D);
   const L = dist(S, H);
-  // 出发地与目的地都须在区间走廊带内(区间内任意段可买 - 实测 'b-c 中间段能买')
+  // 核心带: 出发地与目的地都须在区间走廊带内
   const Oin = inIntervalBelt(S, H, O, -0.05, 1.05, Math.max(60, 0.32 * L));
   const Din = inIntervalBelt(S, H, D, -0.05, 1.05, Math.max(60, 0.32 * L));
-  if (!Oin || !Din) return { ok: 0, mode: 'full', direct };
+  // 边缘延伸带: 超出核心带但距端点不超过 ~0.45×区间长
+  // 实测: 济南以北最远可买到沈阳(≈800km/区间1830km), 天津(≈270km)可买; 更远(哈尔滨)拦截
+  const endExt = Math.max(250, 0.45 * L);
+  const Oedge = !Oin && inIntervalBelt(S, H, O, -0.45 - 0.05, 1.05 + 0.45, Math.max(90, 0.45 * L));
+  const Dedge = !Din && inIntervalBelt(S, H, D, -0.45 - 0.05, 1.05 + 0.45, Math.max(90, 0.45 * L));
+  if (!Oin && !Oedge) return { ok: 0, mode: 'full', direct };
+  if (!Din && !Dedge) return { ok: 0, mode: 'full', direct };
+  const edge = (!Oin || !Din);
   // 直达: 目的地在直达走廊带内
-  if (directCovered(S, H, D)) return { ok: 1, mode: 'direct', direct };
+  if (directCovered(S, H, D)) return { ok: 1, mode: edge ? 'edge' : 'direct', direct };
   // 中转: 经枢纽 T, 绕行 ≤ ratio×直达, T 在走廊内
   const tr = transferPlan(S, H, O, D);
-  if (tr) return { ok: 1, mode: 'transfer', direct, via: tr.via, station: tr.station };
+  if (tr) return { ok: 1, mode: edge ? 'edge' : 'transfer', direct, via: tr.via, station: tr.station };
   return { ok: 0, mode: 'full', direct };
 }
 
@@ -1037,8 +1044,8 @@ function renderTrips() {
         '<div class="sub">' + esc(prev) + ' → ' + esc(tp.station ? tp.station.name : '坐标点') + (seg ? ' · ' + seg.km + ' km' : '') + '</div>';
       const chip = '<span class="chip ' + (seg && seg.inInt ? 'chip-green' : 'chip-red') + '">' + (seg && seg.inInt ? '✓ 区间内' : '⚠ 区间外') + '</span>';
       return row(tp, i, main, chip,
-        '<button class="btn btn-ghost btn-sm" onclick="panTo(' + i + ')">📍</button>' +
-        '<button class="btn btn-danger btn-sm" onclick="removeTrip(' + tp.id + ')">✕</button>');
+        '<button class="btn btn-ghost btn-sm" title="在地图上定位" onclick="panTo(' + i + ')">定位</button>' +
+        '<button class="btn btn-danger btn-sm" title="删除" onclick="removeTrip(' + tp.id + ')">删除</button>');
     }).join('');
     return;
   }
@@ -1047,6 +1054,7 @@ function renderTrips() {
     const t = res.perTrip[i];
     const p = t.plan;
     const badge = p.mode === 'direct' ? '<span class="chip chip-green">✓ 直达</span>'
+      : p.mode === 'edge' ? '<span class="chip chip-orange">⚠ 区间边缘(实测可买·可能被查)</span>'
       : p.mode === 'transfer' ? '<span class="chip chip-blue">中转 经' + esc(p.station.name) + '</span>'
       : '<span class="chip chip-red">✕ 全价</span>';
     const fromName = tp.from ? tp.from.name : (state.school && state.school.station ? state.school.station.name : '学校');
@@ -1059,9 +1067,9 @@ function renderTrips() {
       '<span class="bar"></span>' +
       '<span class="sw-label">' + (tp.round ? '往返×2' : '单程×1') + '</span></label>';
     return row(tp, i, main, chip,
-      '<button class="btn btn-ghost btn-sm" title="设置出发地" onclick="editFrom(' + tp.id + ')">✈️</button>' +
-      '<button class="btn btn-ghost btn-sm" onclick="panTo(' + i + ')">📍</button>' +
-      '<button class="btn btn-danger btn-sm" onclick="removeTrip(' + tp.id + ')">✕</button>');
+      '<button class="btn btn-ghost btn-sm" title="设置出发地" onclick="editFrom(' + tp.id + ')">出发地</button>' +
+      '<button class="btn btn-ghost btn-sm" title="在地图上定位" onclick="panTo(' + i + ')">定位</button>' +
+      '<button class="btn btn-danger btn-sm" title="删除" onclick="removeTrip(' + tp.id + ')">删除</button>');
   }).join('');
 }
 
@@ -1224,11 +1232,10 @@ function renderChain() {
   } else {
     check = c.segs.map((s, i) =>
       (i + 1) + '. ' + esc(s.from) + ' → ' + esc(s.to) + '：' + s.km + ' km ' +
-      (s.inInt ? '<span style="color:#16a34a">✓ 区间内</span>' : '<span style="color:#dc2626">✗ 区间外</span>') +
-      ' · 累计' + s.ratio + '×').join('<br>');
-    if (c.foldback) check += '<br><span style="color:#c2410c">⚠️ 存在折返（方向回头），12306 联程大概率不给合并</span>';
-    if (c.maxRatio > state.ratio) check += '<br><span style="color:#c2410c">⚠️ 累计绕行 ' + c.maxRatio + '× 超过上限 ' + state.ratio + '×，可能提示"区间不符无法购票"</span>';
-    check += '<br>全程 ' + c.total + ' km（学校直达家 ' + c.direct + ' km）';
+      (s.inInt ? '<span style="color:#16a34a">✅ 学生票</span>' : '<span style="color:#c2410c">⚠️ 超区间</span>')).join('<br>');
+    if (c.foldback) check += '<br><span style="color:#c2410c">⚠️ 路线走了回头路，12306 联程不会合并——调整顺序</span>';
+    if (c.maxRatio > state.ratio) check += '<br><span style="color:#c2410c">⚠️ 绕路太多（' + c.maxRatio + '×），购票会提示"区间不符"——减少绕路或改家到中间城市</span>';
+    check += '<br>全程 ' + c.total + ' km';
   }
   document.getElementById('chainCheck').innerHTML = check;
   // 往返开关同步
@@ -1256,6 +1263,7 @@ function renderChain() {
   document.getElementById('tripRows').innerHTML = '';
   renderRouteLine();
   renderAdvice();
+  renderCases();
 }
 /* ---------- 导航二级菜单 ---------- */
 function toggleRulesMenu(e) {
@@ -1365,8 +1373,8 @@ function renderRouteLine() {
     if (res) {
       segs = res.perTrip.map(tp => ({
         label: (tp.from ? tp.from.name + '→' : '') + (tp.station ? tp.station.name : tp.text), km: Math.max(40, tp.plan.direct),
-        color: tp.plan.mode === 'direct' ? '#22c55e' : tp.plan.mode === 'transfer' ? '#f97316' : '#ef4444',
-        note: tp.plan.mode === 'direct' ? '直达·学生票' : tp.plan.mode === 'transfer' ? '中转·学生票' : '全价',
+        color: tp.plan.mode === 'direct' ? '#22c55e' : tp.plan.mode === 'edge' ? '#f59e0b' : tp.plan.mode === 'transfer' ? '#f97316' : '#ef4444',
+        note: tp.plan.mode === 'direct' ? '直达·学生票' : tp.plan.mode === 'edge' ? '区间边缘·可能被查' : tp.plan.mode === 'transfer' ? '中转·学生票' : '全价',
       }));
     }
   }
@@ -1406,6 +1414,10 @@ function suggestFix() {
     const res = evalAll();
     if (!res) return tips;
     res.perTrip.forEach((tp, i) => {
+      if (tp.plan.mode === 'edge') {
+        tips.push('「' + esc(tp.text) + '」在<b>区间边缘</b>（超出端点但不算太远）。实测系统可出票，但高铁/动车可能被查补票；被补票可打 <b>01012306 转人工</b>申诉退回次数。');
+        return;
+      }
       if (!tp.plan.ok) {
         let best = null;
         for (const s of STATIONS) {
@@ -1430,9 +1442,30 @@ function suggestFix() {
   }
   return tips;
 }
+/* ---------- 同类实测案例库（小红书/用户实测收集, 2026-08） ---------- */
+const REAL_CASES = [
+  { id: 1, title: '超区间出票成功 · 全程未查', from: '荆州(学校)', to: '临沂(超出华山区间)', result: '区间改为 荆州↔华山, 实际买 回临沂 的车票: 出票成功、进出站畅通、无补票', src: '小红书 677 评论实测帖', note: '能出票≠一定不查, 博主自述属侥幸' },
+  { id: 2, title: '超区间出票成功 · 高铁动车被查概率大', from: '邵东→无锡(旅游)', to: '区间 衡阳↔长沙 完全不对应', result: '线上改区间(学校端也改了)提交失败但购票成功; 车站刷磁卡激活后顺利进出, 卧铺只问了一句学生证', src: '小红书 548 评论实测帖', note: '查不查看工作人员; 被抓补全票可打 01012306 申诉退回次数' },
+  { id: 3, title: '区间边缘延伸 · 家端以北可买', from: '天津→济南', to: '区间 崇左(扶绥)↔济南', result: '实测: 济南允许的超区间范围约到 天津/徐州, 济南以北最远可买到 沈阳; 更远(哈尔滨)出不了', src: '用户 12306 实测观察', note: '延伸沿铁路径路, 越远风险越大' },
+  { id: 4, title: '区间外完全不可用', from: '南昌→贵阳/宜春', to: '区间 南昌↔宜春', result: '买 宜春→贵阳 或 贵阳→宜春 都不能用学生票——因为没有一端是学校所在地', src: '小红书 548 评论帖评论区', note: '两端都不在区间/延伸带内 → 全价' },
+  { id: 5, title: '家庭端可任意改 · 学校端不可动', from: '学校长沙', to: '家庭端改为 无锡/南京/武汉 均可', result: '只要学校端是真实学校位置, 家庭端改哪里都可以, 三张联程自动归为 1 次优惠', src: '小红书 548 评论帖置顶 317 赞', note: '改了学校端提交会失败且资质被锁, 需车站机器刷磁卡恢复' },
+];
+function renderCases() {
+  const el = document.getElementById('advice');
+  if (!state.school || !state.home || !state.trips.length) return;
+  const res = state.chainMode ? null : evalAll();
+  const hasEdgeOrFull = state.chainMode
+    ? (chainEvalCurrent() && !chainEvalCurrent().ok)
+    : (res && res.perTrip.some(t => !t.plan.ok || t.plan.mode === 'edge'));
+  if (!hasEdgeOrFull) return;
+  el.insertAdjacentHTML('beforeend',
+    '<div style="margin-top:8px;font-size:12px;color:var(--muted)">📚 <b>同类实测案例</b>（已收集验证）</div>' +
+    REAL_CASES.map(c => '<div class="advice" style="font-size:12px;padding:9px 12px">📌 <b>' + c.title + '</b>：' + c.from + ' → ' + c.to + '。<span style="color:var(--muted)">' + c.result + '</span><br><span style="color:var(--muted)">来源：' + c.src + ' · ' + c.note + '</span></div>').join(''));
+}
 function renderAdvice() {
   const el = document.getElementById('advice');
   const tips = suggestFix();
+  el.innerHTML = '';
   if (!tips.length) { el.innerHTML = ''; return; }
   const allGood = tips.length === 1 && tips[0].includes('✓');
   el.innerHTML = tips.map(t =>
@@ -1518,6 +1551,7 @@ function renderAll() {
   document.getElementById('resultHint').innerHTML =
     '当前区间：<b>' + esc(state.school.station ? state.school.station.name : state.school.text) + '</b> ↔ <b>' +
     esc(state.home.station ? state.home.station.name : state.home.text) + '</b> · 中转绕行上限 <b>' + state.ratio.toFixed(2) + '×</b>';
+  renderCases();
   renderTotals(res);
   renderRouteLine();
   renderAdvice();
