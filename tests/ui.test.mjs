@@ -316,7 +316,7 @@ async function main() {
   $('tripInput').value = '天津→济南';
   await w.eval('addTrip()');
   await wait(400);
-  A('案例渲染含超区间案例', $('advice').textContent.includes('超区间'));
+  A('案例渲染含超区间案例', $('casesInner').textContent.includes('超区间'));
   A('试买判断提示存在', $('advice').textContent.includes('先试买判断'));
 
   console.log(`\n结果: ${pass} 通过, ${fail} 失败`);
