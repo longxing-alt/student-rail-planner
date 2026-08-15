@@ -86,7 +86,21 @@
   .spot-dots{display:flex;gap:5px;align-items:center;margin-right:4px}
   .spot-dots .dot{width:7px;height:7px;border-radius:50%;background:#d4d4d8;transition:all .3s}
   .spot-dots .dot.on{background:#4f46e5;transform:scale(1.35)}
+  /* 站点胶囊链条 */
+  .route-chain{display:flex;align-items:center;gap:0;padding:18px 8px 6px;flex-wrap:wrap;justify-content:center}
+  .chain-node{display:inline-flex;flex-direction:column;align-items:center;gap:2px;padding:8px 14px;border-radius:12px;
+    font-size:13.5px;font-weight:700;color:#fff;white-space:nowrap;box-shadow:0 2px 8px rgba(0,0,0,.08)}
+  .chain-node em{font-style:normal;font-size:10.5px;font-weight:600;opacity:.85}
+  .chain-node.start{background:linear-gradient(135deg,#6366f1,#4f46e5)}
+  .chain-node.mid{background:linear-gradient(135deg,#0ea5e9,#0284c7)}
+  .chain-node.end{background:linear-gradient(135deg,#34d399,#059669)}
+  .chain-seg{flex:1;min-width:26px;height:4px;border-radius:2px;margin:0 4px}
+  .chain-seg-tip{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;margin:10px 0 4px}
+  .seg-tip-item{font-size:12px;color:var(--muted);display:inline-flex;align-items:center;gap:5px}
+  .seg-tip-item i{width:8px;height:8px;border-radius:50%;display:inline-block}
+  .chain-tip{font-size:12px;color:var(--muted);text-align:center;background:#f4f4f5;border-radius:8px;padding:6px 10px}
   /* 结果直线图 */
+
   .route-head{display:flex;align-items:center;gap:10px;margin:12px 0 6px}
   .route-bar{flex:1;display:flex;height:16px;border-radius:8px;overflow:hidden;gap:2px;background:#f4f4f5}
   .rt-seg{min-width:8px;position:relative;transition:filter .15s}
@@ -375,14 +389,14 @@
             <label>学校地址 / 城市</label>
             <div class="input-row">
               <input id="schoolInput" type="text" placeholder="如：武汉 / 武汉市">
-              <button class="btn btn-ghost btn-sm" onclick="searchPlace('school')">定位</button>
+              <button class="btn btn-ghost btn-sm" onclick="searchPlace('school')">确认</button>
             </div>
           </div>
           <div class="field">
             <label>家庭地址 / 城市（另一端）</label>
             <div class="input-row">
               <input id="homeInput" type="text" placeholder="如：长沙 / 湖南省长沙市">
-              <button class="btn btn-ghost btn-sm" onclick="searchPlace('home')">定位</button>
+              <button class="btn btn-ghost btn-sm" onclick="searchPlace('home')">确认</button>
             </div>
           </div>
         </div>
@@ -1204,10 +1218,29 @@ function renderChain() {
   const ok = !!(c && c.ok);
   const used = ok ? (state.chainRound ? 2 : 1) : 0;
   const remain = state.budget - used;
+  // 路线预览: 站点胶囊链条（每段可单独购买 / 整条联程只扣 1 次）
   const end = state.chainEnd || H;
-  const names = [S.name, ...state.trips.map(t => t.station.name), end.name];
+  const nodes = [S, ...state.trips.map(t => t.station), end];
+  const segs2 = c ? c.segs : [];
   document.getElementById('chainPreview').innerHTML =
-    '<b style="color:var(--text)">' + names.map(n => esc(n)).join(' → ') + '</b>';
+    '<div class="route-chain">' +
+    nodes.map((n, i) => {
+      const isStart = i === 0, isEnd = i === nodes.length - 1;
+      const sg = segs2[i - 1];
+      const segColor = sg ? (sg.inInt ? '#22c55e' : '#ef4444') : '#d4d4d8';
+      const nodeCls = isStart ? 'start' : isEnd ? 'end' : 'mid';
+      const nodeLabel = isStart ? '学校' : isEnd ? (state.chainEnd ? '终点' : '家') : '途经';
+      return (i > 0 ? '<span class="chain-seg" style="background:' + segColor + '"></span>' : '') +
+        '<span class="chain-node ' + nodeCls + '">' + esc(n.name) + '<em>' + nodeLabel + '</em></span>';
+    }).join('') +
+    '</div>' +
+    '<div class="chain-seg-tip">' +
+    segs2.map(sg =>
+      '<span class="seg-tip-item"><i style="background:' + (sg.inInt ? '#22c55e' : '#ef4444') + '"></i>' +
+      esc(sg.from) + '→' + esc(sg.to) + ' ' + sg.km + 'km ' +
+      (sg.inInt ? '✅ 学生票（可单独买 · 扣1次）' : '⚠️ 超区间') + '</span>').join('') +
+    '</div>' +
+    '<div class="chain-tip">💡 区间内任意一小段都可以单独买（各扣 1 次）；整条 5 天内联程购买只扣 1 次。</div>';
   document.getElementById('chainEndLabel').textContent = state.chainEnd ? state.chainEnd.name + '（' + state.chainEnd.city + '）' : '家';
   // 校验明细
   let check = '';
