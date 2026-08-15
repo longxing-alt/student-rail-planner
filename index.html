@@ -1401,6 +1401,8 @@ function sinkResult() {
   state.resultFloated = false;
   const r = document.getElementById('wsResult');
   if (r) { r.classList.remove('float-up'); r.classList.add('sink'); setTimeout(() => r.classList.remove('sink'), 550); }
+}
+function scrollToWizard() {
   const w = document.getElementById('wizardBar');
   if (w) setTimeout(() => { try { w.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch (e) { } }, 120);
 }
@@ -1605,6 +1607,7 @@ function setGuideStep(n) {
   state.guideStep = n;
   renderWizard();
   sinkResult();
+  scrollToWizard();
 }
 function renderWizard() {
   const st = state.guideStep || 0;
@@ -1717,14 +1720,14 @@ async function searchPlace(kind) {
     state.touched = true;
     state.school = { text: q, point: r.point, station: r.station };
     document.getElementById('schoolInput').value = q;
-    state.guideStep = 1; // 自动进入下一步: 家
+    state.guideStep = 1; // 自动进入下一步: 家 (只切面板, 不滚动)
     renderWizard();
     sinkResult();
   } else {
     state.touched = true;
     state.home = { text: q, point: r.point, station: r.station };
     document.getElementById('homeInput').value = q;
-    state.guideStep = 2; // 自动进入下一步: 想去哪
+    state.guideStep = 2; // 自动进入下一步: 想去哪 (只切面板, 不滚动)
     renderWizard();
     sinkResult();
   }
