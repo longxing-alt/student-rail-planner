@@ -1,0 +1,19 @@
+{
+  "name": "student-rail-planner",
+  "version": "1.0.0",
+  "description": "单文件网页应用：帮你规划 12306 **学生票优惠次数**的消耗 —— 在「学校端固定、家庭端可调」的前提下， 为每一趟想去的地方算出是**直达优惠、中转优惠还是全价**，并枚举全部车站作为区间端点， 找到**消耗优惠次数最少**的区间修改方案。",
+  "main": "index.js",
+  "directories": {
+    "test": "tests"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "jsdom": "^24.1.3"
+  }
+}

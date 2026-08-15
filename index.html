@@ -688,6 +688,13 @@ function corridor(S, H, D) {
 }
 
 /* 直达覆盖：目的地位于区间沿线带内 */
+/* 某点在区间走廊带内? (供出发地/目的地/中转站判定) */
+function inIntervalBelt(S, H, P, tLo, tHi, band) {
+  const L = dist(S, H);
+  if (L < 15) return true; // 退化区间: 无走廊概念, 由直达50km/中转绕行规则约束
+  const { t, p } = corridor(S, H, P);
+  return t >= tLo && t <= tHi && p <= band;
+}
 function directCovered(S, H, D) {
   const L = dist(S, H);
   if (L < 15) return dist(S, D) <= 50;
@@ -695,10 +702,27 @@ function directCovered(S, H, D) {
   return t >= -0.12 && t <= 1.12 && p <= Math.max(45, 0.18 * L);
 }
 
-/* 中转方案：经枢纽站 T，绕行 ≤ ratio×直达，T 贴近区间沿线，且终点 D 也在区间内
-   (实测规则: 联程全程须在区间内, 终点超出区间系统拦截 - "海口→徐州不在区间内"案例) */
-function transferPlan(S, H, D) {
-  const direct = dist(S, D);
+/* 行程判定 (O=出发地, D=目的地): 起点与终点都必须在区间内
+   (实测规则: 票面发站/到站须在区间内 - 天津→济南 超出区间则不出售学生票) */
+function planTrip(S, H, O, D) {
+  const direct = dist(O, D);
+  const L = dist(S, H);
+  // 出发地与目的地都须在区间走廊带内(区间内任意段可买 - 实测 'b-c 中间段能买')
+  const Oin = inIntervalBelt(S, H, O, -0.05, 1.05, Math.max(60, 0.32 * L));
+  const Din = inIntervalBelt(S, H, D, -0.05, 1.05, Math.max(60, 0.32 * L));
+  if (!Oin || !Din) return { ok: 0, mode: 'full', direct };
+  // 直达: 目的地在直达走廊带内
+  if (directCovered(S, H, D)) return { ok: 1, mode: 'direct', direct };
+  // 中转: 经枢纽 T, 绕行 ≤ ratio×直达, T 在走廊内
+  const tr = transferPlan(S, H, O, D);
+  if (tr) return { ok: 1, mode: 'transfer', direct, via: tr.via, station: tr.station };
+  return { ok: 0, mode: 'full', direct };
+}
+
+/* 中转方案：经枢纽站 T，绕行 ≤ ratio×直达，T 贴近区间沿线，且起点 O 终点 D 都在区间内 */
+function transferPlan(S, H, O, D) {
+  if (!D) { D = O; O = S; } // 兼容旧3参调用(出发地=学校)
+  const direct = dist(O, D);
   const L = dist(S, H);
   const limit = state.ratio * direct;
   const same = (a, b) => (a.name && a.name === b.name) ||
@@ -711,8 +735,8 @@ function transferPlan(S, H, D) {
   let best = null;
   for (const st of HUBS) {
     const T = { name: st[0], city: st[1], lat: st[2], lon: st[3] };
-    if (same(T, D) || same(T, S)) continue;
-    const via = dist(S, T) + dist(T, D);
+    if (same(T, D) || same(T, S) || same(T, O)) continue;
+    const via = dist(O, T) + dist(T, D);
     if (via > limit) continue;
     if (L >= 15) {
       const { t, p } = corridor(S, H, T);
@@ -723,22 +747,18 @@ function transferPlan(S, H, D) {
   return best;
 }
 
-/* 单程规划：0 = 全价，1 = 优惠（直达或一次中转） */
-function planOneWay(S, H, D) {
-  const direct = dist(S, D);
-  if (directCovered(S, H, D)) return { ok: 1, mode: 'direct', direct };
-  const tr = transferPlan(S, H, D);
-  if (tr) return { ok: 1, mode: 'transfer', direct, via: tr.via, station: tr.station };
-  return { ok: 0, mode: 'full', direct };
+/* 单程规划：0 = 全价，1 = 优惠（直达或一次中转）；默认出发地=学校 */
+function planOneWay(S, H, D, O) {
+  if (O) return planTrip(S, H, O, D);
+  return planTrip(S, H, S, D);
 }
-
 /* 给定家庭端 H，评估全部行程 */
 function evalWith(H) {
   if (!state.school || !state.school.station || !H) return null;
   const S = state.school.station;
   const perTrip = state.trips.map(tp => {
     const D = tp.station;
-    const p = planOneWay(S, H, D);
+    const p = planTrip(S, H, tp.from || S, D);
     const perWay = p.ok ? 1 : 0;
     return Object.assign({}, tp, { plan: p, used: tp.round ? perWay * 2 : perWay });
   });
@@ -1009,7 +1029,8 @@ function renderTrips() {
         '<span class="chip ' + (seg && seg.inInt ? 'chip-green' : 'chip-red') + '">' + (seg && seg.inInt ? '✓ 区间内' : '⚠ 区间外') + '</span>' +
         '<button class="btn btn-ghost btn-sm" title="上移" onclick="moveTrip(' + tp.id + ',-1)">↑</button>' +
         '<button class="btn btn-ghost btn-sm" title="下移" onclick="moveTrip(' + tp.id + ',1)">↓</button>' +
-        '<button class="btn btn-ghost btn-sm" onclick="panTo(' + i + ')">📍</button>' +
+        '<button class="btn btn-ghost btn-sm" title="设置出发地" onclick="editFrom(' + tp.id + ')">✈️</button>' +
+      '<button class="btn btn-ghost btn-sm" onclick="panTo(' + i + ')">📍</button>' +
         '<button class="btn btn-danger btn-sm" onclick="removeTrip(' + tp.id + ')">✕</button></div>';
     }).join('');
     return;
@@ -1024,7 +1045,9 @@ function renderTrips() {
     return '<div class="trip-row fade-in">' +
       '<div class="trip-idx">' + (i + 1) + '</div>' +
       '<div class="trip-main"><b>' + esc(tp.text) + '</b>' +
-      '<div class="sub">车站：' + esc(tp.station ? tp.station.name + ' · ' + tp.station.city : '坐标点') +
+      '<div class="sub">' + (tp.from
+        ? '出发：' + esc(tp.from.name) + ' → 目的地：' + esc(tp.station ? tp.station.name + ' · ' + tp.station.city : '坐标点')
+        : '车站：' + esc(tp.station ? tp.station.name + ' · ' + tp.station.city : '坐标点')) +
       ' · 直达里程 ' + Math.round(p.direct) + ' km</div></div>' +
       badge +
       '<span class="chip ' + (t.used === 0 ? 'chip-red' : 'chip-violet') + '">' + t.used + ' 次</span>' +
@@ -1230,7 +1253,7 @@ function startGuide() {
 function scrollToElSettled(el, done) {
   const rect = el.getBoundingClientRect();
   const targetY = rect.top + (window.scrollY || 0) - (window.innerHeight - rect.height) / 2;
-  if (window.scrollTo) window.scrollTo({ top: Math.max(0, targetY), behavior: 'smooth' });
+  try { if (window.scrollTo) window.scrollTo({ top: Math.max(0, targetY), behavior: 'smooth' }); } catch (e) { }
   let lastY = window.scrollY || 0, stable = 0;
   const tick = () => {
     const y = window.scrollY || 0;
@@ -1310,7 +1333,7 @@ function renderRouteLine() {
     const res = evalAll();
     if (res) {
       segs = res.perTrip.map(tp => ({
-        label: tp.station ? tp.station.name : tp.text, km: Math.max(40, tp.plan.direct),
+        label: (tp.from ? tp.from.name + '→' : '') + (tp.station ? tp.station.name : tp.text), km: Math.max(40, tp.plan.direct),
         color: tp.plan.mode === 'direct' ? '#22c55e' : tp.plan.mode === 'transfer' ? '#f97316' : '#ef4444',
         note: tp.plan.mode === 'direct' ? '直达·学生票' : tp.plan.mode === 'transfer' ? '中转·学生票' : '全价',
       }));
@@ -1488,13 +1511,37 @@ async function addTrip() {
   const q = document.getElementById('tripInput').value.trim();
   if (!q) return;
   setStatus('正在解析：' + q + ' …');
-  const r = await resolvePlace(q);
-  if (!r) { setStatus('❌ 未能解析 "' + q + '"'); return; }
-  state.trips.push({ id: ++state._tid, text: q, point: r.point, station: r.station, round: true });
+  // 支持出发地: "天津→济南" / "天津->济南" / "从天津到济南"
+  let fromQ = null, toQ = q;
+  const m1 = q.match(/^从(.+?)到(.+)$/);
+  const m2 = q.match(/^(.+?)\s*(?:→|->|=>)\s*(.+)$/);
+  if (m1) { fromQ = m1[1].trim(); toQ = m1[2].trim(); }
+  else if (m2) { fromQ = m2[1].trim(); toQ = m2[2].trim(); }
+  const r = await resolvePlace(toQ);
+  if (!r) { setStatus('❌ 未能解析 "' + toQ + '"'); return; }
+  let from = null;
+  if (fromQ) {
+    const rf = await resolvePlace(fromQ);
+    if (!rf) { setStatus('❌ 未能解析出发地 "' + fromQ + '"'); return; }
+    from = rf.station || { name: rf.label, lat: rf.point.lat, lon: rf.point.lon };
+  }
+  state.trips.push({ id: ++state._tid, text: q, from, point: r.point, station: r.station, round: true });
   document.getElementById('tripInput').value = '';
-  setStatus('✅ 已添加：' + q + '（' + r.label + '）');
+  setStatus('✅ 已添加：' + (from ? fromQ + ' → ' : '') + toQ + (from ? '（自定义出发地）' : ''));
   renderAll();
   fitAll();
+}
+function editFrom(id) {
+  const t = state.trips.find(x => x.id === id);
+  if (!t) return;
+  const q = (window.prompt ? window.prompt('出发地城市（留空 = 从学校出发）：', t.from ? t.from.name : '') : '') || '';
+  if (!q.trim()) { t.from = null; renderAll(); return; }
+  resolvePlace(q.trim()).then(rf => {
+    if (!rf) { setStatus('❌ 未能解析出发地 "' + q.trim() + '"'); return; }
+    t.from = rf.station || { name: rf.label, lat: rf.point.lat, lon: rf.point.lon };
+    setStatus('出发地已设为：' + t.from.name);
+    renderAll();
+  });
 }
 function addTripWith(pt, station) {
   const nm = station ? station.name + ' · ' + station.city : pt.lat.toFixed(2) + ',' + pt.lng.toFixed(2);
