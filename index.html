@@ -132,13 +132,16 @@ input[type=range]{width:100%;accent-color:var(--blue)}
     padding:7px 14px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;color:var(--muted);transition:all .15s}
   .wz-step b{color:var(--text)}
   .wz-step:hover{border-color:#d6d3d1}
-  .wz-step.active{background:#18181b;color:#fff;border-color:#18181b}
+  .wz-step.active{background:#18181b;color:#fff;border-color:#18181b;transform:scale(1.05);box-shadow:0 2px 8px rgba(0,0,0,.15)}
   .wz-step.active b{color:#fff}
   .wz-step.done{color:var(--green);border-color:rgba(22,163,74,.4)}
   .wz-done{display:none;font-weight:800}
   .wz-step.done .wz-done{display:inline}
-  .wz-arrow{color:#d4d4d8;font-weight:700}
+  .wz-arrow{color:#d4d4d8;font-weight:700;transition:transform .3s}
+  .wz-step.done + .wz-arrow{color:#22c55e}
   .wz-tip{font-size:12px;color:var(--muted)}
+  .wz-panel{animation:panelIn .3s ease both}
+  @keyframes panelIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
   .wz-panel label{display:block;font-size:16px;font-weight:700;margin-bottom:8px}
   .wz-sub{font-style:normal;font-weight:400;font-size:12px;color:var(--muted);margin-left:8px}
   .wz-panel .input-row input{font-size:16px;padding:12px 15px}
