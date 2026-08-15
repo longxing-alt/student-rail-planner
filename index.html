@@ -18,7 +18,7 @@
   --green:#16a34a; --green-soft:rgba(22,163,74,.08);
   --orange:#d97706; --orange-soft:rgba(217,119,6,.08);
   --red:#dc2626; --red-soft:rgba(220,38,38,.06);
-  --blue:#2563eb; --blue-soft:rgba(37,99,235,.08);
+  --blue:#0d9488; --blue-soft:rgba(13,148,136,.08);
   --radius:16px;
   --shadow-sm:0 1px 2px rgba(16,24,40,.05);
   --shadow-md:0 1px 2px rgba(16,24,40,.05),0 12px 28px -16px rgba(16,24,40,.16);
@@ -31,7 +31,7 @@ body{
   font-size:15px; line-height:1.6; letter-spacing:0;
   -webkit-font-smoothing:antialiased; text-rendering:optimizeLegibility;
 }
-::selection{background:rgba(37,99,235,.14)}
+::selection{background:rgba(13,148,136,.14)}
 ::-webkit-scrollbar{width:10px;height:10px}
 ::-webkit-scrollbar-thumb{background:#d4d4d8;border-radius:99px;border:3px solid var(--bg)}
 :focus-visible{outline:2px solid var(--blue);outline-offset:2px;border-radius:6px}
@@ -71,7 +71,7 @@ input[type=text],input[type=number]{
   width:100%;background:#fff;border:1px solid #d6d3d1;border-radius:10px;color:var(--text);
   padding:10px 13px;font-size:14px;outline:none;transition:border-color .15s,box-shadow .15s;font-family:inherit}
 input:hover{border-color:#a8a29e}
-input:focus{border-color:var(--blue);box-shadow:0 0 0 3px rgba(37,99,235,.12)}
+input:focus{border-color:var(--blue);box-shadow:0 0 0 3px rgba(13,148,136,.14)}
 input[type=range]{width:100%;accent-color:var(--blue)}
 .hot-line{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin:14px 0 4px;font-size:12px}
 .hot-line .lbl{color:var(--muted);font-weight:600;margin-right:4px}
@@ -81,7 +81,7 @@ input[type=range]{width:100%;accent-color:var(--blue)}
 .chain-mini{display:flex;flex-direction:column;gap:4px;padding:10px 12px;border:1px solid var(--line);border-radius:12px;background:#fafafa;margin:10px 0}
   .chain-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
   .chain-sep{width:1px;height:16px;background:var(--line)}
-.chain-tag{font-size:12px;font-weight:700;color:var(--blue);background:var(--blue-soft);padding:3px 10px;border-radius:99px}
+.chain-tag{font-size:12px;font-weight:700;color:#0f766e;background:var(--blue-soft);padding:3px 10px;border-radius:99px}
 .switch{position:relative;display:inline-flex;align-items:center;gap:7px;cursor:pointer;font-size:12.5px;color:var(--muted);user-select:none}
 .switch input{display:none}
 .switch .bar{width:34px;height:19px;border-radius:99px;background:#d4d4d8;position:relative;transition:background .15s}
@@ -97,8 +97,8 @@ input[type=range]{width:100%;accent-color:var(--blue)}
 /* 按钮 */
 .btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;border:none;cursor:pointer;font-family:inherit;font-size:13px;font-weight:600;border-radius:10px;padding:9px 15px;transition:background .15s,border-color .15s,transform 100ms ease-out;text-decoration:none;white-space:nowrap}
 .btn:active{transform:scale(.97)}
-.btn-primary{background:#18181b;color:#fff}
-.btn-primary:hover{background:#000}
+.btn-primary{background:linear-gradient(135deg,#06b6d4,#10b981);color:#fff;box-shadow:0 2px 8px rgba(13,148,136,.25)}
+.btn-primary:hover{filter:brightness(1.08)}
 .btn-ghost{background:#fff;border:1px solid #d6d3d1;color:var(--text)}
 .btn-ghost:hover{background:#f4f4f5;border-color:#a8a29e}
 .btn-sm{padding:6px 11px;font-size:12.5px;border-radius:8px}
@@ -114,6 +114,11 @@ input[type=range]{width:100%;accent-color:var(--blue)}
 .chip-violet{color:#6d28d9;background:rgba(124,58,237,.08)}
 
 /* 结果区 */
+.ws-result{position:relative}
+.ws-result.float-up{animation:floatUp .55s cubic-bezier(.22,.9,.32,1) both}
+.ws-result.sink{animation:sinkDown .45s ease both}
+@keyframes floatUp{from{opacity:.15;transform:translateY(28px)}to{opacity:1;transform:none}}
+@keyframes sinkDown{from{opacity:1;transform:none}to{opacity:.25;transform:translateY(18px)}}
 .ws-top{display:flex;align-items:center;gap:16px;flex-wrap:wrap;margin-bottom:14px}
 .ws-used{display:flex;align-items:baseline;gap:8px}
 .ws-used b{font-size:44px;font-weight:800;letter-spacing:-.03em;font-variant-numeric:tabular-nums;line-height:1}
@@ -132,7 +137,7 @@ input[type=range]{width:100%;accent-color:var(--blue)}
     padding:7px 14px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;color:var(--muted);transition:all .15s}
   .wz-step b{color:var(--text)}
   .wz-step:hover{border-color:#d6d3d1}
-  .wz-step.active{background:#18181b;color:#fff;border-color:#18181b;transform:scale(1.05);box-shadow:0 2px 8px rgba(0,0,0,.15)}
+  .wz-step.active{background:linear-gradient(135deg,#06b6d4,#10b981);color:#fff;border-color:transparent;transform:scale(1.05);box-shadow:0 3px 10px rgba(13,148,136,.3)}
   .wz-step.active b{color:#fff}
   .wz-step.done{color:var(--green);border-color:rgba(22,163,74,.4)}
   .wz-done{display:none;font-weight:800}
@@ -150,10 +155,10 @@ input[type=range]{width:100%;accent-color:var(--blue)}
   .iv-box{margin:12px 0 4px}
   .iv-line{display:flex;align-items:center;gap:10px}
   .iv-node{font-size:13px;font-weight:700;white-space:nowrap;padding:6px 10px;border-radius:9px;color:#fff}
-  .iv-s{background:#4f46e5}.iv-h{background:#059669}
+  .iv-s{background:linear-gradient(135deg,#0ea5e9,#0d9488)}.iv-h{background:#059669}
   .iv-track{position:relative;flex:1;height:34px}
   .iv-zone{position:absolute;top:50%;left:0;right:0;height:6px;transform:translateY(-50%);border-radius:3px;
-    background:linear-gradient(90deg,rgba(79,70,229,.25),rgba(5,150,105,.45))}
+    background:linear-gradient(90deg,rgba(14,165,233,.3),rgba(16,185,129,.5))}
   .iv-pt{position:absolute;top:50%;width:12px;height:12px;border-radius:50%;transform:translate(-50%,-50%);
     border:2px solid #fff;box-shadow:0 1px 3px rgba(0,0,0,.3)}
   .iv-legend{font-size:11.5px;color:var(--muted);margin-top:4px}
@@ -166,8 +171,8 @@ input[type=range]{width:100%;accent-color:var(--blue)}
 .route-chain{display:flex;align-items:center;gap:0;padding:16px 4px 6px;flex-wrap:wrap;justify-content:center}
 .chain-node{display:inline-flex;flex-direction:column;align-items:center;gap:2px;padding:8px 14px;border-radius:12px;font-size:13.5px;font-weight:700;color:#fff;white-space:nowrap;box-shadow:0 2px 8px rgba(0,0,0,.08)}
 .chain-node em{font-style:normal;font-size:10.5px;font-weight:600;opacity:.85}
-.chain-node.start{background:linear-gradient(135deg,#6366f1,#4f46e5)}
-.chain-node.mid{background:linear-gradient(135deg,#0ea5e9,#0284c7)}
+.chain-node.start{background:linear-gradient(135deg,#0ea5e9,#0d9488)}
+.chain-node.mid{background:linear-gradient(135deg,#22d3ee,#0d9488)}
 .chain-node.end{background:linear-gradient(135deg,#34d399,#059669)}
 .chain-seg{flex:1;min-width:26px;height:4px;border-radius:2px;margin:0 4px}
 .chain-seg-tip{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;margin:10px 0 4px}
@@ -223,9 +228,9 @@ input[type=range]{width:100%;accent-color:var(--blue)}
 
 .pin{width:32px;height:32px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);display:flex;align-items:center;justify-content:center;border:2px solid #fff;box-shadow:0 6px 14px rgba(0,0,0,.25)}
 .pin>span{transform:rotate(45deg);font-weight:800;color:#fff;font-size:12px;text-shadow:0 1px 2px rgba(0,0,0,.3)}
-.pin-school{background:linear-gradient(135deg,#6366f1,#4f46e5)}
+.pin-school{background:linear-gradient(135deg,#0ea5e9,#0d9488)}
 .pin-home{background:linear-gradient(135deg,#34d399,#059669)}
-.pin-dir{background:linear-gradient(135deg,#818cf8,#6366f1)}
+.pin-dir{background:linear-gradient(135deg,#22d3ee,#0d9488)}
 .pin-tr{background:linear-gradient(135deg,#fb923c,#ea580c)}
 .pin-fail{background:#a1a1aa}
 
@@ -245,11 +250,11 @@ input[type=range]{width:100%;accent-color:var(--blue)}
 
 /* 引导 */
 #spotlight{position:fixed;inset:0;z-index:1000;cursor:pointer}
-#spotHole{position:absolute;border-radius:14px;border:2.5px solid var(--blue);box-shadow:0 0 0 9999px rgba(15,15,20,.62),0 10px 40px rgba(37,99,235,.3);transition:left .5s cubic-bezier(.22,.9,.32,1),top .5s cubic-bezier(.22,.9,.32,1),width .5s cubic-bezier(.22,.9,.32,1),height .5s cubic-bezier(.22,.9,.32,1),opacity .28s ease;pointer-events:none;opacity:0}
+#spotHole{position:absolute;border-radius:14px;border:2.5px solid var(--blue);box-shadow:0 0 0 9999px rgba(15,15,20,.62),0 10px 40px rgba(13,148,136,.3);transition:left .5s cubic-bezier(.22,.9,.32,1),top .5s cubic-bezier(.22,.9,.32,1),width .5s cubic-bezier(.22,.9,.32,1),height .5s cubic-bezier(.22,.9,.32,1),opacity .28s ease;pointer-events:none;opacity:0}
 #spotCard{position:fixed;width:min(340px,86vw);background:#fff;border:1px solid var(--line);border-radius:16px;box-shadow:var(--shadow-md);padding:15px 17px;z-index:1001;cursor:default;animation:spotIn .35s ease both}
 @keyframes spotIn{from{opacity:0;transform:translateY(10px) scale(.97)}to{opacity:1;transform:none}}
 .spot-title{font-size:15px;font-weight:800;margin-bottom:6px;color:var(--text)}
-.spot-title .st-num{display:inline-grid;place-items:center;width:22px;height:22px;border-radius:7px;background:linear-gradient(135deg,#4f46e5,#22d3ee);color:#fff;font-size:12px;margin-right:8px;vertical-align:-4px}
+.spot-title .st-num{display:inline-grid;place-items:center;width:22px;height:22px;border-radius:7px;background:linear-gradient(135deg,#0ea5e9,#10b981);color:#fff;font-size:12px;margin-right:8px;vertical-align:-4px}
 .spot-text{font-size:13px;color:var(--muted);line-height:1.7;margin-bottom:12px}
 .spot-text b{color:var(--text)}
 .spot-btns{display:flex;align-items:center;gap:8px}
@@ -336,7 +341,7 @@ footer b{color:var(--text)}
       <!-- 输入 -->
       <div class="ws-input">
         <!-- 向导步骤条 -->
-        <div class="wizard-bar">
+        <div class="wizard-bar" id="wizardBar">
           <button class="wz-step" data-step="0" onclick="setGuideStep(0)"><b>①</b> 学校 <span class="wz-done">✓</span></button>
           <span class="wz-arrow">→</span>
           <button class="wz-step" data-step="1" onclick="setGuideStep(1)"><b>②</b> 家 <span class="wz-done">✓</span></button>
@@ -419,7 +424,7 @@ footer b{color:var(--text)}
       <div class="ws-divider"></div>
 
       <!-- 结果 -->
-      <div class="ws-result">
+      <div class="ws-result" id="wsResult">
         <div class="ws-top">
           <div class="ws-used"><b id="usedBig">–</b><span>次 / 预算 <span id="budgetBig">4</span></span></div>
           <div class="hint" id="resultHint">设置区间并添加目的地后，这里实时计算。</div>
@@ -1273,9 +1278,11 @@ function renderChain() {
       : used > 0 ? '<div class="ok-banner">✅ 整条路线 ' + used + ' 次（' + (state.chainRound ? '往返' : '单程') + '），预算内可用，剩余 ' + remain + ' 次。</div>' : '') +
     (!ok ? '<div class="warn-banner">⚠️ 当前路线存在折返/超区间/绕行超标，12306 联程可能无法合并出票。请调整顺序或改用"独立行程"。</div>' : '');
   document.getElementById('tripRows').innerHTML = '';
+  document.getElementById('routeLine').innerHTML = '';
   renderIntervalViz();
   renderAdvice();
   renderCases();
+  maybeFloatResult();
 }
 /* ---------- 导航二级菜单 ---------- */
 function toggleRulesMenu(e) {
@@ -1372,7 +1379,24 @@ function closeGuide() {
   try { sessionStorage.setItem('spr_guide_done', '1'); } catch (e) { }
 }
 
+/* ---------- 结果区: 完成自动上浮 / 改输入自动下沉 ---------- */
+function maybeFloatResult() {
+  const done = state.school && state.school.station && state.home && state.home.station && state.trips.length > 0;
+  const r = document.getElementById('wsResult');
+  if (!r || !done || state.resultFloated) return;
+  state.resultFloated = true;
+  r.classList.remove('float-up'); void r.offsetWidth; r.classList.add('float-up');
+  setTimeout(() => { try { r.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch (e) { } }, 200);
+}
+function sinkResult() {
+  state.resultFloated = false;
+  const r = document.getElementById('wsResult');
+  if (r) { r.classList.remove('float-up'); r.classList.add('sink'); setTimeout(() => r.classList.remove('sink'), 550); }
+  const w = document.getElementById('wizardBar');
+  if (w) setTimeout(() => { try { w.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch (e) { } }, 120);
+}
 /* ---------- 区间画图 + 区间内可去推荐 ---------- */
+
 function renderIntervalViz() {
   const el = document.getElementById('intervalViz');
   const S = state.school && state.school.station, H = state.home && state.home.station;
@@ -1570,6 +1594,7 @@ function setChainEnd() {
 function setGuideStep(n) {
   state.guideStep = n;
   renderWizard();
+  sinkResult();
 }
 function renderWizard() {
   const st = state.guideStep || 0;
@@ -1663,6 +1688,7 @@ function renderAll() {
   renderTrips();
   renderOpt();
   renderMap();
+  maybeFloatResult();
 }
 
 /* ---------- 交互 ---------- */
@@ -1676,11 +1702,13 @@ async function searchPlace(kind) {
     document.getElementById('schoolInput').value = q;
     state.guideStep = 1; // 自动进入下一步: 家
     renderWizard();
+    sinkResult();
   } else {
     state.home = { text: q, point: r.point, station: r.station };
     document.getElementById('homeInput').value = q;
     state.guideStep = 2; // 自动进入下一步: 想去哪
     renderWizard();
+    sinkResult();
   }
   setStatus(r.offline ? '✅ 已匹配内置车站：' + r.label : '✅ 已定位并吸附车站：' + r.label);
   renderAll();

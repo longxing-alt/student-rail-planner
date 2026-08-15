@@ -361,6 +361,21 @@ async function main() {
   A('回点步骤0 学校面板恢复', $all('.wz-panel')[0].style.display !== 'none');
   await w.eval('setGuideStep(2)');
 
+  G('T22. 结果区上浮/下沉动画');
+  await w.eval('state.trips.forEach(t => removeTrip(t.id))');
+  await w.eval('setHomeFromStation("长沙南")');
+  $('schoolInput').value = '武汉';
+  await w.eval('searchPlace("school")');
+  $('tripInput').value = '岳阳';
+  await w.eval('addTrip()');
+  await wait(500);
+  A('完成匹配后结果区上浮', $('wsResult').classList.contains('float-up'), $('wsResult').className);
+  await w.eval('setGuideStep(0)');
+  A('改输入时结果区下沉', $('wsResult').classList.contains('sink'));
+  await w.eval('setGuideStep(2)');
+  await wait(600);
+
+
   G('T21. 引导对齐向导步骤');
   await w.eval('startGuide()');
   await wait(450);
