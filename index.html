@@ -130,6 +130,7 @@
         padding:24px;box-shadow:var(--shadow-sm);transition:border-color .15s,box-shadow .15s,transform .15s}
   .card:hover{border-color:#d6d3d1;box-shadow:var(--shadow-md)}
   .card h3{font-size:15px;font-weight:700;letter-spacing:-.01em;margin-bottom:3px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+  .step-num{display:inline-grid;place-items:center;width:22px;height:22px;border-radius:7px;background:linear-gradient(135deg,#4f46e5,#22d3ee);color:#fff;font-size:12px;font-weight:800}
   .card .hint{font-size:12.5px;color:var(--muted);margin-bottom:16px}
 
   .field{margin-bottom:14px}
@@ -362,8 +363,8 @@
       <!-- 左列：设置 + 出行计划 -->
       <div style="display:flex;flex-direction:column;gap:20px">
         <div class="card">
-          <h3>📍 区间设置 <span class="lock-tag">学校固定</span> <span class="drag-tag">家可移动/拖动</span></h3>
-          <div class="hint">学校端固定不动；"家"一端可在输入框修改，或直接在地图上拖动绿色图钉。</div>
+          <h3><span class="step-num">①</span> 设置区间 <span class="lock-tag">学校固定</span> <span class="drag-tag">家可随便改</span></h3>
+          <div class="hint">学校固定不动；"家"是优惠区间的另一端——12306 里可随便改、不限次数，改完立即生效。</div>
           <div class="field">
             <label>学校地址 / 城市</label>
             <div class="input-row">
@@ -392,10 +393,10 @@
         </div>
 
         <div class="card">
-          <h3>🧭 出行计划</h3>
-          <div class="hint" id="planHint">独立行程：每个目的地单独扣次。也可切换为"串联路线"——多个目的地按顺序串成一条联程路线，整条只扣 1 次。</div>
+          <h3><span class="step-num">②</span> 添加想去的地方</h3>
+          <div class="hint" id="planHint">支持"北京"（从学校出发）、"天津→济南"（指定出发地）。默认串成联程路线，整条只扣 1 次。</div>
           <div class="trip-add">
-            <input id="tripInput" type="text" placeholder="目的地，如：北京 / 广州市 / 大理">
+            <input id="tripInput" type="text" placeholder="北京 / 天津→济南 / 从武汉到长沙">
             <button class="btn btn-primary" onclick="addTrip()">添加</button>
           </div>
           <div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap;align-items:center">
@@ -418,9 +419,9 @@
             <div id="chainCheck" style="font-size:12.5px;margin-top:6px;color:var(--muted)"></div>
           </div>
           <div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap;align-items:center" id="batchBtns">
-            <span style="font-size:12px;color:var(--muted)">批量：</span>
-            <button class="btn btn-ghost btn-sm" onclick="setAllRound(true)">全部往返(×2)</button>
-            <button class="btn btn-ghost btn-sm" onclick="setAllRound(false)">全部单程(×1)</button>
+            <span style="font-size:12px;color:var(--muted)">批量设：</span>
+            <button class="btn btn-ghost btn-sm" onclick="setAllRound(true)">往返(×2)</button>
+            <button class="btn btn-ghost btn-sm" onclick="setAllRound(false)">单程(×1)</button>
           </div>
           <div id="tripList"></div>
         </div>
@@ -431,10 +432,7 @@
         <div class="card" style="padding:16px">
           <h3 style="margin-bottom:10px">🗺️ 地图与车站 <span class="hint" style="display:inline">（右上角图层可切换高德/OSM、显示全部车站）</span></h3>
           <div class="map-tools">
-            <span class="lbl">地图点击模式：</span>
-            <button class="btn btn-ghost btn-sm map-mode" data-mode="school" onclick="setClickMode('school')">设学校</button>
-            <button class="btn btn-ghost btn-sm map-mode" data-mode="home" onclick="setClickMode('home')">设家</button>
-            <button class="btn btn-ghost btn-sm map-mode" data-mode="add" onclick="setClickMode('add')">添加目的地</button>
+            <span class="lbl">可拖动绿色图钉移动"家" · 右上角切换底图/显示车站</span>
             <div style="flex:1"></div>
             <button class="btn btn-ghost btn-sm" onclick="fitAll()">⌖ 适应视野</button>
           </div>
@@ -661,7 +659,6 @@ const state = {
   budget: 4,
   school: null, home: null,
   trips: [],
-  clickMode: null,
   optMode: 'save',
   optBestName: null,
   chainMode: true,    // 联程默认: 多个目的地按顺序串成一条联程路线(整条1次)
@@ -895,29 +892,12 @@ function initMap() {
   }
   L.control.layers({ '高德 · 街道': gaode, 'OpenStreetMap': osm }, { '🚉 显示全部车站': stationLayer },
     { position: 'topright', collapsed: false }).addTo(map);
-  map.on('click', onMapClick);
 }
 function pin(role, label) {
   const cls = role === 'school' ? 'pin-school' : role === 'home' ? 'pin-home'
     : role === 'dir' ? 'pin-dir' : role === 'tr' ? 'pin-tr' : 'pin-fail';
   return L.divIcon({ className: '', html: '<div class="pin ' + cls + '"><span>' + label + '</span></div>',
     iconSize: [34, 34], iconAnchor: [17, 31], popupAnchor: [0, -26] });
-}
-function onMapClick(e) {
-  if (!state.clickMode) return;
-  const pt = e.latlng;
-  const n = nearestStation(pt, 60);
-  const station = n ? stToObj(n) : null;
-  if (state.clickMode === 'school') {
-    state.school = { text: station ? station.name : pt.lat.toFixed(2) + ',' + pt.lon.toFixed(2), point: { lat: pt.lat, lon: pt.lng }, station };
-    document.getElementById('schoolInput').value = state.school.text;
-    setStatus('学校已设为 ' + (station ? station.name + ' · ' + station.city : '该坐标附近无车站'));
-  } else if (state.clickMode === 'home') {
-    setHomeFromPoint(pt, station);
-  } else {
-    addTripWith(pt, station);
-  }
-  renderAll();
 }
 function setStatus(msg) { document.getElementById('status').textContent = msg || ''; }
 function fitAll() {
@@ -1276,11 +1256,11 @@ document.addEventListener('click', () => {
 });
 /* ---------- 动画聚焦引导 ---------- */
 const GUIDE_STEPS = [
-  { sel: '#schoolInput', num: '1', title: '在哪写车站', text: '学校地址写在这里 —— <b>固定不动</b>（12306 要求与学信网一致）。', pos: 'bottom' },
-  { sel: '#homeInput', num: '2', title: '另一个端点"家"', text: '写在这里 —— 区间另一端，<b>12306 里可随便改、不限次数</b>，改完立即生效。这就是你优化区间的钥匙。', pos: 'bottom' },
-  { sel: '#tripInput', num: '3', title: '想去的地方', text: '添加在这里，默认自动按顺序<b>串成联程路线</b>（整条只扣 1 次，往返 2 次），也可以切"独立行程"。', pos: 'bottom' },
-  { sel: '#routeLine', num: '4', title: '怎么看结果', text: '看这条直线图：<b>🟢 绿=学生票（扣次数）</b>、🟠 橙=中转学生票、<b>🔴 红=全价（不扣次）</b>。', pos: 'top' },
-  { sel: '#advice', num: '5', title: '怎么改区间', text: '这里自动告诉你"<b>把家改到哪</b>最省次数"，照着改即可。预算不够时也会给出减行程/改单程建议。', pos: 'top' },
+  { sel: '#schoolInput', num: '1', title: '设置区间 · 学校', text: '学校地址写在这里 —— <b>固定不动</b>（须与学信网一致）。', pos: 'bottom' },
+  { sel: '#homeInput', num: '2', title: '设置区间 · 家', text: '"家"写在这里 —— <b>12306 里可随便改、不限次数</b>，改完立即生效。这就是优化区间的钥匙。', pos: 'bottom' },
+  { sel: '#tripInput', num: '3', title: '添加想去的地方', text: '默认自动串成<b>联程路线</b>（整条只扣 1 次）。支持"<b>天津→济南</b>"指定出发地。', pos: 'bottom' },
+  { sel: '#routeLine', num: '4', title: '看结果', text: '<b>🟢 绿=学生票</b>、🟠 橙=区间边缘（可能被查）、<b>🔴 红=全价</b>。', pos: 'top' },
+  { sel: '#advice', num: '5', title: '照做就行', text: '这里告诉你"<b>把家改到哪</b>最省次数"，还有同类实测案例参考。', pos: 'top' },
 ];
 let guideIdx = 0;
 function startGuide() {
@@ -1561,12 +1541,6 @@ function renderAll() {
 }
 
 /* ---------- 交互 ---------- */
-function setClickMode(m) {
-  state.clickMode = state.clickMode === m ? null : m;
-  document.querySelectorAll('.map-mode').forEach(b => b.classList.toggle('active', b.dataset.mode === state.clickMode));
-  if (map) map.getContainer().style.cursor = state.clickMode ? 'crosshair' : '';
-  setStatus(state.clickMode ? '点击地图设置：' + ({ school: '学校', home: '家', add: '目的地' })[state.clickMode] : '');
-}
 async function searchPlace(kind) {
   const q = document.getElementById(kind === 'school' ? 'schoolInput' : 'homeInput').value;
   setStatus('正在解析：' + q + ' …');

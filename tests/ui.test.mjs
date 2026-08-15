@@ -236,17 +236,18 @@ async function main() {
   A('点击后展开', $('rulesMenu').classList.contains('open'));
   A('下拉含计算规则与官方对照', $('rulesMenu').textContent.includes('计算规则') && $('rulesMenu').textContent.includes('官方规则对照'));
   await w.eval('document.getElementById("rulesMenu").classList.remove("open")');
+  A('地图选点模式已移除', $all('.map-mode').length === 0 && !($all('.map-tools')[0] || {textContent:''}).textContent.includes('设学校'));
   A('首次访问 spotlight 引导显示', $('spotlight').style.display === 'block');
   await wait(450); // 等聚焦框动画定位(380ms)
-  A('第1步: 在哪写车站(聚焦学校, 文字含学校)', $('spotTitle').textContent.includes('在哪写车站') && $('spotText').textContent.includes('学校') && $('spotHole').style.width !== '');
+  A('第1步: 设置区间·学校', $('spotTitle').textContent.includes('设置区间') && $('spotText').textContent.includes('学校') && $('spotHole').style.width !== '');
   await w.eval('nextSpot()');
   A('第2步: 家', $('spotTitle').textContent.includes('家'));
   await w.eval('nextSpot()');
   A('第3步: 添加目的地', $('spotTitle').textContent.includes('想去的地方'));
   await w.eval('nextSpot()');
-  A('第4步: 怎么看结果(直线图)', $('spotTitle').textContent.includes('怎么看结果'));
+  A('第4步: 看结果(直线图)', $('spotTitle').textContent.includes('看结果'));
   await w.eval('nextSpot()');
-  A('第5步: 怎么改区间', $('spotTitle').textContent.includes('怎么改区间'));
+  A('第5步: 照做就行', $('spotTitle').textContent.includes('照做就行'));
   A('最后一步显示完成按钮', $('spotDone').style.display !== 'none');
   await w.eval('closeGuide()');
   A('完成后 spotlight 隐藏', $('spotlight').style.display === 'none');
