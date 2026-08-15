@@ -168,16 +168,19 @@ input[type=range]{width:100%;accent-color:var(--blue)}
   .hot-chip.edge:hover{background:#fef3c7;border-color:#f59e0b;color:#92400e}
   /* 站点进度条 */
 .route-chain{display:flex;align-items:flex-start;gap:0;padding:16px 4px 8px;justify-content:center}
-.rc-node{display:flex;flex-direction:column;align-items:center;gap:4px;width:84px;flex:none}
-.rc-dot{width:22px;height:22px;border-radius:50%;border:3px solid #fff;position:relative;flex:none;
-  box-shadow:0 0 0 3px rgba(13,148,136,.18),0 2px 6px rgba(0,0,0,.18)}
-.rc-dot::after{content:'';position:absolute;inset:6px;border-radius:50%;background:rgba(255,255,255,.92)}
+.rc-node{display:flex;flex-direction:column;align-items:center;gap:4px;width:84px;flex:none;cursor:pointer;border-radius:10px;padding:4px 2px;transition:background .15s}
+.rc-node:hover{background:rgba(13,148,136,.07)}
+.rc-dot{width:20px;height:20px;border-radius:50%;flex:none;position:relative;z-index:1;transition:transform .15s,box-shadow .15s;box-shadow:0 1px 2px rgba(0,0,0,.12)}
+.rc-node:hover .rc-dot{transform:scale(1.18);box-shadow:0 3px 10px rgba(13,148,136,.35)}
 .rc-dot.start{background:linear-gradient(135deg,#0ea5e9,#0d9488)}
 .rc-dot.mid{background:linear-gradient(135deg,#22d3ee,#0d9488)}
 .rc-dot.end{background:linear-gradient(135deg,#34d399,#059669)}
-.rc-name{font-size:12.5px;font-weight:700;white-space:nowrap;color:var(--text)}
+.rc-name{font-size:12.5px;font-weight:700;white-space:nowrap;color:var(--text);transition:color .15s}
+.rc-node:hover .rc-name{color:#0f766e}
 .rc-tag{font-size:10px;color:var(--muted)}
-.rc-seg{flex:1;min-width:26px;height:10px;border-radius:5px;margin:9px 2px 0}
+.rc-seg{flex:1;min-width:26px;height:10px;border-radius:5px;margin:9px -40px 0}
+.trip-row.flash{animation:flashRow 1.2s ease}
+@keyframes flashRow{0%{background:#ccfbf1;border-color:#5eead4}60%{background:#ccfbf1;border-color:#5eead4}100%{background:#fafafa}}
 
 .chain-seg-tip{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;margin:10px 0 4px}
 .seg-tip-item{font-size:12px;color:var(--muted);display:inline-flex;align-items:center;gap:5px}
@@ -1241,7 +1244,7 @@ function renderChain() {
       const dotCls = isStart ? 'start' : isEnd ? 'end' : 'mid';
       const tag = isStart ? '学校' : isEnd ? (state.chainEnd ? '终点' : '家') : '途经';
       return (i > 0 ? '<span class="rc-seg" style="background:' + segColor + '"></span>' : '') +
-        '<span class="rc-node"><span class="rc-dot ' + dotCls + '"></span><span class="rc-name">' + esc(n.name) + '</span><span class="rc-tag">' + tag + '</span></span>';
+        '<span class="rc-node" onclick="nodeClick(' + i + ')" title="点击定位该站"><span class="rc-dot ' + dotCls + '"></span><span class="rc-name">' + esc(n.name) + '</span><span class="rc-tag">' + tag + '</span></span>';
     }).join('') +
     '</div>' +
     '<div class="chain-seg-tip">' +
@@ -1390,7 +1393,32 @@ function closeGuide() {
   try { sessionStorage.setItem('spr_guide_done', '1'); } catch (e) { }
 }
 
+/* ---------- 进度条节点点击: 定位该站 ---------- */
+function nodeClick(i) {
+  const n = state.trips.length;
+  if (i === 0) { // 学校
+    setGuideStep(0);
+    setStatus('学校（固定）：' + (state.school && state.school.station ? state.school.station.name : ''));
+    return;
+  }
+  if (i === n + 1) { // 终点(家/自定义)
+    setStatus('终点：' + (state.chainEnd ? state.chainEnd.name : (state.home && state.home.station ? state.home.station.name : '家')));
+    return;
+  }
+  const idx = i - 1;
+  const row = document.querySelectorAll('.trip-row')[idx];
+  if (row) {
+    row.classList.remove('flash'); void row.offsetWidth; row.classList.add('flash');
+    setTimeout(() => row.classList.remove('flash'), 1300);
+    try { row.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch (e) { }
+  }
+  const c = chainEvalCurrent();
+  const sg = c && c.segs[idx];
+  const tp = state.trips[idx];
+  setStatus('途经：' + (tp ? tp.text : '') + (sg ? ' ' + sg.km + 'km ' + (sg.inInt ? '✅ 学生票' : '⚠️ 超区间') : ''));
+}
 /* ---------- 结果区: 完成自动上浮 / 改输入自动下沉 ---------- */
+
 function maybeFloatResult() {
   if (!state.touched) return; // 初始加载不自动滚动, 用户操作后才上浮
   const done = state.school && state.school.station && state.home && state.home.station && state.trips.length > 0;
