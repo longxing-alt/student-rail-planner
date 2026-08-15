@@ -668,6 +668,7 @@ const state = {
   optBestName: null,
   chainMode: true,    // 联程默认: 多个目的地按顺序串成一条联程路线(整条1次)
   chainEnd: null,     // 串联路线终点(默认=家, 可改为任意想去的地方)
+  touched: false,     // 是否已有用户操作(初始不自动滚动)
   chainRound: false,  // 串联模式下整条路线: 单程=1次 / 往返=2次
   _tid: 0,
 };
@@ -1338,10 +1339,14 @@ function showSpotStep() {
   hole.style.opacity = 0; // 先隐藏, 精确定位后再淡入, 避免闪烁
   const place = () => {
     const r = target.getBoundingClientRect();
-    hole.style.left = (r.left - 12) + 'px';
-    hole.style.top = (r.top - 12) + 'px';
-    hole.style.width = (r.width + 24) + 'px';
-    hole.style.height = (r.height + 24) + 'px';
+    const W = window.innerWidth, H = window.innerHeight || 900;
+    const pad = 6;
+    const left = Math.max(2, Math.min(r.left - pad, W - r.width - 2 * pad - 4));
+    const top = Math.max(2, Math.min(r.top - pad, H - r.height - 2 * pad - 4));
+    hole.style.left = left + 'px';
+    hole.style.top = top + 'px';
+    hole.style.width = (r.width + 2 * pad) + 'px';
+    hole.style.height = (r.height + 2 * pad) + 'px';
     hole.style.opacity = 1;
     const card = document.getElementById('spotCard');
     const above = step.pos === 'top';
@@ -1381,6 +1386,7 @@ function closeGuide() {
 
 /* ---------- 结果区: 完成自动上浮 / 改输入自动下沉 ---------- */
 function maybeFloatResult() {
+  if (!state.touched) return; // 初始加载不自动滚动, 用户操作后才上浮
   const done = state.school && state.school.station && state.home && state.home.station && state.trips.length > 0;
   const r = document.getElementById('wsResult');
   if (!r || !done || state.resultFloated) return;
@@ -1592,6 +1598,7 @@ function setChainEnd() {
 }
 /* ---------- 向导：学校 → 家 → 想去哪 ---------- */
 function setGuideStep(n) {
+  state.touched = true;
   state.guideStep = n;
   renderWizard();
   sinkResult();
@@ -1698,12 +1705,14 @@ async function searchPlace(kind) {
   const r = await resolvePlace(q);
   if (!r) { setStatus('❌ 未能解析 "' + q + '"（离线车站库未匹配，在线解析失败/无网络）'); return; }
   if (kind === 'school') {
+    state.touched = true;
     state.school = { text: q, point: r.point, station: r.station };
     document.getElementById('schoolInput').value = q;
     state.guideStep = 1; // 自动进入下一步: 家
     renderWizard();
     sinkResult();
   } else {
+    state.touched = true;
     state.home = { text: q, point: r.point, station: r.station };
     document.getElementById('homeInput').value = q;
     state.guideStep = 2; // 自动进入下一步: 想去哪
@@ -1732,6 +1741,7 @@ async function addTrip() {
     if (!rf) { setStatus('❌ 未能解析出发地 "' + fromQ + '"'); return; }
     from = rf.station || { name: rf.label, lat: rf.point.lat, lon: rf.point.lon };
   }
+  state.touched = true;
   state.trips.push({ id: ++state._tid, text: q, from, point: r.point, station: r.station, round: false }); // 默认单程
   document.getElementById('tripInput').value = '';
   setStatus('✅ 已添加：' + (from ? fromQ + ' → ' : '') + toQ + (from ? '（自定义出发地）' : ''));
@@ -1810,6 +1820,7 @@ function initQuickChips() {
 async function quickAdd(city) {
   const r = await resolvePlace(city);
   if (!r) return;
+  state.touched = true;
   state.trips.push({ id: ++state._tid, text: city, point: r.point, station: r.station, round: false });
   renderAll(); fitAll();
 }

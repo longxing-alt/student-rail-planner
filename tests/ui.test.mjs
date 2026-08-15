@@ -89,6 +89,8 @@ const pageHomeName = () => w.eval('state.home && state.home.station && state.hom
 async function main() {
   await wait(150); // 等待 init() 完成
   G('T1. 初始加载(演示数据, 联程默认)');
+  A('初始未触发用户操作(touched=false)', state.touched === false);
+  A('初始结果区未上浮', !$('wsResult').classList.contains('float-up'));
   A('默认串联模式开启', $('chainControls').style.display === 'block', $('chainControls').style.display);
   A('行程行=2(岳阳+重庆)', $all('.trip-row').length === 2, $all('.trip-row').length);
   A('串联: 路线不可合并(重庆超区间) → 0次', pageUsed() === 0);
@@ -374,6 +376,11 @@ async function main() {
   A('改输入时结果区下沉', $('wsResult').classList.contains('sink'));
   await w.eval('setGuideStep(2)');
   await wait(600);
+
+  G('T23. 用户操作后自动上浮');
+  await w.eval('state.touched = true; state.resultFloated = false; renderAll();');
+  A('用户操作后完成匹配自动上浮', $('wsResult').classList.contains('float-up'));
+
 
 
   G('T21. 引导对齐向导步骤');
