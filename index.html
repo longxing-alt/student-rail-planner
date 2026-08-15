@@ -124,7 +124,24 @@ input[type=range]{width:100%;accent-color:var(--blue)}
 .advice.good{background:var(--green-soft);border-color:rgba(22,163,74,.22);color:var(--green)}
 .advice b{color:var(--text)}
 
+  /* 向导 */
+  .wizard-bar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:16px}
+  .wz-step{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);background:#fff;border-radius:99px;
+    padding:7px 14px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;color:var(--muted);transition:all .15s}
+  .wz-step b{color:var(--text)}
+  .wz-step:hover{border-color:#d6d3d1}
+  .wz-step.active{background:#18181b;color:#fff;border-color:#18181b}
+  .wz-step.active b{color:#fff}
+  .wz-step.done{color:var(--green);border-color:rgba(22,163,74,.4)}
+  .wz-done{display:none;font-weight:800}
+  .wz-step.done .wz-done{display:inline}
+  .wz-arrow{color:#d4d4d8;font-weight:700}
+  .wz-tip{font-size:12px;color:var(--muted)}
+  .wz-panel label{display:block;font-size:16px;font-weight:700;margin-bottom:8px}
+  .wz-sub{font-style:normal;font-weight:400;font-size:12px;color:var(--muted);margin-left:8px}
+  .wz-panel .input-row input{font-size:16px;padding:12px 15px}
   /* 区间可视化线 */
+
   .iv-box{margin:12px 0 4px}
   .iv-line{display:flex;align-items:center;gap:10px}
   .iv-node{font-size:13px;font-weight:700;white-space:nowrap;padding:6px 10px;border-radius:9px;color:#fff}
@@ -313,32 +330,44 @@ footer b{color:var(--text)}
     <div class="workspace">
       <!-- 输入 -->
       <div class="ws-input">
-        <div class="ws-row">
-          <div class="ws-field">
-            <label>学校（固定不动）</label>
-            <div class="input-row">
-              <input id="schoolInput" type="text" placeholder="如：武汉">
-              <button class="btn btn-ghost btn-sm" onclick="searchPlace('school')">确认</button>
-            </div>
-          </div>
-          <div class="ws-field">
-            <label>家（可随便改）</label>
-            <div class="input-row">
-              <input id="homeInput" type="text" placeholder="如：长沙">
-              <button class="btn btn-ghost btn-sm" onclick="searchPlace('home')">确认</button>
-            </div>
-          </div>
-          <div class="ws-field">
-            <label>想去的地方</label>
-            <div class="input-row">
-              <input id="tripInput" type="text" placeholder="北京 / 天津→济南 / 从武汉到长沙">
-              <button class="btn btn-primary" onclick="addTrip()">添加</button>
-            </div>
-            <div id="planHint" style="font-size:11.5px;color:var(--muted);margin-top:5px"></div>
+        <!-- 向导步骤条 -->
+        <div class="wizard-bar">
+          <button class="wz-step" data-step="0" onclick="setGuideStep(0)"><b>①</b> 学校 <span class="wz-done">✓</span></button>
+          <span class="wz-arrow">→</span>
+          <button class="wz-step" data-step="1" onclick="setGuideStep(1)"><b>②</b> 家 <span class="wz-done">✓</span></button>
+          <span class="wz-arrow">→</span>
+          <button class="wz-step" data-step="2" onclick="setGuideStep(2)"><b>③</b> 想去哪</button>
+          <span style="flex:1"></span>
+          <span class="wz-tip">按顺序填，填完自动算</span>
+        </div>
+
+        <!-- 步骤1: 学校 -->
+        <div class="wz-panel" data-step="0">
+          <label>① 学校在哪？<em class="wz-sub">固定不动</em></label>
+          <div class="input-row">
+            <input id="schoolInput" type="text" placeholder="输入学校城市，如：武汉">
+            <button class="btn btn-primary" onclick="searchPlace('school')">下一步 →</button>
           </div>
         </div>
-        <div class="hot-line"><span class="lbl">热门：</span><span id="quickChips"></span></div>
-        <div id="zoneCities" class="hot-line"></div>
+        <!-- 步骤2: 家 -->
+        <div class="wz-panel" data-step="1" style="display:none">
+          <label>② 家庭在哪？<em class="wz-sub">可随便改，改完立即生效</em></label>
+          <div class="input-row">
+            <input id="homeInput" type="text" placeholder="输入家庭城市，如：长沙">
+            <button class="btn btn-primary" onclick="searchPlace('home')">下一步 →</button>
+          </div>
+        </div>
+        <!-- 步骤3: 想去哪 -->
+        <div class="wz-panel" data-step="2" style="display:none">
+          <label>③ 想去哪？<em class="wz-sub">可加多个；从哪到哪写"天津→济南"</em></label>
+          <div class="input-row">
+            <input id="tripInput" type="text" placeholder="输入城市，如：北京 / 天津→济南">
+            <button class="btn btn-primary" onclick="addTrip()">添加</button>
+          </div>
+          <div id="planHint" style="font-size:11.5px;color:var(--muted);margin-top:5px"></div>
+          <div id="zoneCities" class="hot-line"></div>
+          <div class="hot-line"><span class="lbl">热门：</span><span id="quickChips"></span></div>
+        </div>
         <div id="intervalViz" class="iv-box"></div>
         <div class="chain-mini" id="chainControls" style="display:none">
           <span class="chain-tag">🔗 串联路线</span>
@@ -1517,6 +1546,25 @@ function setChainEnd() {
     renderAll();
   });
 }
+/* ---------- 向导：学校 → 家 → 想去哪 ---------- */
+function setGuideStep(n) {
+  state.guideStep = n;
+  renderWizard();
+}
+function renderWizard() {
+  const st = state.guideStep || 0;
+  document.querySelectorAll('.wz-step').forEach(b => {
+    const s0 = +b.dataset.step;
+    b.classList.toggle('active', s0 === st);
+    const done = (s0 === 0 && state.school && state.school.station) || (s0 === 1 && state.home && state.home.station);
+    b.classList.toggle('done', done);
+  });
+  document.querySelectorAll('.wz-panel').forEach(p => {
+    p.style.display = (+p.dataset.step === st) ? 'block' : 'none';
+  });
+  const f = st === 0 ? document.getElementById('schoolInput') : st === 1 ? document.getElementById('homeInput') : document.getElementById('tripInput');
+  if (f && document.hasFocus && document.hasFocus()) setTimeout(() => { try { f.focus(); } catch (e) { } }, 200);
+}
 function setChainMode(on) {
   state.chainMode = !!on;
   document.getElementById('fiveDayTip').style.display = on ? 'block' : 'none';
@@ -1606,9 +1654,13 @@ async function searchPlace(kind) {
   if (kind === 'school') {
     state.school = { text: q, point: r.point, station: r.station };
     document.getElementById('schoolInput').value = q;
+    state.guideStep = 1; // 自动进入下一步: 家
+    renderWizard();
   } else {
     state.home = { text: q, point: r.point, station: r.station };
     document.getElementById('homeInput').value = q;
+    state.guideStep = 2; // 自动进入下一步: 想去哪
+    renderWizard();
   }
   setStatus(r.offline ? '✅ 已匹配内置车站：' + r.label : '✅ 已定位并吸附车站：' + r.label);
   renderAll();
@@ -1741,6 +1793,8 @@ async function init() {
     if (r) state.trips.push({ id: ++state._tid, text: c, point: r.point, station: r.station, round: false });
   }
   setChainMode(true);
+  state.guideStep = 2; // 演示数据齐全, 直接到目的地步骤
+  renderWizard();
   let gd = false;
   try { gd = sessionStorage.getItem('spr_guide_done') === '1'; } catch (e) { }
   if (!gd) startGuide();

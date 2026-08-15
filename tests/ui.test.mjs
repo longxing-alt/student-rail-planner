@@ -337,6 +337,31 @@ async function main() {
   await wait(400);
   A('点推荐城市后行程出现', $all('.trip-row').length === 1 && $all('.trip-row')[0].textContent.includes(cityName));
 
+  G('T20. 向导式输入(学校→家→想去哪)');
+  await w.eval('setGuideStep(0)');
+  A('步骤0: 仅学校面板可见', $all('.wz-panel')[0].style.display !== 'none' && $all('.wz-panel')[1].style.display === 'none' && $all('.wz-panel')[2].style.display === 'none');
+  A('步骤0高亮', $all('.wz-step')[0].classList.contains('active'));
+  // 填学校 -> 自动进步骤1
+  $('schoolInput').value = '武汉';
+  await w.eval('searchPlace("school")');
+  A('学校确认后自动进入步骤1(家)', $all('.wz-panel')[1].style.display !== 'none' && $all('.wz-panel')[0].style.display === 'none');
+  A('步骤0显示已完成✓', $all('.wz-step')[0].classList.contains('done'));
+  // 填家 -> 自动进步骤2
+  $('homeInput').value = '长沙';
+  await w.eval('searchPlace("home")');
+  A('家确认后自动进入步骤2(想去哪)', $all('.wz-panel')[2].style.display !== 'none');
+  A('步骤1显示已完成✓', $all('.wz-step')[1].classList.contains('done'));
+  // 步骤2 添加地点
+  $('tripInput').value = '岳阳';
+  await w.eval('addTrip()');
+  await wait(300);
+  A('步骤2 添加成功', $all('.trip-row').length >= 1);
+  // 步骤条可回点
+  await w.eval('setGuideStep(0)');
+  A('回点步骤0 学校面板恢复', $all('.wz-panel')[0].style.display !== 'none');
+  await w.eval('setGuideStep(2)');
+
+
 
   console.log(`\n结果: ${pass} 通过, ${fail} 失败`);
   process.exit(fail ? 1 : 0);
