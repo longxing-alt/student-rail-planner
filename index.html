@@ -168,14 +168,16 @@ input[type=range]{width:100%;accent-color:var(--blue)}
   .hot-chip.edge:hover{background:#fef3c7;border-color:#f59e0b;color:#92400e}
   /* 站点进度条 */
 .route-chain{display:flex;align-items:flex-start;gap:0;padding:16px 4px 8px;justify-content:center}
-.rc-node{display:flex;flex-direction:column;align-items:center;gap:3px;width:76px;flex:none}
-.rc-dot{width:16px;height:16px;border-radius:50%;border:3px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.25);flex:none}
+.rc-node{display:flex;flex-direction:column;align-items:center;gap:4px;width:84px;flex:none}
+.rc-dot{width:22px;height:22px;border-radius:50%;border:3px solid #fff;position:relative;flex:none;
+  box-shadow:0 0 0 3px rgba(13,148,136,.18),0 2px 6px rgba(0,0,0,.18)}
+.rc-dot::after{content:'';position:absolute;inset:6px;border-radius:50%;background:rgba(255,255,255,.92)}
 .rc-dot.start{background:linear-gradient(135deg,#0ea5e9,#0d9488)}
 .rc-dot.mid{background:linear-gradient(135deg,#22d3ee,#0d9488)}
 .rc-dot.end{background:linear-gradient(135deg,#34d399,#059669)}
-.rc-name{font-size:12px;font-weight:700;white-space:nowrap;color:var(--text)}
-.rc-tag{font-size:9.5px;color:var(--muted)}
-.rc-seg{flex:1;min-width:24px;height:6px;border-radius:3px;margin:8px 2px 0}
+.rc-name{font-size:12.5px;font-weight:700;white-space:nowrap;color:var(--text)}
+.rc-tag{font-size:10px;color:var(--muted)}
+.rc-seg{flex:1;min-width:26px;height:10px;border-radius:5px;margin:9px 2px 0}
 
 .chain-seg-tip{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;margin:10px 0 4px}
 .seg-tip-item{font-size:12px;color:var(--muted);display:inline-flex;align-items:center;gap:5px}
@@ -1288,7 +1290,6 @@ function renderChain() {
   renderIntervalViz();
   renderAdvice();
   renderCases();
-  maybeFloatResult();
 }
 /* ---------- 导航二级菜单 ---------- */
 function toggleRulesMenu(e) {
@@ -1709,7 +1710,6 @@ function renderAll() {
   renderTrips();
   renderOpt();
   renderMap();
-  maybeFloatResult();
 }
 
 /* ---------- 交互 ---------- */
@@ -1761,6 +1761,7 @@ async function addTrip() {
   setStatus('✅ 已添加：' + (from ? fromQ + ' → ' : '') + toQ + (from ? '（自定义出发地）' : ''));
   renderAll();
   fitAll();
+  maybeFloatResult(); // 只有"添加"才下滑到结果
 }
 function editFrom(id) {
   const t = state.trips.find(x => x.id === id);
@@ -1837,6 +1838,7 @@ async function quickAdd(city) {
   state.touched = true;
   state.trips.push({ id: ++state._tid, text: city, point: r.point, station: r.station, round: false });
   renderAll(); fitAll();
+  maybeFloatResult(); // 只有"添加"才下滑到结果
 }
 function bindEvents() {
   document.getElementById('budgetInput').addEventListener('change', e => {

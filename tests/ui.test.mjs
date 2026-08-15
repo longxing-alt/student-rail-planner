@@ -377,9 +377,14 @@ async function main() {
   await w.eval('setGuideStep(2)');
   await wait(600);
 
-  G('T23. 用户操作后自动上浮');
-  await w.eval('state.touched = true; state.resultFloated = false; renderAll();');
-  A('用户操作后完成匹配自动上浮', $('wsResult').classList.contains('float-up'));
+  G('T23. 仅添加才下滑');
+  await w.eval('state.touched = true; state.resultFloated = false; searchPlace("school")'); // 改输入不应上浮
+  await wait(200);
+  A('改输入后不上浮', !$('wsResult').classList.contains('float-up'));
+  $('tripInput').value = '岳阳';
+  await w.eval('state.resultFloated = false; addTrip()'); // 添加才上浮
+  await wait(300);
+  A('添加后上浮', $('wsResult').classList.contains('float-up'));
 
   G('T24. 未完成三步不显示结果区');
   await w.eval('state.trips.forEach(t => removeTrip(t.id))');
