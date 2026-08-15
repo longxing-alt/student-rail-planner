@@ -415,6 +415,32 @@ async function main() {
   A('引导第3步: 目的地面板可见', $all('.wz-panel')[2].style.display !== 'none');
   await w.eval('closeGuide()');
 
+  G('T25. 折返路线: 联程0次但展示拆开买最低(用户场景 石家庄/贵阳北+长沙/岳阳)');
+  await w.eval('setHomeFromStation("贵阳北")');
+  $('schoolInput').value = '石家庄';
+  await w.eval('searchPlace("school")');
+  await w.eval('state.trips.forEach(t => removeTrip(t.id))');
+  await w.eval('state.chainRound = false;');
+  $('tripInput').value = '长沙';
+  await w.eval('addTrip()');
+  $('tripInput').value = '岳阳';
+  await w.eval('addTrip()');
+  await w.eval('setChainMode(true)');
+  A('折返警告出现(岳阳东在长沙南北边)', $('chainCheck').textContent.includes('回头路'));
+  A('整条路线消耗 0 次(联程不可合并)', $('totals').querySelector('.total-box .num').textContent.startsWith('0 /'));
+  A('提示拆开单独买最低', $('resultHint').textContent.includes('拆开单独买最低'));
+  A('提示含原因:走了回头路', $('resultHint').textContent.includes('走了回头路'));
+  A('拆开买最低=3段×1次=3', $all('.total-box .num')[4].textContent === '3', $all('.total-box .num')[4].textContent);
+  A('警示横幅给出拆开方案', $('banners').textContent.includes('拆开单独买'));
+  A('建议点自动排序(可排序修复)', $('chainCheck').textContent.includes('自动排序') && !$('chainCheck').textContent.includes('排序救不了'));
+  await w.eval('state.chainRound = true; renderChain();');
+  A('往返: 拆开买最低=3段×2次=6', $all('.total-box .num')[4].textContent === '6', $all('.total-box .num')[4].textContent);
+  await w.eval('state.chainRound = false; renderChain();');
+  await w.eval('chainAutoSort()');
+  A('自动排序把岳阳排在长沙前', $all('.trip-main b')[0].textContent === '岳阳' && $all('.trip-main b')[1].textContent === '长沙', $all('.trip-main b').map(b=>b.textContent).join(' | '));
+  A('自动排序后折返消失', !$('chainCheck').textContent.includes('回头路'));
+  A('自动排序后联程合并=1次', $('totals').querySelector('.total-box .num').textContent.startsWith('1 /'));
+
 
 
 

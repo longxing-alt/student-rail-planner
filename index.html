@@ -202,7 +202,7 @@ input[type=range]{width:100%;accent-color:var(--blue)}
 .total-box+.total-box{border-left:1px solid var(--line)}
 .total-box .num{font-size:21px;font-weight:800;letter-spacing:-.02em;font-variant-numeric:tabular-nums;line-height:1.1}
 .total-box .lbl{font-size:11px;color:var(--muted);margin-top:2px}
-.num-green{color:var(--green)}.num-red{color:var(--red)}.num-blue{color:var(--blue)}.num-orange{color:var(--orange)}
+.num-green{color:var(--green)}.num-red{color:var(--red)}.num-blue{color:var(--blue)}.num-orange{color:var(--orange)}.num-gray{color:#9ca3af}
 
 /* 行程行 */
 .trip-row{display:flex;align-items:center;gap:9px;padding:9px 11px;border:1px solid var(--line);border-radius:12px;background:#fafafa;margin-bottom:8px;flex-wrap:wrap;transition:border-color .15s,background .15s}
@@ -807,7 +807,7 @@ function chainEval(S, H, stList) {
   const pts = [S, ...stList, H];
   const direct = dist(S, H);
   const segs = [];
-  let total = 0, maxRatio = 0, foldback = false;
+  let total = 0, maxRatio = 0, foldback = false, foldAt = null;
   for (let i = 0; i < pts.length - 1; i++) {
     const A = pts[i], B = pts[i + 1];
     const d = dist(A, B);
@@ -823,19 +823,30 @@ function chainEval(S, H, stList) {
       const a1 = pts[i - 1], b1 = pts[i], c1 = pts[i + 1];
       const ux = b1.lon - a1.lon, uy = b1.lat - a1.lat;
       const vx = c1.lon - b1.lon, vy = c1.lat - b1.lat;
-      if (ux * vx + uy * vy < 0) foldback = true;
+      if (ux * vx + uy * vy < 0) { foldback = true; if (!foldAt) foldAt = B.name; }
     }
     segs.push({ from: A.name || '学校', to: B.name || '家', km: Math.round(d), inInt, ratio: +ratio.toFixed(2) });
   }
   return {
     segs, total: Math.round(total), direct: Math.round(direct),
-    maxRatio: +maxRatio.toFixed(2), foldback,
+    maxRatio: +maxRatio.toFixed(2), foldback, foldAt,
     ok: !foldback && maxRatio <= state.ratio && segs.every(s => s.inInt),
   };
 }
 function chainEvalCurrent() {
   const end = state.chainEnd || (state.home && state.home.station);
   return chainEval(state.school && state.school.station, end, state.trips.map(t => t.station));
+}
+function foldBackBadStation(c) {
+  /* 折返能否靠排序修复: 按投影顺路排序后仍折返 → 返回出问题的站名(排序救不了); 否则 null(可排序修复) */
+  if (!c || !c.foldback) return null;
+  const S = state.school && state.school.station;
+  const H = state.chainEnd || (state.home && state.home.station);
+  if (!S || !H) return null;
+  const sorted = state.trips.map(t => t.station).filter(Boolean)
+    .sort((a, b) => corridor(S, H, a).t - corridor(S, H, b).t);
+  const c2 = chainEval(S, H, sorted);
+  return (c2 && c2.foldback) ? (c.foldAt || '某站') : null;
 }
 // ==== PURE LOGIC END ====
 
@@ -1263,7 +1274,12 @@ function renderChain() {
     const okN = c.segs.filter(x => x.inInt).length;
     const badN = c.segs.length - okN;
     check = '<b>' + okN + ' 段学生票 · ' + badN + ' 段超区间</b> · 全程 ' + c.total + ' km';
-    if (c.foldback) check += '<br><span style="color:#c2410c">⚠️ 路线走了回头路，12306 联程不会合并——调整顺序</span>';
+    if (c.foldback) {
+      const bad = foldBackBadStation(c);
+      check += bad
+        ? '<br><span style="color:#c2410c">⚠️ 走了回头路：<b>' + esc(bad) + '</b> 与前进方向相反，排序救不了——去掉该站，或把"家"改到它后面</span>'
+        : '<br><span style="color:#c2410c">⚠️ 路线走了回头路，12306 联程不会合并——点"🪄 自动排序"或手动调整顺序</span>';
+    }
     if (c.maxRatio > state.ratio) check += '<br><span style="color:#c2410c">⚠️ 绕路太多（' + c.maxRatio + '×），购票会提示"区间不符"——减少绕路或改家到中间城市</span>';
   }
   document.getElementById('chainCheck').innerHTML = check;
@@ -1272,8 +1288,18 @@ function renderChain() {
   sw.checked = state.chainRound;
   document.getElementById('chainRoundLabel').textContent = state.chainRound ? '往返 = 2次' : '单程 = 1次';
   // 总计
-  document.getElementById('resultHint').innerHTML =
-    '整条路线按联程计 <b>' + used + ' 次</b>' + (state.chainRound ? '（往返）' : '（单程）');
+  const segs = c ? c.segs : [];
+  const inIntN = segs.filter(s => s.inInt).length;               // 能单独买学生票的段数
+  const splitN = inIntN * (state.chainRound ? 2 : 1);            // 拆开单独买的最低次数（往返×2）
+  const reason = !c ? '未添加目的地'
+    : c.foldback ? '走了回头路'
+    : c.maxRatio > state.ratio ? '绕路 ' + c.maxRatio + '× 超限'
+    : '有段超出区间';
+  document.getElementById('resultHint').innerHTML = !c
+    ? '⚠️ 先添加目的地，才能计算优惠次数。'
+    : ok
+      ? '整条路线按联程计 <b>' + used + ' 次</b>' + (state.chainRound ? '（往返）' : '（单程）')
+      : '⚠️ 联程无法合并（' + reason + '）→ 拆开单独买最低 <b>' + splitN + ' 次</b>' + (state.chainRound ? '（往返）' : '');
   document.getElementById('totals').innerHTML =
     '<div class="total-box"><div class="num ' + (used > state.budget ? 'num-red' : 'num-blue') + '">' + used +
     '<span style="font-size:14px;color:var(--muted)"> / ' + state.budget + '</span></div><div class="lbl">整条路线消耗</div></div>' +
@@ -1282,12 +1308,16 @@ function renderChain() {
     '<div class="total-box"><div class="num ' + (ok ? 'num-green' : 'num-red') + '">' + (ok ? '1' : '0') +
     '</div><div class="lbl">联程合并为几次</div></div>' +
     '<div class="total-box"><div class="num num-orange">' + (c ? c.segs.length : 0) +
-    '</div><div class="lbl">串联段数（换乘 ' + Math.max(0, (c ? c.segs.length : 0) - 1) + ' 次）</div></div>';
-  document.getElementById('banners').innerHTML =
-    (used > state.budget
-      ? '<div class="warn-banner">⚠️ 超出预算 <b>' + (used - state.budget) + '</b> 次。建议：路线改单程 / 减少串联站点 / 部分站点改全价。</div>'
-      : used > 0 ? '<div class="ok-banner">✅ 整条路线 ' + used + ' 次（' + (state.chainRound ? '往返' : '单程') + '），预算内可用，剩余 ' + remain + ' 次。</div>' : '') +
-    (!ok ? '<div class="warn-banner">⚠️ 当前路线存在折返/超区间/绕行超标，12306 联程可能无法合并出票。请调整顺序或改用"独立行程"。</div>' : '');
+    '</div><div class="lbl">串联段数（换乘 ' + Math.max(0, (c ? c.segs.length : 0) - 1) + ' 次）</div></div>' +
+    '<div class="total-box"><div class="num ' + (ok && splitN > used ? 'num-gray' : 'num-green') + '">' + splitN +
+    '</div><div class="lbl">拆开买最低（' + inIntN + ' 段×' + (state.chainRound ? '2' : '1') + '次）</div></div>';
+  let banners = '';
+  if (!c) banners = '<div class="warn-banner">⚠️ 先添加目的地，才能计算优惠次数。</div>';
+  else if (used > state.budget) banners = '<div class="warn-banner">⚠️ 超出预算 <b>' + (used - state.budget) + '</b> 次。建议：路线改单程 / 减少串联站点 / 部分站点改全价。</div>';
+  else if (ok) banners = '<div class="ok-banner">✅ 整条路线 ' + used + ' 次（' + (state.chainRound ? '往返' : '单程') + '），预算内可用，剩余 ' + remain + ' 次。' +
+    (segs.length > 1 && splitN > used ? '比拆开买省 <b>' + (splitN - used) + ' 次</b>。' : '') + '</div>';
+  else banners = '<div class="warn-banner">⚠️ 联程无法合并（' + reason + '），12306 不会出联程票。拆开单独买：' + inIntN + ' 段学生票共 <b>' + splitN + ' 次</b>' + (state.chainRound ? '（往返）' : '') + '，超区间段全价不扣次数。' + (c.foldback ? (foldBackBadStation(c) ? '去掉回头的那一站，或把"家"改到它后面。' : '点"🪄 自动排序"消除折返。') : '') + '</div>';
+  document.getElementById('banners').innerHTML = banners;
   document.getElementById('tripRows').innerHTML = '';
   document.getElementById('routeLine').innerHTML = '';
   renderIntervalViz();
@@ -1539,7 +1569,12 @@ function suggestFix() {
           tips.push('「' + s.from + '→' + s.to + '」超出区间（' + s.km + 'km 全价）。把"家"改到 <b>' + esc(s.to) + '</b>，这段就变成区间内学生票。');
         }
       });
-      if (c.foldback) tips.push('路线存在<b>折返</b>（方向回头），12306 联程不会合并——用 ↑↓ 调整顺序或"🪄 自动排序"。');
+      if (c.foldback) {
+        const bad = foldBackBadStation(c);
+        tips.push(bad
+          ? '路线走了回头路：<b>' + esc(bad) + '</b> 与前进方向相反，排序救不了——去掉该站，或把"家"改到它更靠终点的一侧。'
+          : '路线存在<b>折返</b>（方向回头），12306 联程不会合并——用 ↑↓ 调整顺序或"🪄 自动排序"。');
+      }
       if (c.maxRatio > state.ratio) tips.push('累计绕行 <b>' + c.maxRatio + '×</b> 超过上限 ' + state.ratio + '×，购票时会提示"区间不符"——减少绕路或把家改到中间城市。');
     } else if (c) {
       tips.push('整条路线可以合并为 <b>1 次</b>联程' + (state.chainRound ? '（往返 2 次）' : '') + ' ✓ 直接去 12306 用"中转/联程"方式购买。');
