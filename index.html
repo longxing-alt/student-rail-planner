@@ -1,0 +1,1600 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>学生票 · 优惠区间规划器</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🚄</text></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>  :root{
+    --bg:#fafafa; --surface:#ffffff; --line:#e7e5e4;
+    --text:#18181b; --muted:#71717a; --muted-2:#a1a1aa;
+    --accent:#4f46e5; --accent-soft:rgba(79,70,229,.08);
+    --green:#15803d; --green-soft:rgba(22,163,74,.09);
+    --orange:#c2410c; --orange-soft:rgba(234,88,12,.09);
+    --red:#b91c1c; --red-soft:rgba(220,38,38,.07);
+    --violet:#6d28d9; --violet-soft:rgba(124,58,237,.08);
+    --radius:16px;
+    --shadow-sm:0 1px 2px rgba(16,24,40,.05);
+    --shadow-md:0 1px 2px rgba(16,24,40,.05),0 12px 28px -16px rgba(16,24,40,.18);
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html{scroll-behavior:smooth}
+  body{
+    background:var(--bg); color:var(--text);
+    font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hiragino Sans GB','Microsoft YaHei',system-ui,sans-serif;
+    font-size:15px; line-height:1.6; letter-spacing:0;
+    -webkit-font-smoothing:antialiased; text-rendering:optimizeLegibility;
+  }
+  body::before{content:'';position:fixed;inset:0 0 auto 0;height:420px;pointer-events:none;z-index:0;
+    background:radial-gradient(ellipse 70% 100% at 50% -20%,rgba(99,102,241,.09),rgba(34,211,238,.05) 55%,transparent 80%);}
+  ::selection{background:rgba(79,70,229,.18)}
+  .bg-grid,.glow{display:none}
+  ::-webkit-scrollbar{width:10px;height:10px}
+  ::-webkit-scrollbar-thumb{background:#d4d4d8;border-radius:99px;border:3px solid var(--bg)}
+  ::-webkit-scrollbar-track{background:transparent}
+  :focus-visible{outline:2px solid #6366f1;outline-offset:2px;border-radius:6px}
+
+  .wrap{position:relative;z-index:1;max-width:1120px;margin:0 auto;padding:0 24px}
+
+  /* ---------- 顶部导航：半透明材质 ---------- */
+  nav{position:sticky;top:0;z-index:50;background:rgba(250,250,250,.78);
+      backdrop-filter:blur(14px) saturate(180%);-webkit-backdrop-filter:blur(14px) saturate(180%);
+      border-bottom:1px solid var(--line)}
+  nav .inner{max-width:1120px;margin:0 auto;padding:0 24px;height:58px;display:flex;align-items:center;gap:12px}
+  .logo{width:28px;height:28px;border-radius:8px;display:grid;place-items:center;flex:none;
+        background:#18181b;color:#fff;font-weight:800;font-size:14px;box-shadow:var(--shadow-sm)}
+  .brand{font-weight:700;font-size:15px;letter-spacing:-.01em}
+  .brand small{color:var(--muted);font-weight:500;margin-left:6px}
+  nav .spacer{flex:1}
+  .nav-link{color:var(--muted);text-decoration:none;font-size:13.5px;font-weight:500;padding:6px 11px;border-radius:8px;transition:background .15s,color .15s;background:none;border:none;cursor:pointer;font-family:inherit}
+  .nav-link:hover{color:var(--text);background:#f4f4f5}
+  /* 二级菜单 */
+  .dropdown{position:relative}
+  .dropdown-menu{display:none;position:absolute;right:0;top:calc(100% + 8px);width:640px;max-width:90vw;
+    background:#fff;border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow-md);
+    padding:14px;z-index:100;grid-template-columns:1fr 1fr;gap:14px}
+  .dropdown-menu.open{display:grid}
+  @media(max-width:760px){.dropdown-menu{grid-template-columns:1fr;width:86vw}}
+  .dropdown-menu .dd-col b{display:block;font-size:12.5px;margin-bottom:8px;color:var(--text)}
+  .dropdown-menu ul{list-style:none}
+  .dropdown-menu li{font-size:12px;color:var(--muted);line-height:1.65;padding:5px 0;border-bottom:1px dashed var(--line)}
+  .dropdown-menu li:last-child{border-bottom:none}
+  .dropdown-menu li b{color:var(--text)}
+  .dd-arrow{font-size:10px;vertical-align:1px}
+  /* 新手引导: 动画聚焦 */
+  #spotlight{position:fixed;inset:0;z-index:1000;cursor:pointer}
+  #spotHole{position:absolute;border-radius:14px;border:2.5px solid #6366f1;
+    box-shadow:0 0 0 9999px rgba(15,15,20,.62),0 10px 40px rgba(79,70,229,.35);
+    transition:left .5s cubic-bezier(.22,.9,.32,1),top .5s cubic-bezier(.22,.9,.32,1),
+      width .5s cubic-bezier(.22,.9,.32,1),height .5s cubic-bezier(.22,.9,.32,1),opacity .28s ease;
+    pointer-events:none;opacity:0}
+  #spotCard{position:fixed;width:min(360px,86vw);background:#fff;border:1px solid var(--line);
+    border-radius:16px;box-shadow:var(--shadow-md);padding:16px 18px;z-index:1001;cursor:default;
+    animation:spotIn .35s ease both}
+  @keyframes spotIn{from{opacity:0;transform:translateY(10px) scale(.97)}to{opacity:1;transform:none}}
+  .spot-title{font-size:15px;font-weight:800;letter-spacing:-.01em;margin-bottom:6px;color:var(--text)}
+  .spot-title .st-num{display:inline-grid;place-items:center;width:22px;height:22px;border-radius:7px;
+    background:linear-gradient(135deg,#6366f1,#22d3ee);color:#fff;font-size:12px;margin-right:8px;vertical-align:-4px}
+  .spot-text{font-size:13px;color:var(--muted);line-height:1.7;margin-bottom:12px}
+  .spot-text b{color:var(--text)}
+  .spot-btns{display:flex;align-items:center;gap:8px}
+  .spot-dots{display:flex;gap:5px;align-items:center;margin-right:4px}
+  .spot-dots .dot{width:7px;height:7px;border-radius:50%;background:#d4d4d8;transition:all .3s}
+  .spot-dots .dot.on{background:#4f46e5;transform:scale(1.35)}
+  /* 结果直线图 */
+  .route-head{display:flex;align-items:center;gap:10px;margin:12px 0 6px}
+  .route-bar{flex:1;display:flex;height:16px;border-radius:8px;overflow:hidden;gap:2px;background:#f4f4f5}
+  .rt-seg{min-width:8px;position:relative;transition:filter .15s}
+  .rt-seg:hover{filter:brightness(1.15)}
+  .rt-node{font-size:12px;font-weight:700;color:var(--text);white-space:nowrap}
+  .route-seq{font-size:12px;color:var(--muted);line-height:1.8;margin-top:2px}
+  .route-seq b{color:var(--text)}
+  /* 建议条 */
+  .advice{margin:10px 0;padding:11px 14px;border-radius:12px;font-size:13px;line-height:1.7;
+    background:rgba(251,146,60,.08);border:1px solid rgba(251,146,60,.3);color:#9a3412}
+  .advice.good{background:var(--green-soft);border-color:rgba(22,163,74,.25);color:var(--green)}
+  .advice b{color:var(--text)}
+  .ver{font-size:11px;color:var(--muted);border:1px solid var(--line);border-radius:99px;padding:2px 9px;background:#fff}
+
+  /* ---------- Hero ---------- */
+  .hero{text-align:center;padding:88px 0 56px}
+  .hero-badge{display:inline-flex;align-items:center;gap:7px;font-size:12.5px;font-weight:600;color:var(--accent);
+              background:var(--accent-soft);padding:5px 13px;border-radius:99px;margin-bottom:26px}
+  .hero-badge::before{content:'';width:6px;height:6px;border-radius:50%;background:var(--accent)}
+  .hero h1{font-size:clamp(38px,5.4vw,64px);font-weight:800;letter-spacing:-.035em;line-height:1.06;text-wrap:balance}
+  .grad-text{background:linear-gradient(100deg,#4f46e5 0%,#0891b2 55%,#059669 100%);
+             -webkit-background-clip:text;background-clip:text;color:transparent}
+  .hero p{max-width:620px;margin:20px auto 0;color:var(--muted);font-size:16px;text-wrap:balance}
+  .hero p b{color:var(--text);font-weight:600}
+  .hero-actions{display:flex;gap:12px;justify-content:center;margin-top:32px;flex-wrap:wrap}
+  .hero-stats{display:flex;justify-content:center;margin-top:52px;flex-wrap:wrap}
+  .hero-stats div{display:flex;align-items:baseline;gap:7px}
+  .hero-stats div+div{margin-left:26px;padding-left:26px;border-left:1px solid var(--line)}
+  .hero-stats b{font-size:15px;font-weight:700;color:var(--text);font-variant-numeric:tabular-nums}
+  .hero-stats span{font-size:13px;color:var(--muted)}
+
+  /* ---------- 区块 ---------- */
+  section.block{margin:0 0 64px}
+  .sec-head{display:flex;align-items:flex-end;gap:16px;margin-bottom:20px}
+  .kicker{font-size:11.5px;font-weight:700;letter-spacing:.08em;color:var(--accent);text-transform:uppercase;margin-bottom:4px}
+  .sec-title{font-size:23px;font-weight:800;letter-spacing:-.02em;line-height:1.2}
+  .sec-sub{color:var(--muted);font-size:13px;margin-left:auto;text-align:right}
+
+  /* ---------- 卡片 ---------- */
+  .card{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);
+        padding:24px;box-shadow:var(--shadow-sm);transition:border-color .15s,box-shadow .15s,transform .15s}
+  .card:hover{border-color:#d6d3d1;box-shadow:var(--shadow-md)}
+  .card h3{font-size:15px;font-weight:700;letter-spacing:-.01em;margin-bottom:3px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+  .card .hint{font-size:12.5px;color:var(--muted);margin-bottom:16px}
+
+  .field{margin-bottom:14px}
+  .field:last-child{margin-bottom:0}
+  .field label{display:block;font-size:12.5px;font-weight:600;color:var(--text);margin-bottom:6px}
+  .input-row{display:flex;gap:8px}
+  input[type=text],input[type=number]{
+    width:100%;background:#fff;border:1px solid #d6d3d1;border-radius:10px;
+    color:var(--text);padding:9px 12px;font-size:14px;outline:none;transition:border-color .15s,box-shadow .15s;font-family:inherit}
+  input:hover{border-color:#a8a29e}
+  input:focus{border-color:#6366f1;box-shadow:0 0 0 3px rgba(99,102,241,.14)}
+  input[type=range]{width:100%;accent-color:var(--accent)}
+  .lock-tag{font-size:11px;font-weight:600;color:var(--green);background:var(--green-soft);padding:2px 9px;border-radius:99px}
+  .drag-tag{font-size:11px;font-weight:600;color:var(--orange);background:var(--orange-soft);padding:2px 9px;border-radius:99px}
+
+  /* ---------- 按钮：按下即反馈 ---------- */
+  .btn{display:inline-flex;align-items:center;justify-content:center;gap:7px;border:none;cursor:pointer;
+       font-family:inherit;font-size:13.5px;font-weight:600;border-radius:10px;padding:9px 16px;
+       transition:background .15s,border-color .15s,box-shadow .15s,transform 100ms ease-out;text-decoration:none}
+  .btn:active{transform:scale(.97)}
+  .btn-primary{background:#18181b;color:#fff;box-shadow:var(--shadow-sm)}
+  .btn-primary:hover{background:#000;box-shadow:0 4px 14px -6px rgba(0,0,0,.4)}
+  .btn-ghost{background:#fff;border:1px solid #d6d3d1;color:var(--text)}
+  .btn-ghost:hover{background:#f4f4f5;border-color:#a8a29e}
+  .btn-sm{padding:6px 11px;font-size:12.5px;border-radius:8px}
+  .btn-danger{color:var(--red);background:transparent;border:1px solid transparent}
+  .btn-danger:hover{background:var(--red-soft);border-color:rgba(220,38,38,.3)}
+
+  /* ---------- 徽章 ---------- */
+  .chip{display:inline-flex;align-items:center;gap:5px;font-size:11.5px;font-weight:600;padding:3px 10px;
+        border-radius:99px;white-space:nowrap}
+  .chip-blue{color:#4338ca;background:var(--accent-soft)}
+  .chip-green{color:var(--green);background:var(--green-soft)}
+  .chip-orange{color:var(--orange);background:var(--orange-soft)}
+  .chip-red{color:var(--red);background:var(--red-soft)}
+  .chip-violet{color:var(--violet);background:var(--violet-soft)}
+
+  .grid-2{display:grid;grid-template-columns:minmax(320px,360px) 1fr;gap:20px;align-items:start}
+  @media(max-width:960px){.grid-2{grid-template-columns:1fr}}
+
+  /* ---------- 地图 ---------- */
+  #map{height:520px;border-radius:14px;border:1px solid var(--line);background:#eef0f2;z-index:1}
+  .map-tools{display:flex;gap:8px;margin:12px 0;flex-wrap:wrap;align-items:center}
+  .map-tools .lbl{font-size:12.5px;color:var(--muted);margin-right:2px}
+  .map-mode.active,.opt-tab.active{background:#18181b;color:#fff;border-color:#18181b}
+  .legend{display:flex;gap:16px;flex-wrap:wrap;margin-top:12px;font-size:12.5px;color:var(--muted)}
+  .legend span{display:inline-flex;align-items:center;gap:6px}
+  .legend i{width:16px;height:3px;border-radius:2px}
+  #status{font-size:12.5px;color:#52525b;margin-top:10px;min-height:18px}
+
+  /* 地图弹窗/控件浅色适配 */
+  .leaflet-popup-content-wrapper,.leaflet-popup-tip{background:#fff;color:var(--text);border:1px solid var(--line);box-shadow:var(--shadow-md)}
+  .leaflet-popup-content{margin:12px 14px;font-size:13px;line-height:1.55}
+  .leaflet-container a.leaflet-popup-close-button{color:#a1a1aa}
+  .leaflet-control-layers{background:#fff;border:1px solid var(--line);border-radius:10px;color:var(--text);box-shadow:var(--shadow-sm)}
+  .leaflet-control-layers-expanded{padding:8px 10px}
+  .leaflet-control-layers label{font-size:12px}
+  .leaflet-control-attribution{background:rgba(255,255,255,.85)!important;color:#a1a1aa!important;font-size:10px!important}
+  .leaflet-control-attribution a{color:#6366f1!important}
+  .leaflet-control-zoom a{background:#fff!important;color:var(--text)!important;border:1px solid var(--line)!important}
+
+  /* 图钉 */
+  .pin{width:32px;height:32px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);
+       display:flex;align-items:center;justify-content:center;border:2px solid #fff;
+       box-shadow:0 6px 14px rgba(0,0,0,.25)}
+  .pin>span{transform:rotate(45deg);font-weight:800;color:#fff;font-size:12px;text-shadow:0 1px 2px rgba(0,0,0,.3)}
+  .pin-school{background:linear-gradient(135deg,#6366f1,#4f46e5)}
+  .pin-home{background:linear-gradient(135deg,#34d399,#059669)}
+  .pin-dir{background:linear-gradient(135deg,#818cf8,#6366f1)}
+  .pin-tr{background:linear-gradient(135deg,#fb923c,#ea580c)}
+  .pin-fail{background:#a1a1aa}
+
+  /* ---------- 出行计划 ---------- */
+  .trip-add{display:flex;gap:8px;margin-bottom:14px}
+  .chips-quick{display:flex;gap:7px;flex-wrap:wrap;margin-bottom:16px}
+  .trip-row{display:flex;align-items:center;gap:12px;padding:11px 13px;border:1px solid var(--line);
+            border-radius:12px;background:#fafafa;margin-bottom:8px;flex-wrap:wrap;transition:border-color .15s,background .15s}
+  .trip-row:hover{border-color:#d6d3d1;background:#fff}
+  .trip-idx{width:22px;height:22px;border-radius:7px;display:grid;place-items:center;font-size:11.5px;font-weight:700;
+            background:var(--accent-soft);color:#4338ca;flex:none}
+  .trip-main{flex:1;min-width:150px}
+  .trip-main b{font-size:13.5px}
+  .trip-main .sub{font-size:11.5px;color:var(--muted);margin-top:1px}
+  .switch{position:relative;display:inline-flex;align-items:center;gap:7px;cursor:pointer;font-size:12.5px;color:var(--muted);user-select:none}
+  .switch input{display:none}
+  .switch .bar{width:36px;height:20px;border-radius:99px;background:#d4d4d8;position:relative;transition:background .15s}
+  .switch .bar::after{content:'';position:absolute;width:14px;height:14px;border-radius:50%;background:#fff;top:3px;left:3px;transition:left .15s;box-shadow:0 1px 2px rgba(0,0,0,.25)}
+  .switch input:checked+.bar{background:#22c55e}
+  .switch input:checked+.bar::after{left:19px}
+  .switch .sw-label{font-weight:600;color:var(--text);font-size:12px}
+
+  /* ---------- 结果 ---------- */
+  .totals{display:flex;flex-wrap:wrap;border:1px solid var(--line);border-radius:14px;background:#fff;
+          overflow:hidden;margin-bottom:16px}
+  .total-box{flex:1;min-width:105px;padding:14px 16px}
+  .total-box+.total-box{border-left:1px solid var(--line)}
+  .total-box .num{font-size:23px;font-weight:800;letter-spacing:-.02em;font-variant-numeric:tabular-nums;line-height:1.1}
+  .total-box .lbl{font-size:11.5px;color:var(--muted);margin-top:2px}
+  .num-green{color:var(--green)}.num-red{color:var(--red)}.num-blue{color:#4338ca}.num-orange{color:var(--orange)}
+  .warn-banner{margin:14px 0;padding:12px 15px;border-radius:12px;font-size:13.5px;
+               background:var(--red-soft);border:1px solid rgba(220,38,38,.22);color:var(--red)}
+  .ok-banner{margin:14px 0;padding:12px 15px;border-radius:12px;font-size:13.5px;
+             background:var(--green-soft);border:1px solid rgba(22,163,74,.22);color:var(--green)}
+  .demo-tip{margin-bottom:12px;padding:11px 14px;border-radius:12px;font-size:13px;line-height:1.7;
+            background:var(--accent-soft);border:1px solid rgba(99,102,241,.25);color:#3730a3}
+
+  /* ---------- 优化 ---------- */
+  .opt-row{display:flex;align-items:center;gap:12px;padding:11px 13px;border:1px solid var(--line);
+           border-radius:12px;background:#fafafa;margin-bottom:8px;flex-wrap:wrap;transition:border-color .15s,background .15s}
+  .opt-row:hover{border-color:#d6d3d1;background:#fff}
+  .opt-row.best{background:#f0fdf4;border-color:#86efac}
+  .opt-row.cur{background:#eef2ff;border-color:#a5b4fc}
+  .opt-main{flex:1;min-width:160px}
+  .opt-main b{font-size:13.5px}
+  .opt-main .sub{font-size:11.5px;color:var(--muted)}
+  .opt-meta{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  .opt-used{font-size:16px;font-weight:800;font-variant-numeric:tabular-nums}
+
+  /* ---------- 规则 ---------- */
+  .rules{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:14px}
+  .rule-item{border:1px solid var(--line);border-radius:14px;padding:18px;background:#fff;box-shadow:var(--shadow-sm)}
+  .rule-item .ic{font-size:19px}
+  .rule-item b{display:block;margin:9px 0 5px;font-size:14px;letter-spacing:-.01em}
+  .rule-item p{font-size:12.5px;color:var(--muted);line-height:1.6}
+  .disclaimer{margin-top:18px;font-size:12.5px;color:#92400e;background:#fffbeb;
+              border:1px solid #fde68a;border-radius:12px;padding:13px 16px;line-height:1.7}
+
+  footer{border-top:1px solid var(--line);margin-top:64px;padding:30px 0 44px;text-align:center;
+         color:var(--muted);font-size:13px}
+  footer b{color:var(--text)}
+
+  .fade-in{animation:fadeIn .4s ease both}
+  @keyframes fadeIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+
+  @media (prefers-reduced-motion: reduce){
+    html{scroll-behavior:auto}
+    .fade-in{animation:none}
+    *{transition-duration:.01ms!important;animation-duration:.01ms!important}
+  }
+</style>
+</head>
+<body>
+
+<!-- ================= 导航 ================= -->
+<nav>
+  <div class="inner">
+    <div class="logo">优</div>
+    <div class="brand">学生优惠 · 区间规划器</div>
+    <div class="spacer"></div>
+    <a class="nav-link" href="#app">开始规划</a>
+    <a class="nav-link" href="#optimize">区间优化</a>
+    <a class="nav-link" href="javascript:void(0)" onclick="startGuide()">新手引导</a>
+    <div class="dropdown">
+      <button class="nav-link dropdown-toggle" onclick="toggleRulesMenu(event)">规则 <span class="dd-arrow">▾</span></button>
+      <div class="dropdown-menu" id="rulesMenu">
+        <div class="dd-col">
+          <b>📐 计算规则（本工具）</b>
+          <ul>
+            <li><b>直达 = 1 次</b>：目的地在区间走廊带内</li>
+            <li><b>中转 = 1 次</b>：换乘站与终点都在区间内、绕行 ≤ 1.5×</li>
+            <li><b>联程 = 1 次</b>：5 天内多段只扣 1 次（串联路线模式）</li>
+            <li><b>往返 = 2 次</b>，单程 = 1 次</li>
+            <li><b>全价 = 0 次</b>：终点超出区间，12306 不发售学生票</li>
+            <li><b>区间优化</b>：枚举 367 站找最省次数的"家"</li>
+          </ul>
+        </div>
+        <div class="dd-col">
+          <b>📋 官方规则对照（2026-08-14 核实）</b>
+          <ul>
+            <li><b>次数</b>：每学年 4 次单程（10.1–次年 9.30），退票全部退返</li>
+            <li><b>区间修改</b>：家庭端不限次数、线上改、无需盖章；学校端须与学信网一致</li>
+            <li><b>同城通用</b>：按城市填区间，同城站通用；可不满、不可超出</li>
+            <li><b>中转</b>：5 天/120h 联程只扣 1 次；换乘站须在区间内；折返不合并</li>
+            <li><b>绕行</b>：近径路/不故意绕远（实测阈值 150%）</li>
+            <li><b>票价</b>：普速 5 折；动车执行价 75 折（≥4 折），席别已扩至一等座/卧铺</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+    <span class="ver">v1.0</span>
+  </div>
+</nav>
+
+<div class="wrap">
+  <!-- ================= Hero ================= -->
+  <section class="hero fade-in">
+    <div class="hero-badge">🚄 学生票 · 优惠次数规划</div>
+    <h1>把每一次出行<br>都算进<span class="grad-text">优惠区间</span>里</h1>
+    <p>输入学校（固定）与家庭（可调）区间，添加你想去的地方。<br>
+       自动规划每条行程是<b style="color:#a5b4fc">直达优惠</b>、<b style="color:#fdba74">中转优惠</b>还是<b style="color:#fca5a5">全价</b>，
+       并枚举全部车站方案 —— 找到<b style="color:#6ee7b7">消耗学生优惠次数最少</b>的区间修改方式。</p>
+    <div class="hero-actions">
+      <a class="btn btn-primary" href="#app">开始规划 →</a>
+      <a class="btn btn-ghost" href="#rules">查看计算规则</a>
+    </div>
+    <div class="hero-stats">
+      <div><b>367</b><span>内置车站 / 35 枢纽</span></div>
+      <div><b>1.5×</b><span>中转绕行上限</span></div>
+      <div><b>2 次</b><span>往返计次</span></div>
+      <div><b>1 次</b><span>中转计次</span></div>
+      <div><b>0</b><span>API Key 依赖</span></div>
+    </div>
+  </section>
+
+  <!-- ================= 动画聚焦引导 ================= -->
+  <div id="spotlight" style="display:none">
+    <div id="spotHole"></div>
+    <div id="spotCard">
+      <div class="spot-title" id="spotTitle"></div>
+      <div class="spot-text" id="spotText"></div>
+      <div class="spot-btns">
+        <button class="btn btn-ghost btn-sm" id="spotSkip" onclick="closeGuide()">跳过</button>
+        <button class="btn btn-ghost btn-sm" id="spotPrev" onclick="prevSpot()">← 上一步</button>
+        <span style="flex:1"></span>
+        <div class="spot-dots" id="spotProgress"></div>
+        <button class="btn btn-primary btn-sm" id="spotNext" onclick="nextSpot()">下一步 →</button>
+        <button class="btn btn-primary btn-sm" id="spotDone" style="display:none" onclick="closeGuide()">完成 🎉</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= 主应用 ================= -->
+  <section id="app" class="block">
+    <div class="grid-2">
+
+      <!-- 左列：设置 + 出行计划 -->
+      <div style="display:flex;flex-direction:column;gap:20px">
+        <div class="card">
+          <h3>📍 区间设置 <span class="lock-tag">学校固定</span> <span class="drag-tag">家可移动/拖动</span></h3>
+          <div class="hint">学校端固定不动；"家"一端可在输入框修改，或直接在地图上拖动绿色图钉。</div>
+          <div class="field">
+            <label>学校地址 / 城市</label>
+            <div class="input-row">
+              <input id="schoolInput" type="text" placeholder="如：武汉大学 / 武汉市">
+              <button class="btn btn-ghost btn-sm" onclick="searchPlace('school')">定位</button>
+            </div>
+          </div>
+          <div class="field">
+            <label>家庭地址 / 城市（优惠区间的另一端）</label>
+            <div class="input-row">
+              <input id="homeInput" type="text" placeholder="如：长沙 / 湖南省长沙市">
+              <button class="btn btn-ghost btn-sm" onclick="searchPlace('home')">定位</button>
+            </div>
+          </div>
+          <div class="field">
+            <label>年度优惠次数预算（12306 默认每学年 4 次）</label>
+            <input id="budgetInput" type="number" min="1" max="40" value="4">
+          </div>
+          <div class="field">
+            <label>中转绕行上限 ×（默认 1.5，即中转总里程 ≤ 1.5 × 直达里程）</label>
+            <input id="ratioInput" type="range" min="1.1" max="2.2" step="0.05" value="1.5">
+            <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--muted)">
+              <span>1.1×</span><span id="ratioVal" style="color:#67e8f9;font-weight:700">1.50×</span><span>2.2×</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <h3>🧭 出行计划</h3>
+          <div class="hint" id="planHint">独立行程：每个目的地单独扣次。也可切换为"串联路线"——多个目的地按顺序串成一条联程路线，整条只扣 1 次。</div>
+          <div class="trip-add">
+            <input id="tripInput" type="text" placeholder="目的地，如：北京 / 广州市 / 大理">
+            <button class="btn btn-primary" onclick="addTrip()">添加</button>
+          </div>
+          <div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap;align-items:center">
+            <button class="btn btn-ghost btn-sm mode-btn" data-mode="solo" onclick="setChainMode(false)">🧩 独立行程</button>
+            <button class="btn btn-ghost btn-sm mode-btn" data-mode="chain" onclick="setChainMode(true)">🔗 串联路线</button>
+          </div>
+          <div class="chips-quick" id="quickChips"></div>
+          <div id="chainControls" style="display:none;margin-bottom:12px;padding:12px;border:1px dashed var(--line);border-radius:12px;background:#fafafa">
+            <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px">
+              <b style="font-size:13px">路线顺序（学校 → 家 方向）</b>
+              <button class="btn btn-ghost btn-sm" onclick="chainAutoSort()">🪄 自动排序（按顺路）</button>
+              <span style="flex:1"></span>
+              <label class="switch" title="整条路线 往返/单程">
+                <input type="checkbox" onchange="toggleChainRound()">
+                <span class="bar"></span>
+                <span class="sw-label" id="chainRoundLabel">单程 = 1次</span>
+              </label>
+            </div>
+            <div id="chainPreview" style="font-size:13px;line-height:1.9"></div>
+            <div id="chainCheck" style="font-size:12.5px;margin-top:6px;color:var(--muted)"></div>
+          </div>
+          <div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap;align-items:center" id="batchBtns">
+            <span style="font-size:12px;color:var(--muted)">批量：</span>
+            <button class="btn btn-ghost btn-sm" onclick="setAllRound(true)">全部往返(×2)</button>
+            <button class="btn btn-ghost btn-sm" onclick="setAllRound(false)">全部单程(×1)</button>
+          </div>
+          <div id="tripList"></div>
+        </div>
+      </div>
+
+      <!-- 右列：地图 + 结果 -->
+      <div style="display:flex;flex-direction:column;gap:20px">
+        <div class="card" style="padding:16px">
+          <h3 style="margin-bottom:10px">🗺️ 地图与车站 <span class="hint" style="display:inline">（右上角图层可切换高德/OSM、显示全部车站）</span></h3>
+          <div class="map-tools">
+            <span class="lbl">地图点击模式：</span>
+            <button class="btn btn-ghost btn-sm map-mode" data-mode="school" onclick="setClickMode('school')">设学校</button>
+            <button class="btn btn-ghost btn-sm map-mode" data-mode="home" onclick="setClickMode('home')">设家</button>
+            <button class="btn btn-ghost btn-sm map-mode" data-mode="add" onclick="setClickMode('add')">添加目的地</button>
+            <div style="flex:1"></div>
+            <button class="btn btn-ghost btn-sm" onclick="fitAll()">⌖ 适应视野</button>
+          </div>
+          <div id="map"></div>
+          <div id="status"></div>
+          <div class="legend">
+            <span><i style="background:#6366f1"></i>学校(固定)</span>
+            <span><i style="background:#34d399"></i>家(可拖动)</span>
+            <span><i style="background:#e4e4e7;border-top:1px dashed #e4e4e7;height:0"></i>优惠区间</span>
+            <span><i style="background:#818cf8"></i>直达优惠</span>
+            <span><i style="background:#fb923c"></i>中转优惠</span>
+            <span><i style="background:#52525b"></i>全价(不扣次数)</span>
+          </div>
+        </div>
+
+        <div class="card">
+          <h3>🧾 规划结果</h3>
+          <div id="demoTip" class="demo-tip" style="display:none"></div>
+          <div class="hint" id="resultHint">计算结果实时更新。</div>
+          <div id="routeLine"></div>
+          <div id="advice"></div>
+          <div class="totals" id="totals"></div>
+          <div id="banners"></div>
+          <div id="tripRows"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= 区间优化 ================= -->
+  <section id="optimize" class="block">
+    <div class="sec-head">
+      <div>
+        <div class="kicker">Optimizer</div>
+        <div class="sec-title">区间端点怎么改，消耗次数最少</div>
+      </div>
+      <div class="sec-sub">枚举全部车站作为"家"的一端 · 按消耗次数排序</div>
+    </div>
+    <div class="card">
+      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:16px">
+        <button class="btn btn-primary" onclick="applyBest()">⚡ 应用最优区间</button>
+        <span class="hint" style="margin:0">将"家"移动到最优候选站并重新规划（仅作规划演示，实际修改需在 12306 学生资质中按真实家庭地址调整）</span>
+      </div>
+      <div id="optCurrent"></div>
+      <div id="optList"></div>
+    </div>
+  </section>
+
+<footer>
+  <div>学生优惠 · 区间规划器 —— 帮助你把每学年有限的优惠次数花在刀刃上</div>
+  <div style="margin-top:6px">车站数据 · 规划结果仅供估算参考 · UI 风格致敬 skills.dev</div>
+</footer>
+
+<script>
+'use strict';
+/* ============================================================
+ * 数据区：内置全国主要铁路车站 [名称, 城市, 纬度, 经度, 是否枢纽]
+ * ============================================================ */
+// ==== PURE LOGIC START ====
+const STATIONS = [
+  // 京津冀
+  ["北京西","北京",39.895,116.322,1],["北京南","北京",39.865,116.379,1],["北京丰台","北京",39.852,116.301,0],
+  ["天津","天津",39.135,117.202,1],["天津西","天津",39.161,117.158,0],["天津南","天津",39.059,117.057,0],
+  ["石家庄","石家庄",38.056,114.490,1],["石家庄东","石家庄",38.050,114.602,0],
+  ["保定东","保定",38.858,115.498,0],["邯郸东","邯郸",36.610,114.530,0],["邢台东","邢台",37.071,114.550,0],
+  ["廊坊","廊坊",39.510,116.750,0],["唐山","唐山",39.622,118.178,0],["秦皇岛","秦皇岛",39.950,119.601,0],
+  ["张家口","张家口",40.762,114.887,0],["承德南","承德",40.946,117.930,0],["沧州西","沧州",38.322,116.829,0],
+  ["衡水北","衡水",37.732,115.666,0],
+  // 山西
+  ["太原南","太原",37.750,112.600,1],["太原","太原",37.853,112.571,0],
+  ["大同南","大同",40.052,113.361,0],["阳泉北","阳泉",38.049,113.467,0],["长治东","长治",36.201,113.110,0],
+  ["晋城东","晋城",35.489,112.830,0],["朔州","朔州",39.317,112.430,0],["晋中","晋中",37.679,112.753,0],
+  ["运城北","运城",35.019,111.010,0],["忻州西","忻州",38.414,112.711,0],["临汾西","临汾",36.091,111.480,0],
+  ["吕梁","吕梁",37.518,111.141,0],
+  // 内蒙古
+  ["呼和浩特东","呼和浩特",40.846,111.760,1],["呼和浩特","呼和浩特",40.820,111.654,0],
+  ["包头","包头",40.602,109.981,0],["鄂尔多斯","鄂尔多斯",39.620,109.780,0],["乌兰察布","乌兰察布",40.993,113.128,0],
+  ["巴彦淖尔","巴彦淖尔",40.749,107.409,0],["乌海","乌海",39.651,106.789,0],["通辽","通辽",43.621,122.249,0],
+  ["赤峰","赤峰",42.262,118.947,0],["海拉尔","呼伦贝尔",49.210,119.728,0],
+  // 东北
+  ["沈阳北","沈阳",41.821,123.435,1],["沈阳","沈阳",41.784,123.399,0],["沈阳南","沈阳",41.661,123.372,0],
+  ["大连北","大连",38.980,121.620,1],["大连","大连",38.921,121.619,0],
+  ["鞍山西","鞍山",41.111,122.974,0],["抚顺北","抚顺",41.882,123.877,0],["本溪","本溪",41.292,123.765,0],
+  ["丹东","丹东",40.124,124.380,0],["锦州南","锦州",41.080,121.141,0],["营口东","营口",40.647,122.401,0],
+  ["盘锦","盘锦",41.184,122.074,0],["阜新","阜新",42.021,121.659,0],["辽阳","辽阳",41.265,123.174,0],
+  ["铁岭西","铁岭",42.216,123.723,0],["朝阳","朝阳",41.568,120.448,0],["葫芦岛北","葫芦岛",40.752,120.802,0],
+  ["长春西","长春",43.830,125.180,1],["长春","长春",43.902,125.308,0],
+  ["吉林","吉林",43.874,126.521,0],["四平东","四平",43.171,124.394,0],["延吉西","延吉",42.921,129.462,0],
+  ["通化","通化",41.724,125.940,0],["白城","白城",45.630,122.833,0],["松原","松原",45.139,124.820,0],
+  ["白山","白山",41.943,126.423,0],
+  ["哈尔滨西","哈尔滨",45.632,126.570,1],["哈尔滨","哈尔滨",45.750,126.620,0],["哈尔滨北","哈尔滨",45.893,126.516,0],
+  ["齐齐哈尔南","齐齐哈尔",47.311,123.960,0],["牡丹江","牡丹江",44.599,129.590,0],["佳木斯","佳木斯",46.801,130.361,0],
+  ["大庆西","大庆",46.631,124.928,0],["鸡西西","鸡西",45.299,130.900,0],["双鸭山西","双鸭山",46.646,131.170,0],
+  ["伊春","伊春",47.721,128.853,0],["七台河西","七台河",45.780,131.030,0],["鹤岗","鹤岗",47.351,130.281,0],
+  ["黑河","黑河",50.246,127.483,0],["绥化","绥化",46.637,126.986,0],["加格达奇","大兴安岭",50.423,124.121,0],
+  // 长三角
+  ["上海虹桥","上海",31.197,121.323,1],["上海","上海",31.251,121.456,0],["上海南","上海",31.154,121.428,0],
+  ["苏州","苏州",31.329,120.621,0],["苏州北","苏州",31.430,120.621,0],
+  ["无锡","无锡",31.568,120.308,0],["无锡东","无锡",31.603,120.430,0],
+  ["常州","常州",31.729,119.957,0],["常州北","常州",31.830,119.973,0],
+  ["镇江","镇江",32.194,119.425,0],["扬州东","扬州",32.416,119.518,0],["泰州","泰州",32.492,119.921,0],
+  ["南通","南通",31.971,120.862,0],["南通西","南通",32.057,120.843,0],
+  ["徐州东","徐州",34.281,117.309,1],["徐州","徐州",34.266,117.186,0],
+  ["淮安东","淮安",33.610,119.090,0],["盐城","盐城",33.380,120.130,0],["连云港","连云港",34.601,119.160,0],
+  ["宿迁","宿迁",33.964,118.290,0],
+  ["杭州东","杭州",30.290,120.210,1],["杭州","杭州",30.244,120.178,0],["杭州南","杭州",30.174,120.272,0],
+  ["宁波","宁波",29.861,121.549,0],["温州南","温州",27.966,120.640,0],["绍兴北","绍兴",30.099,120.573,0],
+  ["嘉兴南","嘉兴",30.721,120.780,0],["湖州","湖州",30.873,120.090,0],["金华","金华",29.079,119.642,0],
+  ["衢州","衢州",28.958,118.857,0],["台州西","台州",28.697,121.283,0],["丽水","丽水",28.450,119.910,0],
+  ["义乌","义乌",29.327,120.071,0],
+  ["南京南","南京",31.970,118.794,1],["南京","南京",32.088,118.790,0],
+  ["合肥南","合肥",31.800,117.300,1],["合肥","合肥",31.877,117.283,0],
+  ["芜湖","芜湖",31.327,118.361,0],["蚌埠南","蚌埠",32.950,117.400,0],["安庆","安庆",30.509,117.080,0],
+  ["黄山北","黄山",29.920,118.240,0],["阜阳西","阜阳",32.928,115.782,0],["淮南南","淮南",32.626,117.012,0],
+  ["马鞍山东","马鞍山",31.690,118.484,0],["滁州","滁州",32.319,118.302,0],["六安","六安",31.749,116.488,0],
+  ["亳州南","亳州",33.860,115.760,0],["宣城","宣城",30.941,118.749,0],["铜陵北","铜陵",30.943,117.812,0],
+  ["池州","池州",30.660,117.483,0],["淮北","淮北",33.954,116.795,0],
+  // 东南
+  ["福州","福州",26.100,119.300,1],["福州南","福州",25.987,119.380,0],
+  ["厦门北","厦门",24.636,118.130,1],["厦门","厦门",24.466,118.110,0],
+  ["泉州","泉州",24.879,118.601,0],["漳州","漳州",24.509,117.654,0],["莆田","莆田",25.401,119.010,0],
+  ["龙岩","龙岩",25.122,117.031,0],["宁德","宁德",26.659,119.520,0],["南平","南平",26.632,118.169,0],
+  ["三明北","三明",26.301,117.800,0],
+  // 江西
+  ["南昌西","南昌",28.620,115.780,1],["南昌","南昌",28.680,115.860,0],
+  ["九江","九江",29.708,116.011,0],["赣州西","赣州",25.780,114.870,0],["赣州","赣州",25.851,114.948,0],
+  ["上饶","上饶",28.456,117.961,0],["鹰潭北","鹰潭",28.333,117.063,0],["萍乡北","萍乡",27.681,113.812,0],
+  ["新余北","新余",27.832,114.858,0],["宜春","宜春",27.792,114.419,0],["景德镇北","景德镇",29.311,117.204,0],
+  ["吉安西","吉安",27.080,114.950,0],["抚州","抚州",28.000,116.340,0],
+  // 湖北
+  ["武汉","武汉",30.607,114.422,1],["汉口","武汉",30.620,114.255,0],["武昌","武汉",30.528,114.320,0],
+  ["襄阳东","襄阳",32.012,112.230,0],["宜昌东","宜昌",30.644,111.380,0],["荆州","荆州",30.340,112.220,0],
+  ["十堰东","十堰",32.613,110.780,0],["恩施","恩施",30.281,109.480,0],["黄石北","黄石",30.221,114.982,0],
+  ["鄂州","鄂州",30.390,114.890,0],["孝感东","孝感",30.950,113.940,0],["黄冈东","黄冈",30.461,114.938,0],
+  ["咸宁北","咸宁",29.872,114.318,0],["荆门","荆门",31.031,112.190,0],["随州","随州",31.690,113.371,0],
+  ["仙桃","仙桃",30.360,113.460,0],["潜江","潜江",30.410,112.880,0],["天门南","天门",30.514,113.220,0],
+  // 湖南
+  ["长沙南","长沙",28.150,113.066,1],["长沙","长沙",28.190,112.990,0],
+  ["株洲西","株洲",27.804,113.103,0],["湘潭北","湘潭",27.954,112.932,0],["衡阳东","衡阳",26.901,112.621,0],
+  ["岳阳东","岳阳",29.372,113.199,0],["邵阳","邵阳",27.240,111.470,0],["娄底南","娄底",27.701,112.012,0],
+  ["常德","常德",29.043,111.702,0],["益阳南","益阳",28.579,112.350,0],["郴州西","郴州",25.780,112.946,0],
+  ["永州","永州",26.431,111.617,0],["怀化南","怀化",27.549,109.972,0],["张家界西","张家界",29.148,110.480,0],
+  ["吉首东","湘西",28.310,109.713,0],
+  // 珠三角
+  ["广州南","广州",22.990,113.269,1],["广州","广州",23.147,113.260,0],["广州东","广州",23.151,113.323,0],
+  ["深圳北","深圳",22.609,114.028,1],["深圳","深圳",22.533,114.110,0],
+  ["佛山西","佛山",23.078,113.025,0],["东莞南","东莞",22.781,114.098,0],
+  ["珠海","珠海",22.219,113.528,0],["中山","中山",22.518,113.378,0],["江门","江门",22.573,113.119,0],
+  ["肇庆东","肇庆",23.259,112.653,0],["惠州北","惠州",23.177,114.416,0],["惠州南","惠州",22.872,114.531,0],
+  ["汕尾","汕尾",22.782,115.382,0],["潮汕","潮州",23.528,116.646,0],["汕头","汕头",23.378,116.660,0],
+  ["揭阳","揭阳",23.554,116.381,0],["梅州西","梅州",24.320,116.140,0],["河源东","河源",23.758,114.676,0],
+  ["清远","清远",23.700,113.101,0],["韶关","韶关",24.807,113.602,0],["云浮东","云浮",22.982,112.082,0],
+  ["湛江西","湛江",21.249,110.331,0],["茂名","茂名",21.654,110.933,0],["阳江","阳江",21.857,111.982,0],
+  // 广西
+  ["南宁东","南宁",22.840,108.421,1],["南宁","南宁",22.818,108.310,0],
+  ["柳州","柳州",24.311,109.390,0],["桂林北","桂林",25.317,110.297,0],["桂林","桂林",25.280,110.289,0],
+  ["梧州南","梧州",23.478,111.286,0],["北海","北海",21.478,109.120,0],["钦州东","钦州",21.960,108.630,0],
+  ["防城港北","防城港",21.681,108.348,0],["玉林","玉林",22.642,110.182,0],["百色","百色",23.894,106.627,0],
+  ["贺州","贺州",24.404,111.559,0],["来宾北","来宾",23.730,109.232,0],["崇左南","崇左",22.398,107.352,0],
+  ["贵港","贵港",23.101,109.599,0],
+  // 海南
+  ["海口东","海口",20.020,110.362,0],["海口","海口",20.028,110.320,0],
+  ["三亚","三亚",18.289,109.494,0],["文昌","文昌",19.612,110.758,0],["琼海","琼海",19.240,110.477,0],
+  ["万宁","万宁",18.789,110.389,0],["白马井","儋州",19.728,109.221,0],["东方","东方",19.099,108.651,0],
+  // 西南
+  ["成都东","成都",30.630,104.140,1],["成都","成都",30.700,104.070,0],["成都南","成都",30.610,104.055,0],
+  ["成都西","成都",30.688,103.975,0],
+  ["绵阳","绵阳",31.473,104.723,0],["德阳","德阳",31.128,104.402,0],["乐山","乐山",29.570,103.754,0],
+  ["宜宾西","宜宾",28.779,104.646,0],["泸州","泸州",28.884,105.438,0],["自贡","自贡",29.341,104.784,0],
+  ["内江北","内江",29.584,105.058,0],["南充北","南充",30.828,106.088,0],["达州","达州",31.218,107.479,0],
+  ["广元","广元",32.443,105.821,0],["攀枝花南","攀枝花",26.552,101.733,0],["遂宁","遂宁",30.510,105.584,0],
+  ["眉山东","眉山",30.083,103.840,0],["资阳北","资阳",30.120,104.649,0],["西昌西","凉山",27.887,102.186,0],
+  ["重庆北","重庆",29.611,106.547,1],["重庆西","重庆",29.494,106.395,0],["重庆","重庆",29.552,106.543,0],
+  ["万州北","重庆",30.807,108.352,0],["涪陵北","重庆",29.688,107.360,0],["永川东","重庆",29.322,105.938,0],
+  ["江津","重庆",29.294,106.258,0],
+  ["贵阳北","贵阳",26.630,106.640,1],["贵阳","贵阳",26.579,106.705,0],
+  ["遵义","遵义",27.722,106.911,0],["六盘水","六盘水",26.590,104.830,0],["毕节","毕节",27.298,105.291,0],
+  ["安顺西","安顺",26.257,105.917,0],["凯里南","黔东南",26.568,107.979,0],["都匀东","黔南",26.202,107.554,0],
+  ["铜仁","铜仁",27.721,109.186,0],["兴义","黔西南",25.089,104.901,0],
+  ["昆明南","昆明",24.880,102.860,1],["昆明","昆明",25.021,102.723,0],
+  ["大理","大理",25.654,100.237,0],["丽江","丽江",26.889,100.228,0],["曲靖北","曲靖",25.508,103.772,0],
+  ["玉溪","玉溪",24.360,102.547,0],["蒙自","红河",23.369,103.368,0],["普洱","普洱",22.786,100.966,0],
+  ["西双版纳","西双版纳",22.011,100.806,0],["保山","保山",25.116,99.166,0],["临沧","临沧",23.889,100.085,0],
+  // 青藏
+  ["拉萨","拉萨",29.650,91.120,1],["日喀则","日喀则",29.249,88.882,0],["林芝","林芝",29.640,94.360,0],
+  ["那曲","那曲",31.474,92.052,0],
+  ["西宁","西宁",36.610,101.810,1],["海东西","海东",36.476,102.102,0],["格尔木","海西",36.408,94.900,0],
+  // 西北
+  ["西安北","西安",34.374,108.937,1],["西安","西安",34.278,108.958,0],
+  ["宝鸡南","宝鸡",34.352,107.238,0],["咸阳西","咸阳",34.343,108.670,0],["渭南北","渭南",34.507,109.558,0],
+  ["汉中","汉中",33.066,107.028,0],["安康","安康",32.683,109.018,0],["延安","延安",36.590,109.496,0],
+  ["榆林","榆林",38.287,109.731,0],
+  ["兰州西","兰州",36.070,103.750,1],["兰州","兰州",36.058,103.840,0],
+  ["天水南","天水",34.580,105.700,0],["嘉峪关南","嘉峪关",39.762,98.279,0],["张掖西","张掖",38.923,100.453,0],
+  ["武威","武威",37.930,102.639,0],["酒泉南","酒泉",39.740,98.491,0],["敦煌","敦煌",40.141,94.683,0],
+  ["金昌","金昌",38.499,102.190,0],["陇南","陇南",33.384,104.998,0],["平凉","平凉",35.543,106.657,0],
+  ["庆阳","庆阳",35.758,107.641,0],
+  ["银川","银川",38.481,106.221,1],["吴忠","吴忠",37.989,106.201,0],["中卫南","中卫",37.488,105.176,0],
+  ["石嘴山","石嘴山",38.982,106.382,0],
+  ["乌鲁木齐","乌鲁木齐",43.781,87.582,1],["吐鲁番北","吐鲁番",43.022,89.131,0],["哈密","哈密",42.819,93.513,0],
+  ["库车","阿克苏",41.701,82.948,0],["阿克苏","阿克苏",41.162,80.264,0],["喀什","喀什",39.469,75.991,0],
+  ["和田","和田",37.108,79.933,0],["伊宁","伊宁",43.919,81.280,0],["克拉玛依","克拉玛依",45.580,84.890,0],
+  ["奎屯","奎屯",44.428,84.897,0],["石河子","石河子",44.288,86.046,0],["库尔勒","巴音郭楞",41.716,86.177,0],
+  // 山东
+  ["济南西","济南",36.672,116.880,1],["济南","济南",36.668,117.001,0],["济南东","济南",36.747,117.219,0],
+  ["青岛","青岛",36.062,120.318,0],["青岛北","青岛",36.175,120.360,0],
+  ["淄博","淄博",36.789,118.052,0],["烟台南","烟台",37.483,121.440,0],["潍坊","潍坊",36.710,119.101,0],
+  ["临沂北","临沂",35.104,118.344,0],["济宁北","济宁",35.411,116.589,0],["泰安","泰安",36.183,117.088,0],
+  ["德州东","德州",37.458,116.351,0],["威海","威海",37.469,122.120,0],["东营","东营",37.431,118.672,0],
+  ["聊城西","聊城",36.456,115.968,0],["滨州","滨州",37.418,118.001,0],["菏泽东","菏泽",35.240,115.463,0],
+  ["日照西","日照",35.418,119.516,0],["枣庄","枣庄",34.810,117.319,0],["曲阜东","济宁",35.594,117.016,0],
+  // 河南
+  ["郑州东","郑州",34.720,113.771,1],["郑州","郑州",34.747,113.656,0],
+  ["洛阳龙门","洛阳",34.589,112.516,0],["洛阳","洛阳",34.681,112.469,0],
+  ["开封北","开封",34.857,114.288,0],["许昌东","许昌",34.012,113.862,0],["新乡东","新乡",35.311,113.949,0],
+  ["安阳东","安阳",36.081,114.398,0],["鹤壁东","鹤壁",35.753,114.282,0],["濮阳东","濮阳",35.771,115.022,0],
+  ["商丘","商丘",34.421,115.657,0],["周口东","周口",33.629,114.686,0],["驻马店西","驻马店",33.008,114.051,0],
+  ["南阳东","南阳",33.001,112.579,0],["信阳东","信阳",32.161,114.160,0],["平顶山西","平顶山",33.875,112.897,0],
+  ["焦作","焦作",35.242,113.239,0],["三门峡南","三门峡",34.767,111.178,0],["漯河西","漯河",33.575,113.988,0],
+];
+const HUBS = STATIONS.filter(s => s[4]);
+const state = {
+  ratio: 1.5,
+  budget: 4,
+  school: null, home: null,
+  trips: [],
+  clickMode: null,
+  optMode: 'save',
+  optBestName: null,
+  chainMode: true,    // 联程默认: 多个目的地按顺序串成一条联程路线(整条1次)
+  chainRound: false,  // 串联模式下整条路线: 单程=1次 / 往返=2次
+  _tid: 0,
+};
+
+/* ---------- 纯几何/规划逻辑 ---------- */
+const R = 6371;
+function hav(a, b) {
+  const dLat = (b.lat - a.lat) * Math.PI / 180, dLon = (b.lon - a.lon) * Math.PI / 180;
+  const s = Math.sin(dLat / 2) ** 2 +
+    Math.cos(a.lat * Math.PI / 180) * Math.cos(b.lat * Math.PI / 180) * Math.sin(dLon / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(s));
+}
+function dist(a, b) { return hav(a, b); }
+
+/* 点到"学校↔家"沿线的投影 t 与垂直偏差 p（km，平面近似） */
+function corridor(S, H, D) {
+  const lat0 = (S.lat + H.lat) / 2 * Math.PI / 180;
+  const toX = l => (l.lon - S.lon) * 111.32 * Math.cos(lat0);
+  const toY = l => (l.lat - S.lat) * 110.57;
+  const hx = toX(H), hy = toY(H), dx = toX(D), dy = toY(D);
+  const L2 = hx * hx + hy * hy;
+  if (L2 < 1e-6) return { t: 0, p: Math.hypot(dx, dy) };
+  const t = (dx * hx + dy * hy) / L2;
+  return { t, p: Math.hypot(dx - hx * t, dy - hy * t) };
+}
+
+/* 直达覆盖：目的地位于区间沿线带内 */
+function directCovered(S, H, D) {
+  const L = dist(S, H);
+  if (L < 15) return dist(S, D) <= 50;
+  const { t, p } = corridor(S, H, D);
+  return t >= -0.12 && t <= 1.12 && p <= Math.max(45, 0.18 * L);
+}
+
+/* 中转方案：经枢纽站 T，绕行 ≤ ratio×直达，T 贴近区间沿线，且终点 D 也在区间内
+   (实测规则: 联程全程须在区间内, 终点超出区间系统拦截 - "海口→徐州不在区间内"案例) */
+function transferPlan(S, H, D) {
+  const direct = dist(S, D);
+  const L = dist(S, H);
+  const limit = state.ratio * direct;
+  const same = (a, b) => (a.name && a.name === b.name) ||
+    (Math.abs(a.lat - b.lat) < 0.005 && Math.abs(a.lon - b.lon) < 0.005);
+  // 硬约束①: 终点 D 必须在区间走廊带内(允许同城端少量延伸)
+  if (L >= 15) {
+    const { t, p } = corridor(S, H, D);
+    if (!(t >= -0.15 && t <= 1.15 && p <= Math.max(60, 0.32 * L))) return null;
+  }
+  let best = null;
+  for (const st of HUBS) {
+    const T = { name: st[0], city: st[1], lat: st[2], lon: st[3] };
+    if (same(T, D) || same(T, S)) continue;
+    const via = dist(S, T) + dist(T, D);
+    if (via > limit) continue;
+    if (L >= 15) {
+      const { t, p } = corridor(S, H, T);
+      if (!(t >= -0.35 && t <= 1.35 && p <= Math.max(70, 0.32 * L))) continue;
+    }
+    if (!best || via < best.via) best = { station: T, via, direct };
+  }
+  return best;
+}
+
+/* 单程规划：0 = 全价，1 = 优惠（直达或一次中转） */
+function planOneWay(S, H, D) {
+  const direct = dist(S, D);
+  if (directCovered(S, H, D)) return { ok: 1, mode: 'direct', direct };
+  const tr = transferPlan(S, H, D);
+  if (tr) return { ok: 1, mode: 'transfer', direct, via: tr.via, station: tr.station };
+  return { ok: 0, mode: 'full', direct };
+}
+
+/* 给定家庭端 H，评估全部行程 */
+function evalWith(H) {
+  if (!state.school || !state.school.station || !H) return null;
+  const S = state.school.station;
+  const perTrip = state.trips.map(tp => {
+    const D = tp.station;
+    const p = planOneWay(S, H, D);
+    const perWay = p.ok ? 1 : 0;
+    return Object.assign({}, tp, { plan: p, used: tp.round ? perWay * 2 : perWay });
+  });
+  const used = perTrip.reduce((s, x) => s + x.used, 0);
+  return {
+    used,
+    covered: perTrip.filter(x => x.plan.ok).length,
+    direct: perTrip.filter(x => x.plan.mode === 'direct').length,
+    transfer: perTrip.filter(x => x.plan.mode === 'transfer').length,
+    fail: perTrip.filter(x => !x.plan.ok).length,
+    perTrip,
+  };
+}
+function evalAll() { return (state.home && state.home.station) ? evalWith(state.home.station) : null; }
+
+/* ---------- 串联路线：多个目的地按顺序串成一条联程路线 ---------- */
+/* 顺序: 学校 → D1 → D2 → ... → 家。整条路线按联程计 1 次(单程方向)。
+   校验: ① 每段终点在区间内(走廊带) ② 无折返(相邻段方向夹角>90°) ③ 每前缀累计里程 ≤ ratio×从学校直达该点 */
+function chainEval(S, H, stList) {
+  if (!S || !H || !stList.length) return null;
+  const pts = [S, ...stList, H];
+  const direct = dist(S, H);
+  const segs = [];
+  let total = 0, maxRatio = 0, foldback = false;
+  for (let i = 0; i < pts.length - 1; i++) {
+    const A = pts[i], B = pts[i + 1];
+    const d = dist(A, B);
+    total += d;
+    let inInt = true;
+    if (i < pts.length - 2) { // 中间目的地须在区间走廊带内(首尾自动通过)
+      const { t, p } = corridor(S, H, B);
+      inInt = t >= -0.15 && t <= 1.15 && p <= Math.max(60, 0.32 * direct);
+    }
+    const ratio = total / dist(S, B);
+    maxRatio = Math.max(maxRatio, ratio);
+    if (i > 0) { // 折返检测: 段i-1方向 与 段i方向 夹角
+      const a1 = pts[i - 1], b1 = pts[i], c1 = pts[i + 1];
+      const ux = b1.lon - a1.lon, uy = b1.lat - a1.lat;
+      const vx = c1.lon - b1.lon, vy = c1.lat - b1.lat;
+      if (ux * vx + uy * vy < 0) foldback = true;
+    }
+    segs.push({ from: A.name || '学校', to: B.name || '家', km: Math.round(d), inInt, ratio: +ratio.toFixed(2) });
+  }
+  return {
+    segs, total: Math.round(total), direct: Math.round(direct),
+    maxRatio: +maxRatio.toFixed(2), foldback,
+    ok: !foldback && maxRatio <= state.ratio && segs.every(s => s.inInt),
+  };
+}
+function chainEvalCurrent() {
+  return chainEval(state.school && state.school.station, state.home && state.home.station, state.trips.map(t => t.station));
+}
+// ==== PURE LOGIC END ====
+
+/* ---------- 车站/地址解析（离线优先，在线兜底） ---------- */
+function cleanCity(s) { return String(s || '').replace(/市|省|自治州|地区|盟|县|区|壮族|回族|维吾尔|苗|侗|布依|彝|土家族/g, ''); }
+function stationOf(name) { return STATIONS.find(s => s[0] === name) || null; }
+function nearestStation(pt, maxKm) {
+  let best = null, bd = maxKm != null ? maxKm : Infinity;
+  for (const s of STATIONS) {
+    const d = dist({ lat: s[2], lon: s[3] }, pt);
+    if (d < bd) { bd = d; best = s; }
+  }
+  return best;
+}
+function stToObj(s) { return s ? { name: s[0], city: s[1], lat: s[2], lon: s[3], hub: !!s[4] } : null; }
+
+async function fetchGeo(q) {
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort(), 6000);
+  try {
+    const r = await fetch('https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&accept-language=zh-CN&q=' + encodeURIComponent(q), { signal: ctrl.signal });
+    const j = await r.json();
+    if (j && j[0]) return { lat: +j[0].lat, lon: +j[0].lon };
+  } catch (e) { /* offline or blocked */ }
+  finally { clearTimeout(t); }
+  return null;
+}
+
+async function resolvePlace(q) {
+  q = (q || '').trim();
+  if (!q) return null;
+  // 1) 离线：车站库直接匹配
+  const qn = cleanCity(q);
+  const hits = STATIONS.filter(s => s[0] === qn || s[1] === qn || s[1].includes(qn) || qn.includes(s[1]));
+  if (hits.length) {
+    const h = hits.find(s => s[4]) || hits[0];
+    return { point: { lat: h[2], lon: h[3] }, station: stToObj(h), label: h[0] + ' · ' + h[1], offline: true };
+  }
+  // 2) 在线：Nominatim 地理编码
+  const g = await fetchGeo(q);
+  if (g) {
+    const n = nearestStation(g, 60);
+    if (n) return { point: g, station: stToObj(n), label: n[0] + ' · ' + n[1], offline: false };
+    return { point: g, station: null, label: '坐标点（附近 60km 无车站）', offline: false };
+  }
+  return null;
+}
+
+/* ---------- 地图 ---------- */
+let map = null, fg = null, stationLayer = null, homeMarker = null;
+function initMap() {
+  if (!window.L) { document.getElementById('status').textContent = '⚠️ 地图组件加载失败，请检查网络（Leaflet CDN）'; return; }
+  const gaode = L.tileLayer('https://webrd0{s}.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=8&x={x}&y={y}&z={z}',
+    { subdomains: ['1', '2', '3', '4'], maxZoom: 18, attribution: '© 高德地图' });
+  const osm = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+    { maxZoom: 19, attribution: '© OpenStreetMap' });
+  map = L.map('map', { zoomControl: true }).setView([31.0, 112.0], 5);
+  gaode.addTo(map);
+  fg = L.featureGroup().addTo(map);
+  // 车站图层（静态，切换显示）
+  stationLayer = L.layerGroup();
+  for (const s of STATIONS) {
+    const c = L.circleMarker([s[2], s[3]], {
+      radius: s[4] ? 4.5 : 3, color: s[4] ? '#a78bfa' : '#52525b',
+      weight: 1, fillColor: s[4] ? '#8b5cf6' : '#3f3f46', fillOpacity: .85,
+    });
+    c.bindPopup('<b>' + s[0] + '</b> · ' + s[1] + (s[4] ? ' · <span style="color:#c4b5fd">枢纽站</span>' : '') +
+      '<br>' + s[2].toFixed(3) + ', ' + s[3].toFixed(3));
+    stationLayer.addLayer(c);
+  }
+  L.control.layers({ '高德 · 街道': gaode, 'OpenStreetMap': osm }, { '🚉 显示全部车站': stationLayer },
+    { position: 'topright', collapsed: false }).addTo(map);
+  map.on('click', onMapClick);
+}
+function pin(role, label) {
+  const cls = role === 'school' ? 'pin-school' : role === 'home' ? 'pin-home'
+    : role === 'dir' ? 'pin-dir' : role === 'tr' ? 'pin-tr' : 'pin-fail';
+  return L.divIcon({ className: '', html: '<div class="pin ' + cls + '"><span>' + label + '</span></div>',
+    iconSize: [34, 34], iconAnchor: [17, 31], popupAnchor: [0, -26] });
+}
+function onMapClick(e) {
+  if (!state.clickMode) return;
+  const pt = e.latlng;
+  const n = nearestStation(pt, 60);
+  const station = n ? stToObj(n) : null;
+  if (state.clickMode === 'school') {
+    state.school = { text: station ? station.name : pt.lat.toFixed(2) + ',' + pt.lon.toFixed(2), point: { lat: pt.lat, lon: pt.lng }, station };
+    document.getElementById('schoolInput').value = state.school.text;
+    setStatus('学校已设为 ' + (station ? station.name + ' · ' + station.city : '该坐标附近无车站'));
+  } else if (state.clickMode === 'home') {
+    setHomeFromPoint(pt, station);
+  } else {
+    addTripWith(pt, station);
+  }
+  renderAll();
+}
+function setStatus(msg) { document.getElementById('status').textContent = msg || ''; }
+function fitAll() {
+  if (!map) return;
+  const pts = [];
+  if (state.school) pts.push([state.school.point.lat, state.school.point.lon]);
+  if (state.home) pts.push([state.home.point.lat, state.home.point.lon]);
+  state.trips.forEach(t => pts.push([t.point.lat, t.point.lon]));
+  if (!pts.length) return;
+  map.fitBounds(L.latLngBounds(pts).pad(0.18), { padding: [30, 30] });
+}
+
+/* ---------- 渲染 ---------- */
+function renderMap() {
+  if (!map || !fg) return;
+  fg.clearLayers();
+  const S = state.school, H = state.home;
+  if (S) {
+    L.marker([S.point.lat, S.point.lon], { icon: pin('school', '校') })
+      .bindPopup('<b>学校</b>（固定）<br>' + esc(S.text) + (S.station ? '<br>车站：' + esc(S.station.name) + ' · ' + esc(S.station.city) : '')).addTo(fg);
+  }
+  if (H) {
+    if (homeMarker && map.hasLayer(homeMarker)) map.removeLayer(homeMarker);
+    homeMarker = L.marker([H.point.lat, H.point.lon], { icon: pin('home', '家'), draggable: true })
+      .bindPopup('<b>家庭</b>（可拖动）<br>' + esc(H.text) + (H.station ? '<br>车站：' + esc(H.station.name) + ' · ' + esc(H.station.city) : '')).addTo(fg);
+    homeMarker.on('dragend', () => {
+      const p = homeMarker.getLatLng();
+      const n = nearestStation({ lat: p.lat, lon: p.lng }, 60);
+      state.home = {
+        text: n ? n[0] + ' · ' + n[1] : p.lat.toFixed(2) + ',' + p.lng.toFixed(2),
+        point: { lat: p.lat, lon: p.lng },
+        station: n ? stToObj(n) : null,
+      };
+      document.getElementById('homeInput').value = state.home.text;
+      setStatus(n ? '家已移动到 ' + n[0] + '（' + n[1] + '）' : '家已移动到新位置（附近无车站）');
+      renderAll();
+    });
+  }
+  // 区间线 + 行程线
+  if (S && H && state.chainMode && state.trips.length) {
+    // 串联路线: 学校 → D1 → ... → 家 整条折线
+    const pts = [[S.point.lat, S.point.lon], ...state.trips.map(t => [t.point.lat, t.point.lon]), [H.point.lat, H.point.lon]];
+    L.polyline(pts, { color: '#0ea5e9', weight: 3, opacity: .8 }).addTo(fg);
+    pts.slice(0, -1).forEach((p, i) => {
+      const q = pts[i + 1];
+      L.circleMarker(p, { radius: 5, color: '#0ea5e9', weight: 2, fillColor: '#fff', fillOpacity: 1 }).addTo(fg);
+      if (q) L.polyline([p, q], { color: '#0ea5e9', weight: 1.2, opacity: .5, dashArray: '2 6' }).addTo(fg);
+    });
+    L.circleMarker(pts[pts.length - 1], { radius: 5, color: '#0ea5e9', weight: 2, fillColor: '#fff', fillOpacity: 1 }).addTo(fg);
+  } else if (S && H) {
+    L.polyline([[S.point.lat, S.point.lon], [H.point.lat, H.point.lon]],
+      { color: '#e4e4e7', weight: 2, dashArray: '6 8', opacity: .45 }).addTo(fg);
+  }
+  if (S && H) {
+    const res = evalAll();
+    res.perTrip.forEach((tp, i) => {
+      const D = tp.point;
+      if (state.chainMode) {
+        L.marker([D.lat, D.lon], { icon: pin('dir', String(i + 1)) })
+          .bindPopup('<b>' + esc(tp.text) + '</b><br>车站：' + esc(tp.station ? tp.station.name : '坐标点') + '<br>路线第 ' + (i + 1) + ' 站').addTo(fg);
+        return;
+      }
+      const cls = tp.plan.mode === 'direct' ? 'dir' : tp.plan.mode === 'transfer' ? 'tr' : 'fail';
+      const nm = tp.round ? '往返' : '单程';
+      if (tp.plan.mode === 'transfer' && tp.plan.station) {
+        L.polyline([[S.point.lat, S.point.lon], [tp.plan.station.lat, tp.plan.station.lon]],
+          { color: '#fb923c', weight: 2.5, opacity: .8 }).addTo(fg);
+        L.polyline([[tp.plan.station.lat, tp.plan.station.lon], [D.lat, D.lon]],
+          { color: '#fb923c', weight: 2.5, opacity: .8 }).addTo(fg);
+      } else {
+        L.polyline([[S.point.lat, S.point.lon], [D.lat, D.lon]],
+          { color: tp.plan.mode === 'direct' ? '#818cf8' : '#52525b', weight: 2.5,
+            opacity: tp.plan.mode === 'full' ? .6 : .85, dashArray: tp.plan.mode === 'full' ? '6 8' : null }).addTo(fg);
+      }
+      const txt = tp.station ? tp.station.name : '坐标点';
+      L.marker([D.lat, D.lon], { icon: pin(cls, String(i + 1)) })
+        .bindPopup('<b>' + esc(tp.text) + '</b><br>车站：' + esc(txt) + '<br>' + modeText(tp) + '<br>' + nm).addTo(fg);
+    });
+  }
+}
+function modeText(tp) {
+  if (!tp.plan) return '';
+  if (tp.plan.mode === 'direct') return '✅ 直达优惠（1次/单程）';
+  if (tp.plan.mode === 'transfer') return '🔀 中转优惠 经 ' + esc(tp.plan.station.name) + '（1次/单程）';
+  return '💸 全价购票（不扣次数）';
+}
+function esc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+
+function renderTotals(res) {
+  const remain = state.budget - res.used;
+  document.getElementById('totals').innerHTML =
+    '<div class="total-box"><div class="num ' + (res.used > state.budget ? 'num-red' : 'num-blue') + '">' + res.used +
+    '<span style="font-size:14px;color:var(--muted)"> / ' + state.budget + '</span></div><div class="lbl">总消耗优惠次数</div></div>' +
+    '<div class="total-box"><div class="num ' + (remain < 0 ? 'num-red' : 'num-green') + '">' + remain +
+    '</div><div class="lbl">剩余次数（预算 ' + state.budget + '）</div></div>' +
+    '<div class="total-box"><div class="num num-green">' + res.covered + ' / ' + state.trips.length +
+    '</div><div class="lbl">可享受优惠的行程</div></div>' +
+    '<div class="total-box"><div class="num num-blue">' + res.direct + '</div><div class="lbl">直达优惠</div></div>' +
+    '<div class="total-box"><div class="num num-orange">' + res.transfer + '</div><div class="lbl">中转优惠</div></div>' +
+    '<div class="total-box"><div class="num num-red">' + res.fail + '</div><div class="lbl">需全价</div></div>';
+  document.getElementById('banners').innerHTML =
+    (res.used > state.budget
+      ? '<div class="warn-banner">⚠️ 超出预算 <b>' + (res.used - state.budget) + '</b> 次。建议：修改区间端点（见下方"区间优化"）/ 减少出行 / 部分行程改全价。</div>'
+      : res.used > 0
+        ? '<div class="ok-banner">✅ 预算内可用。剩余 ' + remain + ' 次；' + res.fail + ' 个行程需全价购票。</div>'
+        : '') +
+    (state.trips.length === 0 ? '<div class="ok-banner">👆 先添加你想去的地方，规划会自动生成。</div>' : '');
+}
+
+function renderTrips() {
+  const el = document.getElementById('tripList');
+  if (!state.trips.length) { el.innerHTML = '<div style="color:var(--muted);font-size:13px;padding:6px 2px">还没有行程，添加或点击下方热门城市 👇</div>'; return; }
+  if (state.chainMode) {
+    const c = chainEvalCurrent();
+    el.innerHTML = state.trips.map((tp, i) => {
+      const seg = c ? c.segs[i] : null;
+      return '<div class="trip-row fade-in">' +
+        '<div class="trip-idx">' + (i + 1) + '</div>' +
+        '<div class="trip-main"><b>' + esc(tp.text) + '</b>' +
+        '<div class="sub">车站：' + esc(tp.station ? tp.station.name + ' · ' + tp.station.city : '坐标点') +
+        (seg ? ' · 本段 ' + seg.km + ' km' : '') + '</div></div>' +
+        '<span class="chip ' + (seg && seg.inInt ? 'chip-green' : 'chip-red') + '">' + (seg && seg.inInt ? '✓ 区间内' : '⚠ 区间外') + '</span>' +
+        '<button class="btn btn-ghost btn-sm" title="上移" onclick="moveTrip(' + tp.id + ',-1)">↑</button>' +
+        '<button class="btn btn-ghost btn-sm" title="下移" onclick="moveTrip(' + tp.id + ',1)">↓</button>' +
+        '<button class="btn btn-ghost btn-sm" onclick="panTo(' + i + ')">📍</button>' +
+        '<button class="btn btn-danger btn-sm" onclick="removeTrip(' + tp.id + ')">✕</button></div>';
+    }).join('');
+    return;
+  }
+  el.innerHTML = state.trips.map((tp, i) => {
+    const res = evalAll();
+    const t = res.perTrip[i];
+    const p = t.plan;
+    const badge = p.mode === 'direct' ? '<span class="chip chip-blue">直达 · 1次/单程</span>'
+      : p.mode === 'transfer' ? '<span class="chip chip-orange">中转 经' + esc(p.station.name) + ' · 1次/单程</span>'
+      : '<span class="chip chip-red">全价 · 0次</span>';
+    return '<div class="trip-row fade-in">' +
+      '<div class="trip-idx">' + (i + 1) + '</div>' +
+      '<div class="trip-main"><b>' + esc(tp.text) + '</b>' +
+      '<div class="sub">车站：' + esc(tp.station ? tp.station.name + ' · ' + tp.station.city : '坐标点') +
+      ' · 直达里程 ' + Math.round(p.direct) + ' km</div></div>' +
+      badge +
+      '<span class="chip ' + (t.used === 0 ? 'chip-red' : 'chip-violet') + '">' + t.used + ' 次</span>' +
+      '<label class="switch" title="点击切换 往返/单程">' +
+      '<input type="checkbox" ' + (tp.round ? 'checked' : '') + ' onchange="toggleRound(' + tp.id + ')">' +
+      '<span class="bar"></span>' +
+      '<span class="sw-label">' + (tp.round ? '往返 = 2次' : '单程 = 1次') + '</span></label>' +
+      '<button class="btn btn-ghost btn-sm" onclick="panTo(' + i + ')">📍</button>' +
+      '<button class="btn btn-danger btn-sm" onclick="removeTrip(' + tp.id + ')">✕</button></div>';
+  }).join('');
+}
+
+/* 家的有效坐标：优先 point，非法时回退车站坐标，避免 NaN 渲染 */
+function homePoint() {
+  const h = state.home;
+  if (!h) return null;
+  const p = h.point, s = h.station;
+  if (p && isFinite(p.lat) && isFinite(p.lon)) return { lat: +p.lat, lon: +p.lon };
+  if (s && isFinite(s.lat) && isFinite(s.lon)) return { lat: +s.lat, lon: +s.lon };
+  return null;
+}
+
+function renderOpt() {
+  if (!state.school || !state.home) return;
+  const cur = evalAll();
+  if (!cur) return;
+  const homePt = homePoint();
+  const cands = [];
+  for (const s of STATIONS) {
+    const S = state.school.station;
+    if (s[0] === S.name) continue;
+    let r;
+    if (state.chainMode) {
+      const cc = chainEval(S, stToObj(s), state.trips.map(t => t.station));
+      r = cc && cc.ok ? { used: state.chainRound ? 2 : 1, covered: 1, direct: 0, transfer: 1, fail: 0 }
+        : { used: 0, covered: 0, direct: 0, transfer: 0, fail: 1 };
+    } else {
+      r = evalWith(stToObj(s));
+    }
+    if (!r) continue;
+    cands.push({
+      st: s,
+      used: r.used, covered: r.covered, direct: r.direct, transfer: r.transfer, fail: r.fail,
+      sameCity: state.home.station && s[1] === state.home.station.city,
+      kmHome: homePt ? dist({ lat: s[2], lon: s[3] }, homePt) : NaN,
+    });
+  }
+  const mode = state.optMode || 'save';
+  const kmOf = c => (isFinite(c.kmHome) ? c.kmHome : 1e9);
+  let list = cands.slice();
+  if (mode === 'save') {
+    list = list.filter(c => c.covered >= 1);
+    list.sort((a, b) => (a.used - b.used) || (b.covered - a.covered) ||
+      ((b.sameCity ? 1 : 0) - (a.sameCity ? 1 : 0)) || (kmOf(a) - kmOf(b)));
+  } else if (mode === 'full') {
+    list = list.filter(c => state.trips.length > 0 && c.covered === state.trips.length);
+    list.sort((a, b) => (a.used - b.used) || (kmOf(a) - kmOf(b)));
+  } else {
+    list.sort((a, b) => ((b.sameCity ? 1 : 0) - (a.sameCity ? 1 : 0)) || (kmOf(a) - kmOf(b)));
+  }
+  const top = list.slice(0, 8);
+  const smart = smartBest();
+  const smartName = smart ? smart.s[0] : null;
+  const tabs = ['<div class="map-tools" style="margin-top:0">' +
+    '<span class="lbl">排序视图：</span>' +
+    tabBtn('save', '最省次数') + tabBtn('full', '覆盖全部') + tabBtn('near', '离家最近') + '</div>'];
+  document.getElementById('optCurrent').innerHTML =
+    '<div class="opt-row cur"><div class="opt-main"><b>🎯 当前区间</b>' +
+    '<div class="sub">学校 ' + esc(state.school.station ? state.school.station.name + ' · ' + state.school.station.city : state.school.text) +
+    ' ↔ 家 ' + esc(state.home.station ? state.home.station.name + ' · ' + state.home.station.city : state.home.text) + '</div></div>' +
+    '<div class="opt-meta"><span class="opt-used num-blue">' + cur.used + ' 次</span>' +
+    '<span class="chip chip-green">覆盖 ' + cur.covered + '/' + state.trips.length + '</span>' +
+    '<span class="chip chip-blue">直达 ' + cur.direct + '</span><span class="chip chip-orange">中转 ' + cur.transfer + '</span>' +
+    '<span class="chip chip-red">全价 ' + cur.fail + '</span></div></div>';
+  document.getElementById('optList').innerHTML = tabs.join('') +
+    (list.length === 0 ? '<div style="color:var(--muted);font-size:13px;padding:8px 2px">该视图下没有候选（如"覆盖全部"需要先添加更多行程）。</div>'
+    : top.map((c, i) => {
+    const diff = c.used - cur.used;
+    const diffBadge = diff < 0 ? '<span class="chip chip-green">省 ' + (-diff) + ' 次</span>'
+      : diff > 0 ? '<span class="chip chip-red">多 ' + diff + ' 次</span>' : '<span class="chip">相同</span>';
+    const isBest = c.st[0] === smartName;
+    return '<div class="opt-row ' + (isBest ? 'best' : '') + '">' +
+      '<div class="opt-main"><b>' + (isBest ? '⭐ ' : '') + esc(c.st[0]) + ' · ' + esc(c.st[1]) + '</b>' +
+      '<div class="sub">' + (c.sameCity ? '<span style="color:#6ee7b7">与家庭同城，可直接作为区间端点</span> · ' : '') +
+      '距家 ' + (isFinite(c.kmHome) ? Math.round(c.kmHome) : '—') + ' km</div></div>' +
+      '<div class="opt-meta"><span class="opt-used ' + (c.used <= cur.used ? 'num-green' : 'num-red') + '">' + c.used + ' 次</span>' +
+      diffBadge +
+      '<span class="chip chip-green">覆盖 ' + c.covered + '/' + state.trips.length + '</span>' +
+      '<span class="chip chip-blue">' + c.direct + '直达</span><span class="chip chip-orange">' + c.transfer + '中转</span>' +
+      '<span class="chip chip-red">' + c.fail + '全价</span>' +
+      '<button class="btn btn-primary btn-sm" onclick="setHomeFromStation(\'' + c.st[0] + '\')">采用</button></div></div>';
+  }).join(''));
+}
+function tabBtn(mode, label) {
+  return '<button class="btn btn-ghost btn-sm opt-tab ' + (state.optMode === mode ? 'active' : '') +
+    '" onclick="setOptMode(\'' + mode + '\')">' + label + '</button>';
+}
+function setOptMode(m) { state.optMode = m; renderOpt(); }
+
+/* 智能最优：在不减少覆盖行程数的前提下，消耗次数最少；同次数取同城/最近 */
+function smartBest() {
+  if (!state.school || !state.home || !state.trips.length) return null;
+  const cur = evalAll();
+  if (!cur) return null;
+  const homePt = homePoint();
+  let best = null;
+  for (const s of STATIONS) {
+    if (s[0] === state.school.station.name) continue;
+    let r;
+    if (state.chainMode) {
+      const cc = chainEval(state.school.station, stToObj(s), state.trips.map(t => t.station));
+      r = cc && cc.ok ? { used: state.chainRound ? 2 : 1, covered: 1 } : { used: 0, covered: 0 };
+    } else {
+      r = evalWith(stToObj(s));
+    }
+    if (!r) continue;
+    if (r.covered < Math.max(1, cur.covered)) continue;
+    const sameCity = state.home.station && s[1] === state.home.station.city;
+    const km = homePt ? dist({ lat: s[2], lon: s[3] }, homePt) : 1e9;
+    if (!best || r.used < best.used || (r.used === best.used &&
+      ((sameCity ? 1 : 0) > (best.sameCity ? 1 : 0) || (sameCity === best.sameCity && km < best.km)))) {
+      best = { s, used: r.used, covered: r.covered, sameCity, km };
+    }
+  }
+  return best;
+}
+
+/* ---------- 串联路线渲染 ---------- */
+function renderChain() {
+  const S = state.school.station, H = state.home.station;
+  const c = chainEvalCurrent();
+  const ok = !!(c && c.ok);
+  const used = ok ? (state.chainRound ? 2 : 1) : 0;
+  const remain = state.budget - used;
+  // 路线预览
+  const names = [S.name, ...state.trips.map(t => t.station.name), H.name];
+  document.getElementById('chainPreview').innerHTML =
+    '<b style="color:var(--text)">' + names.map(n => esc(n)).join(' → ') + '</b>';
+  // 校验明细
+  let check = '';
+  if (!c) {
+    check = '请先添加目的地。';
+  } else {
+    check = c.segs.map((s, i) =>
+      (i + 1) + '. ' + esc(s.from) + ' → ' + esc(s.to) + '：' + s.km + ' km ' +
+      (s.inInt ? '<span style="color:#16a34a">✓ 区间内</span>' : '<span style="color:#dc2626">✗ 区间外</span>') +
+      ' · 累计' + s.ratio + '×').join('<br>');
+    if (c.foldback) check += '<br><span style="color:#c2410c">⚠️ 存在折返（方向回头），12306 联程大概率不给合并</span>';
+    if (c.maxRatio > state.ratio) check += '<br><span style="color:#c2410c">⚠️ 累计绕行 ' + c.maxRatio + '× 超过上限 ' + state.ratio + '×，可能提示"区间不符无法购票"</span>';
+    check += '<br>全程 ' + c.total + ' km（学校直达家 ' + c.direct + ' km）';
+  }
+  document.getElementById('chainCheck').innerHTML = check;
+  // 往返开关同步
+  const sw = document.getElementById('chainControls').querySelector('.switch input');
+  sw.checked = state.chainRound;
+  document.getElementById('chainRoundLabel').textContent = state.chainRound ? '往返 = 2次' : '单程 = 1次';
+  // 总计
+  document.getElementById('resultHint').innerHTML =
+    '🔗 串联路线：整条路线按联程计 <b>' + used + ' 次</b>' +
+    (state.chainRound ? '（往返）' : '（单程）') + ' · 中转绕行上限 ' + state.ratio.toFixed(2) + '×';
+  document.getElementById('totals').innerHTML =
+    '<div class="total-box"><div class="num ' + (used > state.budget ? 'num-red' : 'num-blue') + '">' + used +
+    '<span style="font-size:14px;color:var(--muted)"> / ' + state.budget + '</span></div><div class="lbl">整条路线消耗</div></div>' +
+    '<div class="total-box"><div class="num ' + (remain < 0 ? 'num-red' : 'num-green') + '">' + remain +
+    '</div><div class="lbl">剩余次数（预算 ' + state.budget + '）</div></div>' +
+    '<div class="total-box"><div class="num ' + (ok ? 'num-green' : 'num-red') + '">' + (ok ? '1' : '0') +
+    '</div><div class="lbl">联程合并为几次</div></div>' +
+    '<div class="total-box"><div class="num num-orange">' + (c ? c.segs.length : 0) +
+    '</div><div class="lbl">串联段数（换乘 ' + Math.max(0, (c ? c.segs.length : 0) - 1) + ' 次）</div></div>';
+  document.getElementById('banners').innerHTML =
+    (used > state.budget
+      ? '<div class="warn-banner">⚠️ 超出预算 <b>' + (used - state.budget) + '</b> 次。建议：路线改单程 / 减少串联站点 / 部分站点改全价。</div>'
+      : used > 0 ? '<div class="ok-banner">✅ 整条路线 ' + used + ' 次（' + (state.chainRound ? '往返' : '单程') + '），预算内可用，剩余 ' + remain + ' 次。</div>' : '') +
+    (!ok ? '<div class="warn-banner">⚠️ 当前路线存在折返/超区间/绕行超标，12306 联程可能无法合并出票。请调整顺序或改用"独立行程"。</div>' : '');
+  document.getElementById('tripRows').innerHTML = '';
+  renderRouteLine();
+  renderAdvice();
+}
+/* ---------- 导航二级菜单 ---------- */
+function toggleRulesMenu(e) {
+  e.stopPropagation();
+  document.getElementById('rulesMenu').classList.toggle('open');
+}
+document.addEventListener('click', () => {
+  const m = document.getElementById('rulesMenu');
+  if (m) m.classList.remove('open');
+});
+/* ---------- 动画聚焦引导 ---------- */
+const GUIDE_STEPS = [
+  { sel: '#schoolInput', num: '1', title: '在哪写车站', text: '学校地址写在这里 —— <b>固定不动</b>（12306 要求与学信网一致）。', pos: 'bottom' },
+  { sel: '#homeInput', num: '2', title: '另一个端点"家"', text: '写在这里 —— 区间另一端，<b>12306 里可随便改、不限次数</b>，改完立即生效。这就是你优化区间的钥匙。', pos: 'bottom' },
+  { sel: '#tripInput', num: '3', title: '想去的地方', text: '添加在这里，默认自动按顺序<b>串成联程路线</b>（整条只扣 1 次，往返 2 次），也可以切"独立行程"。', pos: 'bottom' },
+  { sel: '#routeLine', num: '4', title: '怎么看结果', text: '看这条直线图：<b>🟢 绿=学生票（扣次数）</b>、🟠 橙=中转学生票、<b>🔴 红=全价（不扣次）</b>。', pos: 'top' },
+  { sel: '#advice', num: '5', title: '怎么改区间', text: '这里自动告诉你"<b>把家改到哪</b>最省次数"，照着改即可。预算不够时也会给出减行程/改单程建议。', pos: 'top' },
+];
+let guideIdx = 0;
+function startGuide() {
+  guideIdx = 0;
+  document.getElementById('spotlight').style.display = 'block';
+  showSpotStep();
+}
+/* 平滑滚动到元素, 滚动真正停止后回调(避免测量竞态闪烁) */
+function scrollToElSettled(el, done) {
+  const rect = el.getBoundingClientRect();
+  const targetY = rect.top + (window.scrollY || 0) - (window.innerHeight - rect.height) / 2;
+  if (window.scrollTo) window.scrollTo({ top: Math.max(0, targetY), behavior: 'smooth' });
+  let lastY = window.scrollY || 0, stable = 0;
+  const tick = () => {
+    const y = window.scrollY || 0;
+    if (Math.abs(y - lastY) < 1) stable++; else stable = 0;
+    lastY = y;
+    if (stable >= 3) { done(); return; }
+    if (window.requestAnimationFrame) window.requestAnimationFrame(tick); else done();
+  };
+  if (window.requestAnimationFrame) window.requestAnimationFrame(tick); else done();
+}
+function showSpotStep() {
+  const step = GUIDE_STEPS[guideIdx];
+  const el = document.querySelector(step.sel);
+  if (!el) { nextSpot(); return; }
+  const hole = document.getElementById('spotHole');
+  hole.style.opacity = 0; // 先隐藏, 精确定位后再淡入, 避免闪烁
+  const place = () => {
+    const r = el.getBoundingClientRect();
+    hole.style.left = (r.left - 10) + 'px';
+    hole.style.top = (r.top - 10) + 'px';
+    hole.style.width = (r.width + 20) + 'px';
+    hole.style.height = (r.height + 20) + 'px';
+    hole.style.opacity = 1;
+    const card = document.getElementById('spotCard');
+    const above = step.pos === 'top';
+    card.style.left = Math.max(12, Math.min(r.left, window.innerWidth - 380)) + 'px';
+    const ty = above ? r.top - card.offsetHeight - 14 : r.bottom + 14;
+    card.style.top = Math.max(12, Math.min(ty, window.innerHeight - card.offsetHeight - 12)) + 'px';
+    card.style.animation = 'none';
+    void card.offsetWidth; // 重启动画
+    card.style.animation = '';
+  };
+  const r0 = el.getBoundingClientRect();
+  const inView = r0.top >= 40 && r0.bottom <= (window.innerHeight || 900) - 40;
+  if (inView) { place(); } else { scrollToElSettled(el, place); }
+  document.getElementById('spotTitle').innerHTML =
+    '<span class="st-num">' + step.num + '</span>' + step.title;
+  document.getElementById('spotText').innerHTML = step.text;
+  const last = guideIdx === GUIDE_STEPS.length - 1;
+  document.getElementById('spotNext').style.display = last ? 'none' : '';
+  document.getElementById('spotDone').style.display = last ? '' : 'none';
+  document.getElementById('spotPrev').style.display = guideIdx === 0 ? 'none' : '';
+  document.getElementById('spotProgress').innerHTML = GUIDE_STEPS.map((s, i) =>
+    '<span class="dot' + (i === guideIdx ? ' on' : '') + '"></span>').join('');
+}
+function nextSpot() {
+  guideIdx++;
+  if (guideIdx >= GUIDE_STEPS.length) { closeGuide(); return; }
+  showSpotStep();
+}
+function prevSpot() {
+  if (guideIdx > 0) { guideIdx--; showSpotStep(); }
+}
+function closeGuide() {
+  document.getElementById('spotlight').style.display = 'none';
+  try { localStorage.setItem('spr_guide_done', '1'); } catch (e) { }
+}
+
+/* ---------- 结果直线图：哪段学生票 / 哪段全价 ---------- */
+function renderRouteLine() {
+  const el = document.getElementById('routeLine');
+  if (!state.school || !state.home) { el.innerHTML = ''; return; }
+  const S = state.school.station, H = state.home.station;
+  if (!S || !H) { el.innerHTML = ''; return; }
+  const direct = dist(S, H);
+  let segs = [];
+  if (state.chainMode) {
+    const c = chainEvalCurrent();
+    if (c) {
+      segs = c.segs.map(s => ({
+        label: s.from + '→' + s.to, km: s.km,
+        color: s.inInt ? '#22c55e' : '#ef4444',
+        note: s.inInt ? '学生票' : '全价',
+      }));
+    }
+  } else {
+    const res = evalAll();
+    if (res) {
+      segs = res.perTrip.map(tp => ({
+        label: tp.station ? tp.station.name : tp.text, km: Math.max(40, tp.plan.direct),
+        color: tp.plan.mode === 'direct' ? '#22c55e' : tp.plan.mode === 'transfer' ? '#f97316' : '#ef4444',
+        note: tp.plan.mode === 'direct' ? '直达·学生票' : tp.plan.mode === 'transfer' ? '中转·学生票' : '全价',
+      }));
+    }
+  }
+  const total = segs.reduce((s, x) => s + x.km, 1);
+  el.innerHTML =
+    '<div class="route-head"><span class="rt-node">' + esc(S.name) + '</span>' +
+    '<div class="route-bar">' + segs.map(s =>
+      '<div class="rt-seg" style="flex:' + (s.km / total * 1000).toFixed(0) + ';background:' + s.color + '" title="' +
+      esc(s.label) + ' · ' + s.km + ' km · ' + esc(s.note) + '"></div>').join('') +
+    '</div><span class="rt-node">' + esc(H.name) + '</span></div>' +
+    '<div class="route-seq">' +
+    (state.chainMode ? segs.map((s, i) => (i ? '→ ' : '') + '<b>' + esc(s.label) + '</b> <span style="color:' + s.color + '">' + s.km + 'km · ' + esc(s.note) + '</span>').join(' ')
+      : segs.map((s, i) => (i ? ' · ' : '') + '<b>' + esc(s.label) + '</b> <span style="color:' + s.color + '">' + esc(s.note) + '</span>').join('')) +
+    '</div>';
+}
+
+/* ---------- 修改区间建议 ---------- */
+function suggestFix() {
+  const tips = [];
+  if (!state.school || !state.home || !state.trips.length) return tips;
+  const S = state.school.station;
+  if (state.chainMode) {
+    const c = chainEvalCurrent();
+    if (c && !c.ok) {
+      c.segs.forEach((s, i) => {
+        if (!s.inInt) {
+          const bad = i < c.segs.length - 1 ? s.to : s.from;
+          tips.push('「' + s.from + '→' + s.to + '」超出区间（' + s.km + 'km 全价）。把"家"改到 <b>' + esc(s.to) + '</b>，这段就变成区间内学生票。');
+        }
+      });
+      if (c.foldback) tips.push('路线存在<b>折返</b>（方向回头），12306 联程不会合并——用 ↑↓ 调整顺序或"🪄 自动排序"。');
+      if (c.maxRatio > state.ratio) tips.push('累计绕行 <b>' + c.maxRatio + '×</b> 超过上限 ' + state.ratio + '×，购票时会提示"区间不符"——减少绕路或把家改到中间城市。');
+    } else if (c) {
+      tips.push('整条路线可以合并为 <b>1 次</b>联程' + (state.chainRound ? '（往返 2 次）' : '') + ' ✓ 直接去 12306 用"中转/联程"方式购买。');
+    }
+  } else {
+    const res = evalAll();
+    if (!res) return tips;
+    res.perTrip.forEach((tp, i) => {
+      if (!tp.plan.ok) {
+        let best = null;
+        for (const s of STATIONS) {
+          if (s[0] === S.name) continue;
+          const r = evalWith(stToObj(s));
+          if (!r || !r.perTrip[i]) continue;
+          if (r.perTrip[i].plan.ok) {
+            if (!best || r.used < best.used) best = { name: s[0], city: s[1], used: r.used };
+          }
+        }
+        tips.push('「' + esc(tp.text) + '」超出区间（全价）。' +
+          (best ? '把"家"改到 <b>' + esc(best.name) + '（' + esc(best.city) + '）</b>，总次数变为 ' + best.used + ' 次。' :
+            '可分段购买：区间内学生票 + 区间外全价。'));
+      }
+    });
+    if (res.used > state.budget) {
+      tips.push('总消耗 <b>' + res.used + ' 次</b>超出预算 ' + state.budget + '：减少行程 / 改单程 / 或接受部分行程全价。');
+    }
+    if (res.used > 0 && res.used <= state.budget && res.fail === 0) {
+      tips.push('全部行程都在区间内 ✓ 直接购票即可，剩余 ' + (state.budget - res.used) + ' 次。');
+    }
+  }
+  return tips;
+}
+function renderAdvice() {
+  const el = document.getElementById('advice');
+  const tips = suggestFix();
+  if (!tips.length) { el.innerHTML = ''; return; }
+  const allGood = tips.length === 1 && tips[0].includes('✓');
+  el.innerHTML = tips.map(t =>
+    '<div class="advice ' + (allGood ? 'good' : '') + '">💡 ' + t + '</div>').join('');
+}
+
+function setChainMode(on) {
+  state.chainMode = !!on;
+  document.querySelectorAll('.mode-btn').forEach(b => b.classList.toggle('active', b.dataset.mode === (on ? 'chain' : 'solo')));
+  document.getElementById('chainControls').style.display = on ? 'block' : 'none';
+  document.getElementById('batchBtns').style.display = on ? 'none' : 'flex';
+  document.getElementById('planHint').textContent = on
+    ? '串联路线：目的地按顺序串成一条联程路线，整条只扣 1 次（往返 2 次）。用 ↑↓ 或"自动排序"调整顺序。'
+    : '独立行程：每个目的地单独扣次。也可切换为"串联路线"——多个目的地按顺序串成一条联程路线，整条只扣 1 次。';
+  renderAll();
+}
+function toggleChainRound() {
+  state.chainRound = !state.chainRound;
+  renderChain(); renderTrips(); renderOpt(); renderMap();
+}
+function moveTrip(id, dir) {
+  const i = state.trips.findIndex(t => t.id === id);
+  const j = i + dir;
+  if (i < 0 || j < 0 || j >= state.trips.length) return;
+  [state.trips[i], state.trips[j]] = [state.trips[j], state.trips[i]];
+  renderAll();
+}
+function chainAutoSort() {
+  const S = state.school && state.school.station, H = state.home && state.home.station;
+  if (!S || !H || !state.trips.length) return;
+  state.trips.sort((a, b) => {
+    if (!a.station || !b.station) return 0;
+    return corridor(S, H, a.station).t - corridor(S, H, b.station).t;
+  });
+  renderAll();
+  setStatus('🪄 已按顺路排序（沿 学校→家 方向，投影 t=' +
+    state.trips.map(t => t.station ? corridor(S, H, t.station).t.toFixed(2) : '?').join(', ') + '）');
+}
+
+function renderAll() {
+  // 演示提示：仅在仍是初始演示数据(武汉↔长沙南 + 岳阳/重庆)时展示，用户一改动即隐藏
+  const demoTip = document.getElementById('demoTip');
+  const isDemo =
+    state.school && state.school.station && state.school.station.name === '武汉' &&
+    state.home && state.home.station && state.home.station.name === '长沙南' &&
+    state.trips.length === 2 && state.trips[0].text === '岳阳' && state.trips[1].text === '重庆';
+  if (demoTip) {
+    demoTip.style.display = isDemo ? 'block' : 'none';
+    if (isDemo) {
+      demoTip.innerHTML = '💡 <b>演示说明</b>：串联路线 武汉→岳阳→重庆→长沙。岳阳在区间内（🟢 学生票）；重庆超出区间（🔴 全价）→ 整条路线无法合并。<br>' +
+        '试试：把 <b>"家"</b> 改到重庆（输入框定位或拖动地图绿色图钉）→ 路线变为 武汉→岳阳→重庆，全程学生票只扣 1 次。';
+    }
+  }
+  if (!state.school || !state.home) {
+    document.getElementById('resultHint').textContent = '请先设置学校与家庭地址。';
+    document.getElementById('totals').innerHTML = '';
+    document.getElementById('banners').innerHTML = '';
+    document.getElementById('tripRows').innerHTML = '';
+    document.getElementById('routeLine').innerHTML = '';
+    document.getElementById('advice').innerHTML = '';
+    renderTrips();
+    renderMap();
+    return;
+  }
+  if (state.chainMode) { renderChain(); renderTrips(); renderOpt(); renderMap(); return; }
+  const res = evalAll();
+  if (!res) {
+    document.getElementById('resultHint').textContent = '学校或家庭尚未吸附到车站，请先设置有效地址。';
+    renderMap();
+    return;
+  }
+  document.getElementById('resultHint').innerHTML =
+    '当前区间：<b>' + esc(state.school.station ? state.school.station.name : state.school.text) + '</b> ↔ <b>' +
+    esc(state.home.station ? state.home.station.name : state.home.text) + '</b> · 中转绕行上限 <b>' + state.ratio.toFixed(2) + '×</b>';
+  renderTotals(res);
+  renderRouteLine();
+  renderAdvice();
+  renderTrips();
+  renderOpt();
+  renderMap();
+}
+
+/* ---------- 交互 ---------- */
+function setClickMode(m) {
+  state.clickMode = state.clickMode === m ? null : m;
+  document.querySelectorAll('.map-mode').forEach(b => b.classList.toggle('active', b.dataset.mode === state.clickMode));
+  if (map) map.getContainer().style.cursor = state.clickMode ? 'crosshair' : '';
+  setStatus(state.clickMode ? '点击地图设置：' + ({ school: '学校', home: '家', add: '目的地' })[state.clickMode] : '');
+}
+async function searchPlace(kind) {
+  const q = document.getElementById(kind === 'school' ? 'schoolInput' : 'homeInput').value;
+  setStatus('正在解析：' + q + ' …');
+  const r = await resolvePlace(q);
+  if (!r) { setStatus('❌ 未能解析 "' + q + '"（离线车站库未匹配，在线解析失败/无网络）'); return; }
+  if (kind === 'school') {
+    state.school = { text: q, point: r.point, station: r.station };
+    document.getElementById('schoolInput').value = q;
+  } else {
+    state.home = { text: q, point: r.point, station: r.station };
+    document.getElementById('homeInput').value = q;
+  }
+  setStatus(r.offline ? '✅ 已匹配内置车站：' + r.label : '✅ 已定位并吸附车站：' + r.label);
+  renderAll();
+  fitAll();
+}
+async function addTrip() {
+  const q = document.getElementById('tripInput').value.trim();
+  if (!q) return;
+  setStatus('正在解析：' + q + ' …');
+  const r = await resolvePlace(q);
+  if (!r) { setStatus('❌ 未能解析 "' + q + '"'); return; }
+  state.trips.push({ id: ++state._tid, text: q, point: r.point, station: r.station, round: true });
+  document.getElementById('tripInput').value = '';
+  setStatus('✅ 已添加：' + q + '（' + r.label + '）');
+  renderAll();
+  fitAll();
+}
+function addTripWith(pt, station) {
+  const nm = station ? station.name + ' · ' + station.city : pt.lat.toFixed(2) + ',' + pt.lng.toFixed(2);
+  state.trips.push({ id: ++state._tid, text: nm, point: { lat: pt.lat, lon: pt.lng }, station, round: true });
+  setStatus('✅ 已添加目的地：' + nm);
+  renderAll();
+  fitAll();
+}
+function removeTrip(id) { state.trips = state.trips.filter(t => t.id !== id); renderAll(); }
+function toggleRound(id) {
+  const t = state.trips.find(x => x.id === id);
+  if (t) {
+    t.round = !t.round;
+    renderAll();
+    setStatus('已切换：' + t.text + ' → ' + (t.round ? '往返（每程扣 1 次，共 2 次）' : '单程（扣 1 次）'));
+  }
+}
+function setAllRound(round) {
+  state.trips.forEach(t => { t.round = round; });
+  renderAll();
+  setStatus(round ? '全部行程已设为往返（每程 2 次）' : '全部行程已设为单程（每程 1 次）');
+}
+function panTo(i) { if (map && state.trips[i]) map.panTo([state.trips[i].point.lat, state.trips[i].point.lon]); }
+function setHomeFromStation(name) {
+  const s = stationOf(name);
+  if (!s) return;
+  setHomeFromPoint({ lat: s[2], lon: s[3] }, stToObj(s), '采用候选区间端点：' + s[0] + ' · ' + s[1]);
+}
+function setHomeFromPoint(pt, station, msg) {
+  const lat = +pt.lat, lon = +pt.lng != null ? +pt.lng : +pt.lon;
+  state.home = {
+    text: station ? station.name + ' · ' + station.city : lat.toFixed(2) + ',' + lon.toFixed(2),
+    point: { lat: lat, lon: lon }, station,
+  };
+  document.getElementById('homeInput').value = state.home.text;
+  if (msg) setStatus(msg);
+  renderAll();
+  if (map) map.panTo([lat, lon]);
+}
+function applyBest() {
+  const best = smartBest();
+  if (!best) { setStatus('请先设置学校、家庭并添加行程'); return; }
+  state.optBestName = best.s[0];
+  if (state.home.station && best.s[0] === state.home.station.name) {
+    setStatus('当前区间已是最优方案 ✅（' + best.used + ' 次，覆盖 ' + best.covered + ' 行程）');
+    renderOpt();
+    return;
+  }
+  setHomeFromStation(best.s[0]);
+  setStatus('⚡ 已应用最优区间端点：' + best.s[0] + ' · ' + best.s[1] + '（' + best.used + ' 次，覆盖 ' + best.covered + ' 行程，不减少当前覆盖）');
+}
+
+/* ---------- 初始化 ---------- */
+function initQuickChips() {
+  const cities = ['北京', '上海', '广州', '深圳', '成都', '重庆', '杭州', '南京', '西安', '郑州', '长沙', '昆明'];
+  document.getElementById('quickChips').innerHTML = cities.map(c =>
+    '<button class="btn btn-ghost btn-sm" onclick="quickAdd(\'' + c + '\')">' + c + '</button>').join('');
+}
+async function quickAdd(city) {
+  const r = await resolvePlace(city);
+  if (!r) return;
+  state.trips.push({ id: ++state._tid, text: city, point: r.point, station: r.station, round: true });
+  renderAll(); fitAll();
+}
+function bindEvents() {
+  document.getElementById('budgetInput').addEventListener('change', e => {
+    state.budget = Math.max(1, Math.min(40, +e.target.value || 4));
+    renderAll();
+  });
+  document.getElementById('ratioInput').addEventListener('input', e => {
+    state.ratio = +e.target.value;
+    document.getElementById('ratioVal').textContent = state.ratio.toFixed(2) + '×';
+    renderAll();
+  });
+  document.getElementById('tripInput').addEventListener('keydown', e => { if (e.key === 'Enter') addTrip(); });
+  document.getElementById('schoolInput').addEventListener('keydown', e => { if (e.key === 'Enter') searchPlace('school'); });
+  document.getElementById('homeInput').addEventListener('keydown', e => { if (e.key === 'Enter') searchPlace('home'); });
+}
+async function init() {
+  bindEvents();
+  initQuickChips();
+  initMap();
+  // 演示默认数据：武汉上学，家长沙；行程 岳阳(区间内直达) + 重庆(超出区间→全价)
+  const S = await resolvePlace('武汉');
+  if (S) { state.school = { text: '武汉', point: S.point, station: S.station }; document.getElementById('schoolInput').value = '武汉'; }
+  const H = await resolvePlace('长沙');
+  if (H) { state.home = { text: '长沙', point: H.point, station: H.station }; document.getElementById('homeInput').value = '长沙'; }
+  for (const c of ['岳阳', '重庆']) {
+    const r = await resolvePlace(c);
+    if (r) state.trips.push({ id: ++state._tid, text: c, point: r.point, station: r.station, round: false });
+  }
+  setChainMode(true);
+  let gd = false;
+  try { gd = localStorage.getItem('spr_guide_done') === '1'; } catch (e) { }
+  if (!gd) startGuide();
+  renderAll();
+  fitAll();
+  setStatus('✅ 演示已加载：武汉 ↔ 长沙（岳阳在区间内 / 重庆超区间），说明见"规划结果"卡片顶部。');
+}
+init();
+</script>
+</body>
+</html>
