@@ -246,8 +246,6 @@ async function main() {
   A('第3步: 添加目的地', $('spotTitle').textContent.includes('想去的地方'));
   await w.eval('nextSpot()');
   A('第4步: 看结果(直线图)', $('spotTitle').textContent.includes('看结果'));
-  await w.eval('nextSpot()');
-  A('第5步: 照做就行', $('spotTitle').textContent.includes('照做就行'));
   A('最后一步显示完成按钮', $('spotDone').style.display !== 'none');
   await w.eval('closeGuide()');
   A('完成后 spotlight 隐藏', $('spotlight').style.display === 'none');

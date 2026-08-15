@@ -138,11 +138,14 @@
   .field label{display:block;font-size:12.5px;font-weight:600;color:var(--text);margin-bottom:6px}
   .input-row{display:flex;gap:8px}
   input[type=text],input[type=number]{
-    width:100%;background:#fff;border:1px solid #d6d3d1;border-radius:10px;
-    color:var(--text);padding:9px 12px;font-size:14px;outline:none;transition:border-color .15s,box-shadow .15s;font-family:inherit}
+    width:100%;background:#fff;border:1px solid #d6d3d1;border-radius:11px;
+    color:var(--text);padding:11px 14px;font-size:14.5px;outline:none;transition:border-color .15s,box-shadow .15s;font-family:inherit}
   input:hover{border-color:#a8a29e}
   input:focus{border-color:#6366f1;box-shadow:0 0 0 3px rgba(99,102,241,.14)}
   input[type=range]{width:100%;accent-color:var(--accent)}
+  .adv-settings{border:1px solid var(--line);border-radius:11px;padding:9px 12px;background:#fafafa}
+  .adv-settings summary{cursor:pointer;font-size:12.5px;color:var(--muted);font-weight:600;user-select:none}
+  .adv-settings summary:hover{color:var(--text)}
   .lock-tag{font-size:11px;font-weight:600;color:var(--green);background:var(--green-soft);padding:2px 9px;border-radius:99px}
   .drag-tag{font-size:11px;font-weight:600;color:var(--orange);background:var(--orange-soft);padding:2px 9px;border-radius:99px}
 
@@ -205,7 +208,8 @@
 
   /* ---------- 出行计划 ---------- */
   .trip-add{display:flex;gap:8px;margin-bottom:14px}
-  .chips-quick{display:flex;gap:7px;flex-wrap:wrap;margin-bottom:16px}
+  .chips-quick{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px}
+  .chips-quick .btn{padding:8px 14px;font-size:13px;border-radius:10px;font-weight:600}
   .trip-row{display:flex;align-items:center;gap:9px;padding:9px 11px;border:1px solid var(--line);
             border-radius:12px;background:#fafafa;margin-bottom:8px;flex-wrap:wrap;transition:border-color .15s,background .15s}
   .trip-row:hover{border-color:#d6d3d1;background:#fff}
@@ -379,17 +383,22 @@
               <button class="btn btn-ghost btn-sm" onclick="searchPlace('home')">定位</button>
             </div>
           </div>
-          <div class="field">
-            <label>年度优惠次数预算（12306 默认每学年 4 次）</label>
-            <input id="budgetInput" type="number" min="1" max="40" value="4">
-          </div>
-          <div class="field">
-            <label>中转绕行上限 ×（默认 1.5，即中转总里程 ≤ 1.5 × 直达里程）</label>
-            <input id="ratioInput" type="range" min="1.1" max="2.2" step="0.05" value="1.5">
-            <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--muted)">
-              <span>1.1×</span><span id="ratioVal" style="color:#67e8f9;font-weight:700">1.50×</span><span>2.2×</span>
+          <details class="adv-settings">
+            <summary>⚙️ 高级设置（预算 / 中转比例）</summary>
+            <div style="margin-top:12px">
+              <div class="field">
+                <label>年度优惠次数预算（12306 默认每学年 4 次）</label>
+                <input id="budgetInput" type="number" min="1" max="40" value="4">
+              </div>
+              <div class="field">
+                <label>中转绕行上限 ×（默认 1.5，即中转总里程 ≤ 1.5 × 直达里程）</label>
+                <input id="ratioInput" type="range" min="1.1" max="2.2" step="0.05" value="1.5">
+                <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--muted)">
+                  <span>1.1×</span><span id="ratioVal" style="color:#67e8f9;font-weight:700">1.50×</span><span>2.2×</span>
+                </div>
+              </div>
             </div>
-          </div>
+          </details>
         </div>
 
         <div class="card">
@@ -403,6 +412,7 @@
             <button class="btn btn-ghost btn-sm mode-btn" data-mode="solo" onclick="setChainMode(false)">🧩 独立行程</button>
             <button class="btn btn-ghost btn-sm mode-btn" data-mode="chain" onclick="setChainMode(true)">🔗 串联路线</button>
           </div>
+          <div style="margin-bottom:8px;font-size:12px;font-weight:700;color:var(--muted)">🔥 热门城市（点一下添加，默认从学校出发）</div>
           <div class="chips-quick" id="quickChips"></div>
           <div id="chainControls" style="display:none;margin-bottom:12px;padding:12px;border:1px dashed var(--line);border-radius:12px;background:#fafafa">
             <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px">
@@ -449,7 +459,7 @@
         </div>
 
         <div class="card">
-          <h3>🧾 规划结果</h3>
+          <h3><span class="step-num">③</span> 看结果</h3>
           <div id="demoTip" class="demo-tip" style="display:none"></div>
           <div class="hint" id="resultHint">计算结果实时更新。</div>
           <div id="routeLine"></div>
@@ -1256,11 +1266,10 @@ document.addEventListener('click', () => {
 });
 /* ---------- 动画聚焦引导 ---------- */
 const GUIDE_STEPS = [
-  { sel: '#schoolInput', num: '1', title: '设置区间 · 学校', text: '学校地址写在这里 —— <b>固定不动</b>（须与学信网一致）。', pos: 'bottom' },
-  { sel: '#homeInput', num: '2', title: '设置区间 · 家', text: '"家"写在这里 —— <b>12306 里可随便改、不限次数</b>，改完立即生效。这就是优化区间的钥匙。', pos: 'bottom' },
-  { sel: '#tripInput', num: '3', title: '添加想去的地方', text: '默认自动串成<b>联程路线</b>（整条只扣 1 次）。支持"<b>天津→济南</b>"指定出发地。', pos: 'bottom' },
-  { sel: '#routeLine', num: '4', title: '看结果', text: '<b>🟢 绿=学生票</b>、🟠 橙=区间边缘（可能被查）、<b>🔴 红=全价</b>。', pos: 'top' },
-  { sel: '#advice', num: '5', title: '照做就行', text: '这里告诉你"<b>把家改到哪</b>最省次数"，还有同类实测案例参考。', pos: 'top' },
+  { sel: '#schoolInput', num: '1', title: '设置区间 · 学校', text: '填学校地址 —— <b>固定不动</b>（须与学信网一致）。', pos: 'bottom' },
+  { sel: '#homeInput', num: '2', title: '设置区间 · 家', text: '填"家" —— <b>12306 里可随便改、不限次数</b>，改完立即生效，这就是优化区间的钥匙。', pos: 'bottom' },
+  { sel: '#tripInput', num: '3', title: '添加想去的地方', text: '输入城市（或点下方<b>热门城市</b>）。支持"<b>天津→济南</b>"指定出发地，默认串成联程路线整条只扣 1 次。', pos: 'bottom' },
+  { sel: '#routeLine', num: '4', title: '看结果', text: '<b>🟢 绿=学生票</b>、🟠 橙=区间边缘（可能被查）、<b>🔴 红=全价</b>。下方建议告诉你"把家改到哪"，照做即可。', pos: 'top' },
 ];
 let guideIdx = 0;
 function startGuide() {
