@@ -455,10 +455,6 @@ footer b{color:var(--text)}
         <div id="banners"></div>
         <div id="tripRows"></div>
         <div id="advice"></div>
-        <details class="adv-settings" style="margin-top:12px" id="casesBox">
-          <summary>📚 实测案例（小红书收集 · 点击展开）</summary>
-          <div id="casesInner" style="margin-top:10px"></div>
-        </details>
       </div>
     </div>
 
@@ -1361,7 +1357,6 @@ function renderChain() {
   document.getElementById('routeLine').innerHTML = '';
   renderIntervalViz();
   renderAdvice();
-  renderCases();
 }
 /* ---------- 导航二级菜单 ---------- */
 function toggleRulesMenu(e) {
@@ -1653,38 +1648,6 @@ function suggestFix() {
   }
   return tips;
 }
-/* ---------- 同类实测案例库（小红书/用户实测收集, 2026-08） ---------- */
-const REAL_CASES = [
-  { id: 1, title: '超区间 780km · 出票成功全程未查', from: '荆州(学校) → 临沂', to: '区间 荆州↔华山', result: '实际买回临沂(超出区间约 780km): 出票成功、进出站畅通、无补票、无查证', src: '小红书 677 评论实测帖', note: '能出票≠一定不查, 博主自述属侥幸' },
-  { id: 2, title: '完全不对应区间 · 购票成功', from: '邵东→无锡(旅游)', to: '区间 衡阳↔长沙', result: '线上改区间(学校端也改)提交失败但购票成功; 车站刷磁卡激活后顺利进出, 卧铺只问一句学生证', src: '小红书 548 评论实测帖', note: '查不查看工作人员; 被补全票可打 01012306 申诉退回次数' },
-  { id: 3, title: '家端延伸 270km · 可买', from: '天津→济南', to: '区间 崇左(扶绥)↔济南', result: '实测: 济南允许的超区间范围约到天津/徐州, 济南以北最远可买到沈阳(约 800km)', src: '用户 12306 实测观察', note: '更远(哈尔滨约1170km)出不了' },
-  { id: 4, title: '区间外完全不可用', from: '南昌→贵阳', to: '区间 南昌↔宜春', result: '买 宜春→贵阳 或 贵阳→宜春 都不能用学生票——没有一端是学校所在地', src: '小红书 548 评论帖评论区', note: '两端都不在区间/延伸带内 → 全价' },
-  { id: 5, title: '家庭端可任意改 · 学校端不可动', from: '学校长沙', to: '家庭端改 无锡/南京/武汉 均可', result: '只要学校端是真实学校位置, 家庭端改哪里都可以; 三张联程自动归为 1 次优惠', src: '小红书 548 评论帖置顶 317 赞', note: '改学校端会提交失败且资质被锁, 需车站机器刷磁卡恢复' },
-  { id: 6, title: '两头都不是学校 · 四次没查', from: '北京→(区间外)', to: '两端均非学校所在地', result: '作者四次超区间乘车均未被查; 评论 522 赞"不会, 我乘了四次都没查"', src: '小红书 64 评论实测帖', note: '能买到就能坐, 一般不查' },
-  { id: 7, title: '超区间约 500km · 出票成功未查', from: '苏州→宁波/贵阳(旅游)', to: '区间 苏州↔绵阳', result: '区间苏州↔绵阳, 买宁波→贵阳(南端延伸约300km+北端外)两张均学生票成功, 算 1 次优惠', src: '小红书 96 评论实测帖', note: '作者"先别改区间, 能买就能坐"实测' },
-  { id: 8, title: '区间内任意段 · 邢台→郑州成功', from: '邢台→郑州', to: '区间 石家庄↔乌鲁木齐', result: '学生证区间石家庄↔乌鲁木齐, 学生票价格买邢台→郑州(区间内北端)购买成功(615赞)', src: '小红书 96 评论帖评论区', note: '区间内任意两站均可' },
-  { id: 9, title: '换乘站必须在区间内', from: '北京→漳州(联培)', to: '区间 北京↔漳州', result: '分段买北京→龙岩→漳州被拦; 改用联程买 漳州→赣州→北京 可出票', src: '小红书 297 评论帖评论区', note: '分段单独买会被拦, 用 12306 中转模块联程购买' },
-  { id: 10, title: '区间内换乘 · 中途停留算 1 次', from: '辽宁→安徽(经北京)', to: '区间 辽宁↔安徽', result: '辽宁→北京→安徽(北京停留几天)整段算 1 次优惠; 中转地可玩一天', src: '小红书 677 评论帖评论区', note: '同一站中转+时间不长可合并' },
-  { id: 11, title: '非径路中间段 · 买不了', from: '景德镇→南昌', to: '区间 黄石↔恩施', result: '寒假先去景德镇/南昌玩, 景德镇→南昌段买不了学生票——不在区间径路上', src: '小红书 110 评论帖评论区', note: '中间段必须在区间径路附近' },
-  { id: 12, title: '区间边缘 · "不超区间太多就可以"', from: 'a-c 改 b-c', to: '区间端点调整', result: '区间 a↔c 改成 b↔c: "可以, b 地不超区间太多就可以"(215赞)', src: '小红书 677 评论帖评论区', note: '端点小幅外移可行' },
-  { id: 13, title: '被查风险 · 高铁动车概率大', from: '大连→西安→武汉(家改武汉)', to: '区间 大连↔武汉', result: '家改武汉后买西安→武汉: 评论区"会, 区间是大连-武汉, 西安→武汉跟区间不一样, 高铁动车很可能查"', src: '小红书 548 评论帖评论区', note: '普速火车随缘, 高铁动车被查概率大' },
-  { id: 14, title: '先试买判断 · 提示即补票', from: '任何行程', to: '12306 出票界面', result: '在 12306 选票不付款: 无"区间不符"提示=可正常乘坐; 提示"与核验区间不符"=必被要求补票', src: '小红书 Panini 实测方法', note: '中转按顺序购票, 不要跳着买' },
-  { id: 15, title: '买错区间 · 能出票就能进站', from: '任意区间外行程', to: '购票成功判定', result: '"没有明确通知与核验区间不符的车票, 应该可以坐; 能出票应该就可以上车"; 区间有一端必须是学校(不能改), 只能改家庭端', src: '小红书 362 评论帖置顶', note: '取票机对区间不符可能取不出票' },
-];function renderCases() {
-  const el = document.getElementById('advice');
-  if (!state.school || !state.home || !state.trips.length) return;
-  const res = state.chainMode ? null : evalAll();
-  const hasEdgeOrFull = state.chainMode
-    ? (chainEvalCurrent() && !chainEvalCurrent().ok)
-    : (res && res.perTrip.some(t => !t.plan.ok || t.plan.mode === 'edge'));
-  if (!hasEdgeOrFull) return;
-  const casesEl = document.getElementById('casesInner');
-  if (!casesEl) return;
-  casesEl.innerHTML = '';
-  casesEl.insertAdjacentHTML('beforeend',
-    '<div style="margin-top:8px;font-size:12px;color:var(--muted)">📚 <b>同类实测案例</b>（已收集验证）</div>' +
-    REAL_CASES.map(c => '<div class="advice" style="font-size:12px;padding:9px 12px">📌 <b>' + c.title + '</b>：' + c.from + ' → ' + c.to + '。<span style="color:var(--muted)">' + c.result + '</span><br><span style="color:var(--muted)">来源：' + c.src + ' · ' + c.note + '</span></div>').join(''));
-}
 function renderAdvice() {
   const el = document.getElementById('advice');
   const tips = suggestFix();
@@ -1765,7 +1728,7 @@ function chainAutoSort() {
 function renderAll() {
   // 完成三步(学校+家+至少一个地点)才显示结果区; 未完成只留占位
   const done = state.school && state.school.station && state.home && state.home.station && state.trips.length > 0;
-  const resIds = ['demoTip', 'chainPreview', 'chainCheck', 'routeLine', 'totals', 'banners', 'tripRows', 'advice', 'casesBox'];
+  const resIds = ['demoTip', 'chainPreview', 'chainCheck', 'routeLine', 'totals', 'banners', 'tripRows', 'advice'];
   resIds.forEach(id => { const e = document.getElementById(id); if (e) e.style.display = done ? '' : 'none'; });
   const ph = document.getElementById('resultPlaceholder');
   if (ph) ph.style.display = done ? 'none' : 'block';
@@ -1808,7 +1771,6 @@ function renderAll() {
   renderIntervalViz();
   renderRouteLine();
   renderAdvice();
-  renderCases();
   renderTrips();
   renderOpt();
   renderMap();

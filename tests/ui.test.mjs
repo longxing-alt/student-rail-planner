@@ -307,9 +307,10 @@ async function main() {
   A('终点标签更新', $('chainEndLabel').textContent.includes('广州'));
   await w.eval('state.chainEnd = null; renderAll();');
 
-  G('T18. 案例库');
-  const caseCount = await w.eval('REAL_CASES.length');
-  A('案例库 15 条', caseCount >= 15, '实际 ' + caseCount);
+  G('T18. 超区间行程建议(小红书案例展示已移除)');
+  const hasCasesBox = !!w.document.getElementById('casesBox');
+  const hasRealCases = typeof w.REAL_CASES !== 'undefined';
+  A('案例展示区已删除', !hasCasesBox && !hasRealCases);
   await w.eval('setChainMode(false)');
   await w.eval('state.trips.forEach(t => removeTrip(t.id))');
   await w.eval('setHomeFromStation("济南西")');
@@ -318,7 +319,7 @@ async function main() {
   $('tripInput').value = '天津→济南';
   await w.eval('addTrip()');
   await wait(400);
-  A('案例渲染含超区间案例', $('casesInner').textContent.includes('超区间'));
+  A('无案例区节点', !w.document.getElementById('casesInner'));
   A('试买判断提示存在', $('advice').textContent.includes('先试买判断'));
 
   G('T19. 区间画图 + 区间内可去推荐');
