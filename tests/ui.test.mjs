@@ -495,6 +495,29 @@ async function main() {
   await wait(300);
   A('学校家都改后演示行程自动清除', $all('.trip-row').length === 0, $all('.trip-row').length);
 
+  G('T28. 顶部应用最优 + 弹窗 + 热门删除 + 独立行程并入区间');
+  A('热门城市已删除', !w.document.getElementById('quickChips'));
+  A('顶部控制条有应用最优按钮', $('chainControls').textContent.includes('应用最优区间'));
+  // 构造: 学校武汉 家信阳 行程岳阳 → 当前非最优, 应用后弹大窗
+  await w.eval('setHomeFromStation("信阳")');
+  $('schoolInput').value = '武汉';
+  await w.eval('searchPlace("school")');
+  $('tripInput').value = '岳阳';
+  await w.eval('addTrip()');
+  await wait(300);
+  await w.eval('applyBest()');
+  A('应用后大弹窗出现', $('applyModal').style.display === 'flex', $('applyModal').style.display);
+  A('弹窗头部含"家"', $('applyModalHead').textContent.includes('家'));
+  A('弹窗内容含新区间与具体路线', $('applyModalBody').textContent.includes('区间') && $('applyModalBody').textContent.includes('到'));
+  A('弹窗可下滑滚动', w.getComputedStyle($('applyModalBody')).overflowY === 'auto');
+  A('弹窗含次数统计', $('applyModalBody').textContent.includes('次'));
+  await w.eval('closeApplyModal()');
+  A('关闭后弹窗隐藏', $('applyModal').style.display === 'none');
+  // 独立行程模式也显示上方区间进度条
+  await w.eval('setChainMode(false)');
+  A('独立行程显示节点进度条', $('chainPreview').innerHTML.includes('route-chain'));
+  A('独立行程段提示含判定', $('chainPreview').textContent.includes('学生票') || $('chainPreview').textContent.includes('全价'));
+
 
 
 

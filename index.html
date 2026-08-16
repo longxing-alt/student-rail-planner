@@ -182,10 +182,23 @@ input[type=range]{width:100%;accent-color:var(--blue)}
 .trip-row.flash{animation:flashRow 1.2s ease}
 @keyframes flashRow{0%{background:#ccfbf1;border-color:#5eead4}60%{background:#ccfbf1;border-color:#5eead4}100%{background:#fafafa}}
 
-.chain-seg-tip{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;margin:10px 0 4px}
-.seg-tip-item{font-size:12px;color:var(--muted);display:inline-flex;align-items:center;gap:5px}
+.chain-seg-tip{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;margin:10px 0 4px}.seg-tip-item{font-size:12px;color:var(--muted);display:inline-flex;align-items:center;gap:5px}
 .seg-tip-item i{width:8px;height:8px;border-radius:50%;display:inline-block}
 .chain-tip{font-size:12px;color:var(--muted);text-align:center;background:#f4f4f5;border-radius:8px;padding:6px 10px}
+
+/* 应用区间大弹窗 */
+.modal-mask{position:fixed;inset:0;z-index:200;background:rgba(24,24,27,.5);display:flex;align-items:center;justify-content:center;padding:18px;backdrop-filter:blur(2px)}
+.modal-card{background:#fff;border-radius:18px;max-width:600px;width:100%;max-height:86vh;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 24px 70px rgba(0,0,0,.35);animation:panelIn .25s ease both}
+.modal-head{padding:15px 20px;font-size:16px;font-weight:800;border-bottom:1px solid var(--line)}
+.modal-body{overflow-y:auto;padding:16px 20px;line-height:1.7;font-size:13.5px}
+.modal-foot{padding:12px 20px;border-top:1px solid var(--line);display:flex;justify-content:flex-end}
+.modal-stats{display:flex;gap:10px;margin:14px 0}
+.modal-stats>div{flex:1;background:#f4f4f5;border-radius:12px;padding:10px;text-align:center}
+.modal-stats b{display:block;font-size:20px;font-weight:800}
+.modal-stats span{font-size:11px;color:var(--muted)}
+.modal-route{font-size:15px;line-height:2.1;margin-top:10px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:12px;padding:12px 14px}
+.modal-tip{font-size:13px;margin-top:10px}
+.modal-note{font-size:11.5px;color:var(--muted);margin-top:14px;background:#f4f4f5;border-radius:8px;padding:8px 10px}
 
 /* 直线图 */
 .route-head{display:flex;align-items:center;gap:10px;margin:12px 0 6px}
@@ -387,7 +400,6 @@ footer b{color:var(--text)}
           </div>
           <div id="planHint" style="font-size:11.5px;color:var(--muted);margin-top:5px"></div>
           <div id="zoneCities" class="hot-line"></div>
-          <div class="hot-line"><span class="lbl">热门：</span><span id="quickChips"></span></div>
         </div>
         <div id="intervalViz" class="iv-box"></div>
         <div class="chain-mini" id="chainControls" style="display:none">
@@ -404,6 +416,7 @@ footer b{color:var(--text)}
             <span style="color:var(--muted);font-size:12.5px">终点：</span>
             <b id="chainEndLabel" style="font-size:13px">家</b>
             <button class="btn btn-ghost btn-sm" onclick="setChainEnd()">改终点</button>
+            <button class="btn btn-ghost btn-sm" onclick="applyBest()">⚡ 应用最优区间</button>
             <span class="chain-sep"></span>
             <button class="btn btn-ghost btn-sm mode-btn" data-mode="solo" onclick="setChainMode(false)">🧩 独立行程</button>
           </div>
@@ -500,6 +513,15 @@ footer b{color:var(--text)}
   <div>学生优惠 · 区间规划器 —— 帮助你把每学年有限的优惠次数花在刀刃上</div>
   <div style="margin-top:6px">车站数据 · 规划结果仅供估算参考 · UI 风格致敬 skills.dev</div>
 </footer>
+
+<!-- 应用区间大弹窗（可下滑看详情） -->
+<div class="modal-mask" id="applyModal" style="display:none" onclick="if(event.target===this)closeApplyModal()">
+  <div class="modal-card">
+    <div class="modal-head" id="applyModalHead"></div>
+    <div class="modal-body" id="applyModalBody"></div>
+    <div class="modal-foot"><button class="btn btn-primary" onclick="closeApplyModal()">知道了</button></div>
+  </div>
+</div>
 
 <script>
 'use strict';
@@ -1047,7 +1069,7 @@ function renderTotals(res) {
 
 function renderTrips() {
   const el = document.getElementById('tripList');
-  if (!state.trips.length) { el.innerHTML = '<div style="color:var(--muted);font-size:13px;padding:6px 2px">还没有行程，添加或点击下方热门城市 👇</div>'; return; }
+  if (!state.trips.length) { el.innerHTML = '<div style="color:var(--muted);font-size:13px;padding:6px 2px">还没有行程，在"想去哪"输入城市添加 👇</div>'; return; }
   const row = (tp, i, main, chip, extra) =>
     '<div class="trip-row fade-in" draggable="true" ondragstart="tripDragStart(event,' + tp.id + ')" ondragover="tripDragOver(event,' + tp.id + ')" ondrop="tripDrop(event,' + tp.id + ')" ondragend="tripDragEnd()">' +
     '<div class="drag-handle" title="拖动排序">≡</div>' +
@@ -1227,7 +1249,7 @@ function renderOpt() {
       '<span class="chip chip-green">覆盖 ' + c.covered + '/' + state.trips.length + '</span>' +
       '<span class="chip chip-blue">' + c.direct + '直达</span><span class="chip chip-orange">' + c.transfer + '中转</span>' +
       '<span class="chip chip-red">' + c.fail + '全价</span>' +
-      '<button class="btn btn-primary btn-sm" onclick="setHomeFromStation(\'' + c.st[0] + '\')">采用</button></div></div>';
+      '<button class="btn btn-primary btn-sm" onclick="adoptStation(\'' + c.st[0] + '\')">采用</button></div></div>';
   }).join(''));
 }
 function tabBtn(mode, label) {
@@ -1277,6 +1299,40 @@ function smartBest() {
 }
 
 /* ---------- 串联路线渲染 ---------- */
+/* 节点进度条(圆点嵌在圆柱条里): nodes=站序列, segMeta=每段 {color, tip} */
+function chainBarHTML(nodes, segMeta) {
+  return '<div class="route-chain">' +
+    nodes.map((n, i) => {
+      const isStart = i === 0, isEnd = i === nodes.length - 1;
+      const sg = segMeta[i - 1];
+      const segColor = sg ? sg.color : '#d4d4d8';
+      const dotCls = isStart ? 'start' : isEnd ? 'end' : 'mid';
+      const tag = isStart ? '学校' : isEnd ? (state.chainEnd ? '终点' : '家') : '途经';
+      return (i > 0 ? '<span class="rc-seg" style="background:' + segColor + '"></span>' : '') +
+        '<span class="rc-node" onclick="nodeClick(' + i + ')" title="点击定位该站"><span class="rc-dot ' + dotCls + '"></span><span class="rc-name">' + esc(n.name) + '</span><span class="rc-tag">' + tag + '</span></span>';
+    }).join('') + '</div>' +
+    '<div class="chain-seg-tip">' +
+    segMeta.map(sg => '<span class="seg-tip-item"><i style="background:' + sg.color + '"></i>' + sg.tip + '</span>').join('') +
+    '</div>';
+}
+/* 独立行程模式: 行程也画在上方的区间进度条里(每段按该行程的判定着色) */
+function renderSoloChain() {
+  const S = state.school.station, H = state.home.station;
+  const res = evalAll();
+  const end = state.chainEnd || H;
+  const nodes = [S, ...state.trips.map(t => t.station), end];
+  const segMeta = res ? res.perTrip.map(tp => {
+    const ok = tp.plan.ok, mode = tp.plan.mode;
+    return {
+      color: !ok ? '#ef4444' : mode === 'edge' ? '#f59e0b' : '#22c55e',
+      tip: esc((tp.from ? tp.from.name : S.name)) + '到' + esc(tp.station ? tp.station.name : tp.text) + ' ' +
+        Math.round(tp.plan.direct) + 'km · ' +
+        (!ok ? '⚠️ 全价（不扣次数）' : mode === 'edge' ? '🟠 区间边缘·可能被查（扣 ' + tp.used + ' 次）' : '✅ ' +
+          (mode === 'transfer' ? '中转·学生票' : '直达·学生票') + '（扣 ' + tp.used + ' 次）'),
+    };
+  }) : [];
+  document.getElementById('chainPreview').innerHTML = chainBarHTML(nodes, segMeta);
+}
 function renderChain() {
   const S = state.school.station, H = state.home.station;
   const c = chainEvalCurrent();
@@ -1292,23 +1348,11 @@ function renderChain() {
   const nodes = [S, ...state.trips.map(t => t.station), end];
   const segs2 = c ? c.segs : [];
   document.getElementById('chainPreview').innerHTML =
-    '<div class="route-chain">' +
-    nodes.map((n, i) => {
-      const isStart = i === 0, isEnd = i === nodes.length - 1;
-      const sg = segs2[i - 1];
-      const segColor = sg ? (sg.inInt ? '#22c55e' : '#ef4444') : '#d4d4d8';
-      const dotCls = isStart ? 'start' : isEnd ? 'end' : 'mid';
-      const tag = isStart ? '学校' : isEnd ? (state.chainEnd ? '终点' : '家') : '途经';
-      return (i > 0 ? '<span class="rc-seg" style="background:' + segColor + '"></span>' : '') +
-        '<span class="rc-node" onclick="nodeClick(' + i + ')" title="点击定位该站"><span class="rc-dot ' + dotCls + '"></span><span class="rc-name">' + esc(n.name) + '</span><span class="rc-tag">' + tag + '</span></span>';
-    }).join('') +
-    '</div>' +
-    '<div class="chain-seg-tip">' +
-    segs2.map(sg =>
-      '<span class="seg-tip-item"><i style="background:' + (sg.inInt ? '#22c55e' : '#ef4444') + '"></i>' +
-      esc(sg.from) + '到' + esc(sg.to) + ' ' + sg.km + 'km ' +
-      (sg.inInt ? '✅ 学生票（可单独买 · 扣1次）' : '⚠️ 超区间') + '</span>').join('') +
-    '</div>' +
+    chainBarHTML(nodes, segs2.map(sg => ({
+      color: sg.inInt ? '#22c55e' : '#ef4444',
+      tip: esc(sg.from) + '到' + esc(sg.to) + ' ' + sg.km + 'km ' +
+        (sg.inInt ? '✅ 学生票（可单独买 · 扣1次）' : '⚠️ 超区间'),
+    }))) +
     '<div class="chain-tip">💡 区间内任意一小段都可以单独买（各扣 1 次）；整条 5 天内联程购买只扣 1 次。</div>';
   document.getElementById('chainEndLabel').textContent = state.chainEnd ? state.chainEnd.name + '（' + state.chainEnd.city + '）' : '家';
   // 校验明细
@@ -1777,6 +1821,7 @@ function renderAll() {
   document.getElementById('resultHint').innerHTML =
     '区间：<b>' + esc(state.school.station ? state.school.station.name : state.school.text) + '</b> ↔ <b>' +
     esc(state.home.station ? state.home.station.name : state.home.text) + '</b>';
+  renderSoloChain();
   renderTotals(res);
   renderIntervalViz();
   renderRouteLine();
@@ -1903,14 +1948,62 @@ function applyBest() {
   }
   setHomeFromStation(best.s[0]);
   setStatus('⚡ 已应用最优区间端点：' + best.s[0] + ' · ' + best.s[1] + '（' + best.used + ' 次，覆盖 ' + best.covered + ' 行程，不减少当前覆盖）');
+  showApplyModal('⭐ 已应用最优区间：把"家"改到 ' + best.s[0] + ' · ' + best.s[1]);
 }
+/* 采用候选区间端点: 改家 + 弹出大显示(可下滑看详情) */
+function adoptStation(name) {
+  const s = stationOf(name);
+  if (!s) return;
+  setHomeFromStation(name);
+  showApplyModal('⚡ 已把"家"改到 ' + s[0] + ' · ' + s[1]);
+}
+/* 大弹窗内容: 新区间 + 具体路线 + 次数统计 + 提示 */
+function applyModalHTML() {
+  const S = state.school.station, H = state.home.station;
+  if (!S || !H) return '';
+  let route = '', stats = '', tip = '';
+  if (state.chainMode) {
+    const c = chainEvalCurrent();
+    route = chainRouteStr(S, c) || '';
+    const ok = !!(c && c.ok);
+    const used = ok ? (state.chainRound ? 2 : 1) : 0;
+    const inIntN = c ? c.segs.filter(sg => sg.inInt).length : 0;
+    const splitN = inIntN * (state.chainRound ? 2 : 1);
+    stats = '<div class="modal-stats">' +
+      '<div><b class="' + (ok ? 'num-green' : 'num-red') + '">' + used + '</b><span>整条联程（' + (state.chainRound ? '往返' : '单程') + '）</span></div>' +
+      '<div><b class="num-orange">' + splitN + '</b><span>拆开买最低</span></div>' +
+      '<div><b>' + state.trips.length + '</b><span>目的地</span></div></div>';
+    tip = ok
+      ? '✅ 整条路线可按 <b>1 次</b>联程购买' + (state.chainRound ? '（往返 2 次）' : '') + '，直接去 12306 用"中转/联程"方式购票。'
+      : '⚠️ 联程无法合并，可拆开单独买各段（各扣 1 次），超区间段全价。';
+  } else {
+    const res = evalAll();
+    route = tripRouteStr(res) || '';
+    stats = '<div class="modal-stats">' +
+      '<div><b class="num-green">' + (res ? res.used : 0) + '</b><span>合计次数</span></div>' +
+      '<div><b>' + (res ? res.covered : 0) + '</b><span>学生票行程</span></div>' +
+      '<div><b>' + state.trips.length + '</b><span>目的地</span></div></div>';
+    tip = '独立行程：每个目的地单独计次。';
+  }
+  return '<div style="font-size:14px;color:var(--muted)">区间：<b style="color:var(--text)">' + esc(S.name) + '</b> ↔ <b style="color:var(--text)">' + esc(H.name) + '</b></div>' +
+    '<div class="modal-route">' + route + '</div>' +
+    stats +
+    '<div class="modal-tip">' + tip + '</div>' +
+    '<div class="modal-note">📝 仅作规划演示。实际修改需在 12306"学生资质核验"中按真实家庭地址调整（学校端不可动）。</div>';
+}
+function showApplyModal(title) {
+  const head = document.getElementById('applyModalHead');
+  const body = document.getElementById('applyModalBody');
+  if (!head || !body) return;
+  head.textContent = title;
+  body.innerHTML = applyModalHTML();
+  document.getElementById('applyModal').style.display = 'flex';
+  const card = document.querySelector('.modal-card');
+  if (card) { card.scrollTop = 0; try { card.scrollIntoView({ block: 'center' }); } catch (e) { } }
+}
+function closeApplyModal() { document.getElementById('applyModal').style.display = 'none'; }
 
 /* ---------- 初始化 ---------- */
-function initQuickChips() {
-  const cities = ['北京', '上海', '广州', '深圳', '成都', '重庆', '杭州', '南京', '西安', '郑州', '长沙', '昆明'];
-  document.getElementById('quickChips').innerHTML = cities.map(c =>
-    '<button class="hot-chip" onclick="quickAdd(\'' + c + '\')">' + c + '</button>').join('');
-}
 async function quickAdd(city) {
   const r = await resolvePlace(city);
   if (!r) return;
@@ -1935,7 +2028,6 @@ function bindEvents() {
 }
 async function init() {
   bindEvents();
-  initQuickChips();
   initMap();
   // 演示默认数据：武汉上学，家长沙；行程 岳阳(区间内直达) + 重庆(超出区间→全价)
   const S = await resolvePlace('武汉');
