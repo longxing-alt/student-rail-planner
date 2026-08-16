@@ -93,7 +93,7 @@ async function main() {
   A('初始结果区未上浮', !$('wsResult').classList.contains('float-up'));
   A('默认串联模式开启', $('chainControls').style.display === 'block', $('chainControls').style.display);
   A('行程行=2(岳阳+重庆)', $all('.trip-row').length === 2, $all('.trip-row').length);
-  A('串联: 路线不可合并(重庆超区间) → 0次', pageUsed() === 0);
+  A('串联: 重庆超区间 → 最优分段1次(岳阳段联程+重庆全价)', pageUsed() === 1, pageUsed());
   A('胶囊链条渲染(含红色超区间段)', $('chainPreview').innerHTML.includes('route-chain') && $('chainPreview').innerHTML.includes('#ef4444'));
   A('建议条: 提示把家改到重庆', $('advice').textContent.includes('改到') && $('advice').textContent.includes('重庆'));
   A('优化候选=9(当前+8)', $all('.opt-row').length === 9, $all('.opt-row').length);
@@ -437,11 +437,11 @@ async function main() {
   await w.eval('addTrip()');
   await w.eval('setChainMode(true)');
   A('折返警告出现(岳阳东在长沙南北边)', $('chainCheck').textContent.includes('回头路'));
-  A('整条路线消耗 0 次(联程不可合并)', $('totals').querySelector('.total-box .num').textContent.startsWith('0 /'));
-  A('提示拆开单独买最低', $('resultHint').textContent.includes('拆开单独买最低'));
+  A('整条路线消耗 2 次(折返分两段联程)', $('totals').querySelector('.total-box .num').textContent.startsWith('2 /'));
+  A('提示最优分段', $('resultHint').textContent.includes('最优分段'));
   A('提示含原因:走了回头路', $('resultHint').textContent.includes('走了回头路'));
   A('拆开买最低=2段×1次=2', $all('.total-box .num')[4].textContent === '2', $all('.total-box .num')[4].textContent);
-  A('警示横幅给出拆开方案', $('banners').textContent.includes('拆开单独买'));
+  A('警示横幅给出分段方案', $('banners').textContent.includes('最优分段'));
   A('建议点自动排序(可排序修复)', $('chainCheck').textContent.includes('自动排序') && !$('chainCheck').textContent.includes('排序救不了'));
   await w.eval('state.chainRound = true; renderChain();');
   A('往返: 拆开买最低=2段×2次=4', $all('.total-box .num')[4].textContent === '4', $all('.total-box .num')[4].textContent);

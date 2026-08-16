@@ -139,9 +139,10 @@ input[type=range]{width:100%;accent-color:var(--blue)}
   .wz-step:hover{border-color:#d6d3d1}
   .wz-step.active{background:linear-gradient(135deg,#06b6d4,#10b981);color:#fff;border-color:transparent;transform:scale(1.05);box-shadow:0 3px 10px rgba(13,148,136,.3)}
   .wz-step.active b{color:#fff}
-  .wz-step.done{color:#0f766e;background:var(--blue-soft);border-color:rgba(13,148,136,.35)}
+  .wz-step.done{color:#0f766e;background:#f0fdfa;border-color:rgba(13,148,136,.4);box-shadow:0 1px 4px rgba(13,148,136,.12)}
   .wz-done{display:none;font-weight:800}
-  .wz-step.done .wz-done{display:inline}
+  .wz-step.done .wz-done{display:inline-grid;place-items:center;width:18px;height:18px;border-radius:50%;
+    background:linear-gradient(135deg,#06b6d4,#10b981);color:#fff;font-size:11px;box-shadow:0 1px 3px rgba(13,148,136,.35)}
   .wz-arrow{color:#d4d4d8;font-weight:700;transition:transform .3s}
   .wz-step.done + .wz-arrow{color:#22c55e}
   .wz-tip{font-size:12px;color:var(--muted)}
@@ -384,7 +385,7 @@ footer b{color:var(--text)}
           <span class="wz-arrow">→</span>
           <button class="wz-step" data-step="2" onclick="setGuideStep(2)"><b>③</b> 想去哪</button>
           <span style="flex:1"></span>
-          <span class="wz-tip">按顺序填，填完自动算</span>
+          <span class="wz-tip">按顺序填，填完点 🚀 规划</span>
         </div>
 
         <!-- 步骤1: 学校 -->
@@ -896,6 +897,36 @@ function chainEvalCurrent() {
   const start = state.routeStart || S;
   const end = chainEndPoint();
   return chainEval(S, H, chainMidStations(), start, end);
+}
+/* 最优分段规划: 整条无法联程时, 切成 连续区间内段(每组合1次联程) + 全价段, 总次数最少
+   组断开条件: 段超区间 / 段间折返(方向回头) / 组内累计绕行超 ratio */
+function planGroups() {
+  const c = chainEvalCurrent();
+  if (!c) return null;
+  const S = state.school && state.school.station;
+  const start = state.routeStart || S;
+  const pts = [start, ...state.trips.map(t => t.station), ...(state.chainEnd ? [state.chainEnd] : [])];
+  const groups = [], full = [];
+  let cur = null;
+  c.segs.forEach((sg, i) => {
+    const A = pts[i], B = pts[i + 1];
+    let fold = false;
+    if (i > 0 && pts[i - 1] && A && B) {
+      const p0 = pts[i - 1];
+      fold = (A.lon - p0.lon) * (B.lon - A.lon) + (A.lat - p0.lat) * (B.lat - A.lat) < 0;
+    }
+    if (!sg.inInt) { cur = null; full.push(sg); return; }
+    if (fold) { // 折返: 不能与前段合并, 但本段可自成一组联程
+      if (sg.km / dist(S, B) <= state.ratio) { cur = { segs: [sg], total: sg.km }; groups.push(cur); }
+      else { cur = null; full.push(sg); }
+      return;
+    }
+    const ratioOk = ((cur ? cur.total : 0) + sg.km) / dist(S, B) <= state.ratio;
+    if (cur && ratioOk) { cur.segs.push(sg); cur.total += sg.km; return; }
+    if (sg.km / dist(S, B) <= state.ratio) { cur = { segs: [sg], total: sg.km }; groups.push(cur); }
+    else { cur = null; full.push(sg); }
+  });
+  return { groups, full, used: groups.length * (state.chainRound ? 2 : 1) };
 }
 function foldBackBadStation(c) {
   /* 折返能否靠排序修复: 按投影顺路排序后仍折返 → 返回出问题的站名(排序救不了); 否则 null(可排序修复) */
@@ -1467,8 +1498,14 @@ function renderChain() {
   const S = state.school.station, H = state.home.station;
   const c = chainEvalCurrent();
   const ok = !!(c && c.ok);
-  const used = ok ? (state.chainRound ? 2 : 1) : 0;
+  const plan = planGroups(); // 最优分段: 整条可联程时=1组, 否则按区间内连续段分组
+  const used = ok ? (state.chainRound ? 2 : 1) : (plan ? plan.used : 0);
   const remain = state.budget - used;
+  const planTxt = plan ? plan.groups.map((g, gi) =>
+      esc(g.segs[0].from) + '到' + esc(g.segs[g.segs.length - 1].to) + '（' + g.segs.length + '段·1次联程）').join('，') +
+      (plan.full.length ? (plan.groups.length ? '；全价：' : '') + plan.full.map(sg => esc(sg.from) + '到' + esc(sg.to)).join('，') : '') : '';
+  const fullN = plan ? plan.full.length : 0;
+  const planUsed = plan ? plan.used : 0;
   const ub = document.getElementById('usedBig');
   if (ub) { ub.textContent = used; ub.style.color = used > state.budget ? 'var(--red)' : 'var(--text)'; }
   const bb = document.getElementById('budgetBig');
@@ -1483,6 +1520,7 @@ function renderChain() {
       tip: esc(sg.from) + '到' + esc(sg.to) + ' ' + sg.km + 'km ' +
         (sg.inInt ? '✅ 学生票（可单独买 · 扣1次）' : '⚠️ 超区间'),
     }))) +
+    (c && !ok && plan ? '<div class="chain-tip" style="background:var(--blue-soft);color:#0f766e">🔗 <b>最优分段（次数最少）</b>：' + planTxt + ' → 共 ' + planUsed + ' 次</div>' : '') +
     '<div class="chain-tip">💡 区间内任意一小段都可以单独买（各扣 1 次）；整条 5 天内联程购买只扣 1 次。</div>';
   document.getElementById('chainEndLabel').textContent = state.chainEnd
     ? state.chainEnd.name + '（' + state.chainEnd.city + '）'
@@ -1520,13 +1558,15 @@ function renderChain() {
     ? '⚠️ 先添加目的地，才能计算优惠次数。'
     : ok
       ? '整条路线按联程计 <b>' + used + ' 次</b>' + (state.chainRound ? '（往返）' : '（单程）')
-      : '⚠️ 联程无法合并（' + reason + '）→ 拆开单独买最低 <b>' + splitN + ' 次</b>' + (state.chainRound ? '（往返）' : '');
+      : plan.groups.length
+        ? '⚠️ 无法整条联程（' + reason + '）→ <b>最优分段：联程 ' + planUsed + ' 次</b>' + (fullN ? ' + 全价 ' + fullN + ' 段' : '')
+        : '⚠️ ' + segs.length + ' 段全部超出区间（区间 ' + esc(S.name) + ' ↔ ' + esc(H.name) + ' 太小）→ 把"家"改到沿途城市后部分段可学生票';
   document.getElementById('totals').innerHTML =
     '<div class="total-box"><div class="num ' + (used > state.budget ? 'num-red' : 'num-blue') + '">' + used +
     '<span style="font-size:14px;color:var(--muted)"> / ' + state.budget + '</span></div><div class="lbl">整条路线消耗</div></div>' +
     '<div class="total-box"><div class="num ' + (remain < 0 ? 'num-red' : 'num-green') + '">' + remain +
     '</div><div class="lbl">剩余次数（预算 ' + state.budget + '）</div></div>' +
-    '<div class="total-box"><div class="num ' + (ok ? 'num-green' : 'num-red') + '">' + (ok ? '1' : '0') +
+    '<div class="total-box"><div class="num ' + (ok ? 'num-green' : 'num-red') + '">' + (ok ? '1' : (plan ? plan.groups.length : 0)) +
     '</div><div class="lbl">联程合并为几次</div></div>' +
     '<div class="total-box"><div class="num num-orange">' + (c ? c.segs.length : 0) +
     '</div><div class="lbl">串联段数（换乘 ' + Math.max(0, (c ? c.segs.length : 0) - 1) + ' 次）</div></div>' +
@@ -1537,7 +1577,11 @@ function renderChain() {
   else if (used > state.budget) banners = '<div class="warn-banner">⚠️ 超出预算 <b>' + (used - state.budget) + '</b> 次。建议：路线改单程 / 减少串联站点 / 部分站点改全价。</div>';
   else if (ok) banners = '<div class="ok-banner">✅ 整条路线 ' + used + ' 次（' + (state.chainRound ? '往返' : '单程') + '），预算内可用，剩余 ' + remain + ' 次。' +
     (segs.length > 1 && splitN > used ? '比拆开买省 <b>' + (splitN - used) + ' 次</b>。' : '') + '</div>';
-  else banners = '<div class="warn-banner">⚠️ 联程无法合并（' + reason + '），12306 不会出联程票。拆开单独买：' + inIntN + ' 段学生票共 <b>' + splitN + ' 次</b>' + (state.chainRound ? '（往返）' : '') + '，超区间段全价不扣次数。' + (c.foldback ? (foldBackBadStation(c) ? '去掉回头的那一站，或把"家"改到它后面。' : '点"🪄 自动排序"消除折返。') : '') + '</div>';
+  else banners = '<div class="warn-banner">' + (plan && plan.groups.length
+    ? '⚠️ 无法整条联程（' + reason + '）。<b>最优分段</b>：' + planTxt + '，共 <b>' + planUsed + ' 次</b>' + (state.chainRound ? '（往返）' : '') + '。' +
+      (c.foldback ? (foldBackBadStation(c) ? '去掉回头的那一站，或把"家"改到它后面。' : '点"🪄 自动排序"消除折返。') : '') +
+      (fullN ? '全价段不扣次数，可单独购票。' : '')
+    : '⚠️ ' + segs.length + ' 段全部超出区间（区间 ' + esc(S.name) + ' ↔ ' + esc(H.name) + ' 太小）→ 把"家"改到沿途城市，或减少目的地。') + '</div>';
   document.getElementById('banners').innerHTML = banners;
   document.getElementById('tripRows').innerHTML = '';
   document.getElementById('routeLine').innerHTML = '';
@@ -2100,16 +2144,22 @@ function applyModalHTML() {
     const c = chainEvalCurrent();
     route = chainRouteStr(S, c) || '';
     const ok = !!(c && c.ok);
-    const used = ok ? (state.chainRound ? 2 : 1) : 0;
+    const plan = planGroups();
+    const used = ok ? (state.chainRound ? 2 : 1) : (plan ? plan.used : 0);
     const inIntN = c ? c.segs.filter(sg => sg.inInt).length : 0;
     const splitN = inIntN * (state.chainRound ? 2 : 1);
+    const planTxt = plan ? plan.groups.map(g =>
+      esc(g.segs[0].from) + '到' + esc(g.segs[g.segs.length - 1].to) + '（' + g.segs.length + '段）').join('，') +
+      (plan.full.length ? (plan.groups.length ? '；全价：' : '') + plan.full.map(sg => esc(sg.from) + '到' + esc(sg.to)).join('，') : '') : '';
     stats = '<div class="modal-stats">' +
-      '<div><b class="' + (ok ? 'num-green' : 'num-red') + '">' + used + '</b><span>整条联程（' + (state.chainRound ? '往返' : '单程') + '）</span></div>' +
+      '<div><b class="' + (ok ? 'num-green' : 'num-red') + '">' + used + '</b><span>' + (ok ? '整条联程（' + (state.chainRound ? '往返' : '单程') + '）' : '最优分段次数') + '</span></div>' +
       '<div><b class="num-orange">' + splitN + '</b><span>拆开买最低</span></div>' +
       '<div><b>' + state.trips.length + '</b><span>目的地</span></div></div>';
     tip = ok
       ? '✅ 整条路线可按 <b>1 次</b>联程购买' + (state.chainRound ? '（往返 2 次）' : '') + '，直接去 12306 用"中转/联程"方式购票。'
-      : '⚠️ 联程无法合并，可拆开单独买各段（各扣 1 次），超区间段全价。';
+      : (plan && plan.groups.length
+        ? '🔗 <b>最优分段</b>：' + planTxt + ' → 共 <b>' + plan.used + ' 次</b>' + (state.chainRound ? '（往返）' : '') + '；全价段不扣次数。'
+        : '⚠️ 全部段超出区间，无法用学生票——把"家"改到沿途城市后部分段可学生票。');
   } else {
     const res = evalAll();
     route = tripRouteStr(res) || '';
