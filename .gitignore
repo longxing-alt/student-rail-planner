@@ -1,3 +1,6 @@
 node_modules/
 *.zip
 .DS_Store
+
+# 软著登记材料（含个人身份信息，勿提交）
+soft-copyright/
