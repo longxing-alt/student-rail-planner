@@ -437,6 +437,7 @@ async function main() {
   await w.eval('addTrip()');
   await w.eval('setChainMode(true)');
   A('折返警告出现(岳阳东在长沙南北边)', $('chainCheck').textContent.includes('回头路'));
+  A('回头段可视化(↺标记+条纹)', $('chainPreview').textContent.includes('↺') && $('chainPreview').innerHTML.includes('repeating-linear-gradient'), $('chainPreview').textContent.slice(0, 60));
   A('整条路线消耗 2 次(折返分两段联程)', $('totals').querySelector('.total-box .num').textContent.startsWith('2 /'));
   A('提示最优分段', $('resultHint').textContent.includes('最优分段'));
   A('提示含原因:走了回头路', $('resultHint').textContent.includes('走了回头路'));

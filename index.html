@@ -1513,13 +1513,30 @@ function renderChain() {
   // 路线预览: 站点胶囊链条（每段可单独购买 / 整条联程只扣 1 次）
   const start = state.routeStart || S;
   const nodes = [start, ...state.trips.map(t => t.station), ...(state.chainEnd ? [state.chainEnd] : [])];
+  // 逐段折返标记: 方向与上一段相反(↺) → 该段不能并入联程
+  const folds = [];
+  if (c) {
+    c.segs.forEach((sg, i) => {
+      let f = false;
+      if (i > 0 && nodes[i - 1] && nodes[i] && nodes[i + 1]) {
+        const p0 = nodes[i - 1], A = nodes[i], B = nodes[i + 1];
+        f = (A.lon - p0.lon) * (B.lon - A.lon) + (A.lat - p0.lat) * (B.lat - A.lat) < 0;
+      }
+      folds.push(f);
+    });
+  }
   const segs2 = c ? c.segs : [];
   document.getElementById('chainPreview').innerHTML =
-    chainBarHTML(nodes, segs2.map(sg => ({
-      color: sg.inInt ? '#22c55e' : '#ef4444',
-      tip: esc(sg.from) + '到' + esc(sg.to) + ' ' + sg.km + 'km ' +
-        (sg.inInt ? '✅ 学生票（可单独买 · 扣1次）' : '⚠️ 超区间'),
-    }))) +
+    chainBarHTML(nodes, segs2.map((sg, i) => {
+      const fb = folds[i];
+      return {
+        color: fb
+          ? (sg.inInt ? 'repeating-linear-gradient(45deg,#22c55e 0 5px,#86efac 5px 10px)' : 'repeating-linear-gradient(45deg,#ef4444 0 5px,#fca5a5 5px 10px)')
+          : (sg.inInt ? '#22c55e' : '#ef4444'),
+        tip: (fb ? '↺ 回头段 ' : '') + esc(sg.from) + '到' + esc(sg.to) + ' ' + sg.km + 'km ' +
+          (sg.inInt ? '✅ 学生票（可单独买 · 扣1次）' : '⚠️ 超区间'),
+      };
+    })) +
     (c && !ok && plan ? '<div class="chain-tip" style="background:var(--blue-soft);color:#0f766e">🔗 <b>最优分段（次数最少）</b>：' + planTxt + ' → 共 ' + planUsed + ' 次</div>' : '') +
     '<div class="chain-tip">💡 路线不要求到家：只要每段都在 学校↔家 区间内即可买学生票（各段可单独买·各扣 1 次）；整条 5 天内联程购买只扣 1 次。</div>';
   document.getElementById('chainEndLabel').textContent = state.chainEnd
