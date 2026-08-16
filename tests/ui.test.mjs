@@ -256,6 +256,8 @@ async function main() {
   A('第5步: 串联控制', $('spotTitle').textContent.includes('串联控制') && $('spotText').textContent.includes('应用最优区间'));
   await w.eval('nextSpot()');
   A('第6步: 看区间线', $('spotTitle').textContent.includes('看区间线'));
+  await w.eval('nextSpot()');
+  A('第7步: 区间优化', $('spotTitle').textContent.includes('区间优化') && $('spotText').textContent.includes('采用'));
   A('最后一步显示完成按钮', $('spotDone').style.display !== 'none');
   await w.eval('closeGuide()');
   A('完成后 spotlight 隐藏', $('spotlight').style.display === 'none');

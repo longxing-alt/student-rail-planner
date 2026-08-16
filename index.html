@@ -1675,6 +1675,7 @@ const GUIDE_STEPS = [
   { sel: '#tripList', num: '4', title: '拖动排序', text: '下面每一行都能 <b>拖动 ≡</b>：第一个=起点、最后一个=终点，中间=中转。最后点 <b>🚀 规划</b> 看结果。', pos: 'bottom' },
   { sel: '#chainControls', num: '5', title: '串联控制', text: '<b>自动排序</b> 理顺路线、<b>终点</b> 可改、<b>⚡ 应用最优区间</b> 一键换家、<b>独立行程</b> 换计次方式。', pos: 'top' },
   { sel: '#intervalViz', num: '6', title: '看区间线', text: '🟢 绿=能去 · 🟣 紫=可能被查 · 🔴 红=不能。改"家"就能换一片绿。', pos: 'bottom' },
+  { sel: '#optimize', num: '7', title: '区间优化', text: '下面把<b>每一个车站</b>都当作"家"的候选：覆盖多、次数少的排前面。点 <b>采用</b> 或 <b>⚡ 应用最优区间</b> 一键换家（仅规划演示，真实修改在 12306 学生资质中操作）。', pos: 'top' },
 ];
 let guideIdx = 0;
 function startGuide() {
