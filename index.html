@@ -227,7 +227,7 @@ input[type=range]{width:100%;accent-color:var(--blue)}
 
 /* 次数统计 */
 .totals{display:flex;flex-wrap:wrap;border:1px solid var(--line);border-radius:12px;overflow:hidden;margin:14px 0}
-.total-box{flex:1;min-width:100px;padding:12px 14px}
+.total-box{flex:1;min-width:100px;padding:12px 14px;text-align:center}
 .total-box+.total-box{border-left:1px solid var(--line)}
 .total-box .num{font-size:21px;font-weight:800;letter-spacing:-.02em;font-variant-numeric:tabular-nums;line-height:1.1}
 .total-box .lbl{font-size:11px;color:var(--muted);margin-top:2px}
@@ -1667,7 +1667,8 @@ const GUIDE_STEPS = [
   { sel: '#homeInput', num: '2', title: '填家', text: '填你家（或想去的地方），可随便改。', pos: 'bottom' },
   { sel: '#tripInput', num: '3', title: '加想去的地方', text: '先写出发地点"设为起点"，再点 <b>✅ 区间内可去</b> 或直接输入（可写"天津到济南"）。', pos: 'bottom' },
   { sel: '#tripList', num: '4', title: '拖动排序', text: '下面每一行都能 <b>拖动 ≡</b>：第一个=起点、最后一个=终点，中间=中转。最后点 <b>🚀 规划</b> 看结果。', pos: 'bottom' },
-  { sel: '#intervalViz', num: '5', title: '看区间线', text: '🟢 绿=能去 · 🟣 橙=可能被查 · 🔴 红=不能。改"家"就能换一片绿。', pos: 'bottom' },
+  { sel: '#chainControls', num: '5', title: '串联控制', text: '<b>自动排序</b> 理顺路线、<b>终点</b> 可改、<b>⚡ 应用最优区间</b> 一键换家、<b>独立行程</b> 换计次方式。', pos: 'top' },
+  { sel: '#intervalViz', num: '6', title: '看区间线', text: '🟢 绿=能去 · 🟣 紫=可能被查 · 🔴 红=不能。改"家"就能换一片绿。', pos: 'bottom' },
 ];
 let guideIdx = 0;
 function startGuide() {
