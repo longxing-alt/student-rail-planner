@@ -581,6 +581,44 @@ async function main() {
     w.eval('state.home.station.name') + ' used=' + w.eval('planGroups().used'));
   await w.eval('state.routeStart = null; renderAll();');
 
+  G('T31. 优化器列表: 拉远方案置顶 + 覆盖7/7');
+  await w.eval('setChainMode(true)');
+  await w.eval('state.trips.forEach(t => removeTrip(t.id))');
+  $('schoolInput').value = '清远';
+  await w.eval('searchPlace("school")');
+  $('homeInput').value = '广州南';
+  await w.eval('searchPlace("home")');
+  $('fromInput').value = '广州南';
+  await w.eval('setRouteFrom()');
+  for (const c of ['武汉', '南京', '上海', '扬州', '苏州', '杭州', '广州']) { $('tripInput').value = c; await w.eval('addTrip()'); }
+  await w.eval('chainAutoSort()');
+  await w.eval('renderOpt()');
+  const r31 = $all('#optList .opt-row')[0];
+  A('⭐最优(拉远家)置顶', r31.textContent.includes('⭐'));
+  A('候选覆盖 7/7', r31.textContent.includes('覆盖 7/7'), r31.textContent.slice(0, 60));
+  A('当前行(家=广州南)覆盖 0/7', $('optCurrent').textContent.includes('覆盖 0/7'), $('optCurrent').textContent.match(/覆盖 \d\/\d/));
+
+  G('T32. 应用最优弹窗: 拉远方案详情');
+  await w.eval('state.touched = false; state.resultFloated = false; applyBest()');
+  A('弹窗出现', $('applyModal').style.display === 'flex');
+  A('弹窗显示最优分段次数', $('applyModalBody').textContent.includes('最优分段') && $('applyModalBody').textContent.includes('次'));
+  A('弹窗含具体路线', $('applyModalBody').textContent.includes('到'));
+  await w.eval('closeApplyModal()');
+
+  G('T33. 独立行程模式不受影响');
+  await w.eval('setChainMode(false)');
+  const homeName33 = await pageHomeName();
+  state.school = { station: o('清远') };
+  syncTripsToLogic(); const exp33 = evalWith(o(homeName33));
+  A('独立模式 smartBest/applyBest 不崩', pageUsed() === exp33.used, `${pageUsed()} vs ${exp33.used}`);
+  await w.eval('setChainMode(true)');
+
+  G('T34. 空行程防护');
+  await w.eval('state.trips.forEach(t => removeTrip(t.id))');
+  await w.eval('applyBest()');
+  A('空行程 applyBest 不崩且有提示', $('status').textContent.includes('设置学校') || $('status').textContent.includes('添加行程'), $('status').textContent.slice(0, 40));
+  await w.eval('state.routeStart = null; renderAll();');
+
 
 
 

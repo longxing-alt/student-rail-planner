@@ -8,8 +8,8 @@ const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const html = readFileSync(join(root, 'index.html'), 'utf8');
 const code = html.match(/\/\/ ==== PURE LOGIC START ====\n([\s\S]*?)\/\/ ==== PURE LOGIC END ====/);
 if (!code) { console.error('✗ 未找到 PURE LOGIC 标记'); process.exit(1); }
-const { STATIONS, HUBS, state, planOneWay, evalWith, dist, corridor, directCovered, transferPlan } =
-  new Function(code[1] + '\nreturn {STATIONS,HUBS,state,planOneWay,evalWith,dist,corridor,directCovered,transferPlan};')();
+const { STATIONS, HUBS, state, planOneWay, evalWith, dist, corridor, directCovered, transferPlan, chainEval, planGroups } =
+  new Function(code[1] + '\nreturn {STATIONS,HUBS,state,planOneWay,evalWith,dist,corridor,directCovered,transferPlan,chainEval,planGroups};')();
 
 /* ---------- 工具 ---------- */
 const ST = Object.fromEntries(STATIONS.map(s => [s[0], s]));
@@ -179,7 +179,6 @@ setRatio(1.5);
 
 /* ---------- K. 串联路线模式 ---------- */
 G('K. 串联路线（北京西↔贵阳北）');
-const { chainEval } = new Function(code[1] + '\nreturn {chainEval};')();
 const K = {
   S: o('北京西'), H: o('贵阳北'),
 };
@@ -218,5 +217,53 @@ A('L8 沈阳→济南: 边缘最远可买', planTrip(LS, LH, o('沈阳'), o('济
 lp = planTrip(LS, LH, LS, o('武汉'));
 const lq = planOneWay(LS, LH, o('武汉'));
 A('L6 O=S 时 planTrip 与 planOneWay 等价', lp.mode === lq.mode && lp.ok === lq.ok);
+
+/* ---------- M. 最优分段 planGroups（分组计次 / 拉远家基础） ---------- */
+G('M. 最优分段 planGroups');
+const mkState = (schoolName) => { state.school = { station: o(schoolName) }; state.chainRound = false; state.ratio = 1.5; };
+const pg = cc => planGroups(cc);
+
+mkState('武汉');
+const m1 = pg(chainEval(o('武汉'), o('北京西'), [o('郑州东'), o('石家庄')]));
+A('M1 全程学生票 → 1组1次', m1.groups.length === 1 && m1.full.length === 0 && m1.used === 1,
+  `groups=${m1.groups.length} full=${m1.full.length} used=${m1.used}`);
+
+mkState('清远');
+const m2 = pg(chainEval(o('清远'), o('北京西'), [o('武汉'), o('上海虹桥')]));
+A('M2 中间超区间站(上海)断开: 前段1组+后段因发站超区间也红 → 1组2全价',
+  m2.groups.length === 1 && m2.full.length === 2 && m2.used === 1,
+  `groups=${m2.groups.length} full=${m2.full.length} used=${m2.used}`);
+
+mkState('石家庄');
+const m3 = pg(chainEval(o('石家庄'), o('贵阳北'), [o('长沙南'), o('岳阳东')]));
+A('M3 折返段各自成组(3段全折返) → 3组0全价', m3.groups.length === 3 && m3.full.length === 0 && m3.used === 3,
+  `groups=${m3.groups.length} full=${m3.full.length} used=${m3.used}`);
+
+mkState('武汉');
+state.ratio = 1.0; // 阈值=1.0: 任何累计绕行(1.010>1.0)都触发分段
+const m4 = pg(chainEval(o('武汉'), o('北京西'), [o('郑州东'), o('石家庄')]));
+state.ratio = 1.5;
+A('M4 组内累计绕行超限 → 拆为2组', m4.groups.length === 2 && m4.used === 2,
+  `groups=${m4.groups.length} used=${m4.used}`);
+
+mkState('清远');
+const m5 = pg(chainEval(o('清远'), o('广州南'), [o('武汉'), o('南京')]));
+A('M5 全超区间(区间太小) → 0组3全价0次', m5.groups.length === 0 && m5.full.length === 3 && m5.used === 0,
+  `groups=${m5.groups.length} full=${m5.full.length} used=${m5.used}`);
+
+mkState('武汉');
+const m6 = pg(chainEval(o('武汉'), o('北京西'), [o('郑州东')]));
+A('M6 单行程 → 1组1次', m6.groups.length === 1 && m6.used === 1);
+
+state.chainRound = true;
+const m7 = pg(chainEval(o('武汉'), o('北京西'), [o('郑州东')]));
+state.chainRound = false;
+A('M7 往返 → used×2', m7.used === 2, `used=${m7.used}`);
+
+mkState('武汉');
+const m8 = pg(chainEval(o('武汉'), o('长沙南'), [o('长沙南')]));
+A('M8 终点=家锚点 → 1组1次', m8.groups.length === 1 && m8.used === 1);
+
+A('M9 空链 → null', planGroups(null) === null);
 
 done();
