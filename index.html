@@ -380,9 +380,9 @@ footer b{color:var(--text)}
         </div>
         <!-- 步骤3: 想去哪 -->
         <div class="wz-panel" data-step="2" style="display:none">
-          <label>③ 想去哪？<em class="wz-sub">可加多个；从哪到哪写"天津→济南"</em></label>
+          <label>③ 想去哪？<em class="wz-sub">可加多个；从哪到哪写"天津到济南"</em></label>
           <div class="input-row">
-            <input id="tripInput" type="text" placeholder="输入城市，如：北京 / 天津→济南">
+            <input id="tripInput" type="text" placeholder="输入城市，如：北京 / 天津到济南">
             <button class="btn btn-primary" onclick="addTrip()">添加</button>
           </div>
           <div id="planHint" style="font-size:11.5px;color:var(--muted);margin-top:5px"></div>
@@ -1058,8 +1058,12 @@ function renderTrips() {
     el.innerHTML = state.trips.map((tp, i) => {
       const seg = c ? c.segs[i] : null;
       const prev = i === 0 ? (state.school && state.school.station ? state.school.station.name : '学校') : state.trips[i - 1].station.name;
+      // 行程自带出发地(如"武汉到郑州")时按真实出发地显示, 否则显示串联上一站
+      const fromShown = tp.from ? tp.from.name : prev;
+      const kmTxt = (tp.from && tp.station) ? Math.round(dist(tp.from, tp.station)) : (seg ? seg.km : null);
       const main = '<b>' + esc(tp.text) + '</b>' +
-        '<div class="sub">' + esc(prev) + ' → ' + esc(tp.station ? tp.station.name : '坐标点') + (seg ? ' · ' + seg.km + ' km' : '') + '</div>';
+        '<div class="sub">' + esc(fromShown) + ' 到 ' + esc(tp.station ? tp.station.name : '坐标点') +
+        (kmTxt != null ? ' · ' + kmTxt + ' km' : '') + '</div>';
       const chip = '<span class="chip ' + (seg && seg.inInt ? 'chip-green' : 'chip-red') + '">' + (seg && seg.inInt ? '✓ 区间内' : '⚠ 区间外') + '</span>';
       return row(tp, i, main, chip,
         '<button class="btn btn-ghost btn-sm" title="在地图上定位" onclick="panTo(' + i + ')">定位</button>' +
@@ -1077,7 +1081,7 @@ function renderTrips() {
       : '<span class="chip chip-red">✕ 全价</span>';
     const fromName = tp.from ? tp.from.name : (state.school && state.school.station ? state.school.station.name : '学校');
     const main = '<b>' + esc(tp.text) + '</b>' +
-      '<div class="sub">' + esc(fromName) + ' → ' + esc(tp.station ? tp.station.name : '坐标点') + ' · ' + Math.round(p.direct) + ' km</div>';
+      '<div class="sub">' + esc(fromName) + ' 到 ' + esc(tp.station ? tp.station.name : '坐标点') + ' · ' + Math.round(p.direct) + ' km</div>';
     const chip = badge +
       '<span class="chip ' + (t.used === 0 ? 'chip-red' : 'chip-violet') + '">' + t.used + ' 次</span>' +
       '<label class="switch" title="点击切换 往返/单程">' +
@@ -1130,7 +1134,7 @@ function chainRouteStr(S, cc) {
   if (!cc) return null;
   let s = esc(S.name);
   cc.segs.forEach(sg => {
-    s += ' → ' + esc(sg.to) + (sg.inInt
+    s += ' 到 ' + esc(sg.to) + (sg.inInt
       ? '<span class="r-ok">✅ 学生票</span>'
       : '<span class="r-bad">⚠️ 全价</span>');
   });
@@ -1232,6 +1236,12 @@ function tabBtn(mode, label) {
 }
 function setOptMode(m) { state.optMode = m; renderOpt(); }
 
+function clearDemoTripsIfLeft() {
+  /* 学校、家都已改成非演示城市(武汉/长沙)时, 演示行程(岳阳/重庆)自动清除 */
+  const S = state.school && state.school.station, H = state.home && state.home.station;
+  const nonDemo = !!(S && H && S.city !== '武汉' && H.city !== '长沙');
+  if (nonDemo && state.trips.some(t => t.demo)) state.trips = state.trips.filter(t => !t.demo);
+}
 /* 智能最优：在不减少覆盖行程数的前提下，消耗次数最少；同次数取同城/最近 */
 function smartBest() {
   if (!state.school || !state.home || !state.trips.length) return null;
@@ -1296,7 +1306,7 @@ function renderChain() {
     '<div class="chain-seg-tip">' +
     segs2.map(sg =>
       '<span class="seg-tip-item"><i style="background:' + (sg.inInt ? '#22c55e' : '#ef4444') + '"></i>' +
-      esc(sg.from) + '→' + esc(sg.to) + ' ' + sg.km + 'km ' +
+      esc(sg.from) + '到' + esc(sg.to) + ' ' + sg.km + 'km ' +
       (sg.inInt ? '✅ 学生票（可单独买 · 扣1次）' : '⚠️ 超区间') + '</span>').join('') +
     '</div>' +
     '<div class="chain-tip">💡 区间内任意一小段都可以单独买（各扣 1 次）；整条 5 天内联程购买只扣 1 次。</div>';
@@ -1561,7 +1571,7 @@ function renderRouteLine() {
     const c = chainEvalCurrent();
     if (c) {
       segs = c.segs.map(s => ({
-        label: s.from + '→' + s.to, km: s.km,
+        label: s.from + '到' + s.to, km: s.km,
         color: s.inInt ? '#22c55e' : '#ef4444',
         note: s.inInt ? '学生票' : '全价',
       }));
@@ -1570,7 +1580,7 @@ function renderRouteLine() {
     const res = evalAll();
     if (res) {
       segs = res.perTrip.map(tp => ({
-        label: (tp.from ? tp.from.name + '→' : '') + (tp.station ? tp.station.name : tp.text), km: Math.max(40, tp.plan.direct),
+        label: (tp.from ? tp.from.name + '到' : '') + (tp.station ? tp.station.name : tp.text), km: Math.max(40, tp.plan.direct),
         color: tp.plan.mode === 'direct' ? '#22c55e' : tp.plan.mode === 'edge' ? '#f59e0b' : tp.plan.mode === 'transfer' ? '#f97316' : '#ef4444',
         note: tp.plan.mode === 'direct' ? '直达·学生票' : tp.plan.mode === 'edge' ? '区间边缘·可能被查' : tp.plan.mode === 'transfer' ? '中转·学生票' : '全价',
       }));
@@ -1584,7 +1594,7 @@ function renderRouteLine() {
       esc(s.label) + ' · ' + s.km + ' km · ' + esc(s.note) + '"></div>').join('') +
     '</div><span class="rt-node">' + esc(H.name) + '</span></div>' +
     '<div class="route-seq">' +
-    (state.chainMode ? segs.map((s, i) => (i ? '→ ' : '') + '<b>' + esc(s.label) + '</b> <span style="color:' + s.color + '">' + s.km + 'km · ' + esc(s.note) + '</span>').join(' ')
+    (state.chainMode ? segs.map(s => '<b>' + esc(s.label) + '</b> <span style="color:' + s.color + '">' + s.km + 'km · ' + esc(s.note) + '</span>').join('，')
       : segs.map((s, i) => (i ? ' · ' : '') + '<b>' + esc(s.label) + '</b> <span style="color:' + s.color + '">' + esc(s.note) + '</span>').join('')) +
     '</div>';
 }
@@ -1600,7 +1610,7 @@ function suggestFix() {
       c.segs.forEach((s, i) => {
         if (!s.inInt) {
           const bad = i < c.segs.length - 1 ? s.to : s.from;
-          tips.push('「' + s.from + '→' + s.to + '」超出区间（' + s.km + 'km 全价）。把"家"改到 <b>' + esc(s.to) + '</b>，这段就变成区间内学生票。');
+          tips.push('「' + s.from + '到' + s.to + '」超出区间（' + s.km + 'km 全价）。把"家"改到 <b>' + esc(s.to) + '</b>，这段就变成区间内学生票。');
         }
       });
       if (c.foldback) {
@@ -1721,7 +1731,7 @@ function chainAutoSort() {
     return corridor(S, H, a.station).t - corridor(S, H, b.station).t;
   });
   renderAll();
-  setStatus('🪄 已按顺路排序（沿 学校→家 方向，投影 t=' +
+  setStatus('🪄 已按顺路排序（沿 学校到家 方向，投影 t=' +
     state.trips.map(t => t.station ? corridor(S, H, t.station).t.toFixed(2) : '?').join(', ') + '）');
 }
 
@@ -1741,8 +1751,8 @@ function renderAll() {
   if (demoTip) {
     demoTip.style.display = isDemo ? 'block' : 'none';
     if (isDemo) {
-      demoTip.innerHTML = '💡 <b>演示说明</b>：串联路线 武汉→岳阳→重庆→长沙。岳阳在区间内（🟢 学生票）；重庆超出区间（🔴 全价）→ 整条路线无法合并。<br>' +
-        '试试：把 <b>"家"</b> 改到重庆（输入框定位或拖动地图绿色图钉）→ 路线变为 武汉→岳阳→重庆，全程学生票只扣 1 次。';
+      demoTip.innerHTML = '💡 <b>演示说明</b>：串联路线 武汉到岳阳到重庆到长沙。岳阳在区间内（🟢 学生票）；重庆超出区间（🔴 全价）→ 整条路线无法合并。<br>' +
+        '试试：把 <b>"家"</b> 改到重庆（输入框定位或拖动地图绿色图钉）→ 路线变为 武汉到岳阳到重庆，全程学生票只扣 1 次。';
     }
   }
   if (!state.school || !state.home) {
@@ -1798,6 +1808,7 @@ async function searchPlace(kind) {
     sinkResult();
   }
   setStatus(r.offline ? '✅ 已匹配内置车站：' + r.label : '✅ 已定位并吸附车站：' + r.label);
+  clearDemoTripsIfLeft();
   renderAll();
   fitAll();
 }
@@ -1805,12 +1816,14 @@ async function addTrip() {
   const q = document.getElementById('tripInput').value.trim();
   if (!q) return;
   setStatus('正在解析：' + q + ' …');
-  // 支持出发地: "天津→济南" / "天津->济南" / "从天津到济南"
+  // 支持出发地: "天津到济南" / "天津→济南" / "天津->济南" / "从天津到济南"
   let fromQ = null, toQ = q;
   const m1 = q.match(/^从(.+?)到(.+)$/);
   const m2 = q.match(/^(.+?)\s*(?:→|->|=>)\s*(.+)$/);
+  const m3 = q.match(/^(.+?)到(.+)$/);
   if (m1) { fromQ = m1[1].trim(); toQ = m1[2].trim(); }
   else if (m2) { fromQ = m2[1].trim(); toQ = m2[2].trim(); }
+  else if (m3) { fromQ = m3[1].trim(); toQ = m3[2].trim(); }
   const r = await resolvePlace(toQ);
   if (!r) { setStatus('❌ 未能解析 "' + toQ + '"'); return; }
   let from = null;
@@ -1820,9 +1833,10 @@ async function addTrip() {
     from = rf.station || { name: rf.label, lat: rf.point.lat, lon: rf.point.lon };
   }
   state.touched = true;
+  clearDemoTripsIfLeft();
   state.trips.push({ id: ++state._tid, text: q, from, point: r.point, station: r.station, round: false }); // 默认单程
   document.getElementById('tripInput').value = '';
-  setStatus('✅ 已添加：' + (from ? fromQ + ' → ' : '') + toQ + (from ? '（自定义出发地）' : ''));
+  setStatus('✅ 已添加：' + (from ? fromQ + ' 到 ' : '') + toQ + (from ? '（自定义出发地）' : ''));
   renderAll();
   fitAll();
   maybeFloatResult(); // 只有"添加"才下滑到结果
@@ -1841,6 +1855,7 @@ function editFrom(id) {
 }
 function addTripWith(pt, station) {
   const nm = station ? station.name + ' · ' + station.city : pt.lat.toFixed(2) + ',' + pt.lng.toFixed(2);
+  clearDemoTripsIfLeft();
   state.trips.push({ id: ++state._tid, text: nm, point: { lat: pt.lat, lon: pt.lng }, station, round: false });
   setStatus('✅ 已添加目的地：' + nm);
   renderAll();
@@ -1852,7 +1867,7 @@ function toggleRound(id) {
   if (t) {
     t.round = !t.round;
     renderAll();
-    setStatus('已切换：' + t.text + ' → ' + (t.round ? '往返（每程扣 1 次，共 2 次）' : '单程（扣 1 次）'));
+    setStatus('已切换：' + t.text + ' 为 ' + (t.round ? '往返（每程扣 1 次，共 2 次）' : '单程（扣 1 次）'));
   }
 }
 function setAllRound(round) {
@@ -1929,7 +1944,7 @@ async function init() {
   if (H) { state.home = { text: '长沙', point: H.point, station: H.station }; document.getElementById('homeInput').value = '长沙'; }
   for (const c of ['岳阳', '重庆']) {
     const r = await resolvePlace(c);
-    if (r) state.trips.push({ id: ++state._tid, text: c, point: r.point, station: r.station, round: false });
+    if (r) state.trips.push({ id: ++state._tid, text: c, point: r.point, station: r.station, round: false, demo: true });
   }
   setChainMode(true);
   state.guideStep = 2; // 演示数据齐全, 直接到目的地步骤

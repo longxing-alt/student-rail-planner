@@ -61,9 +61,9 @@ const G = name => console.log(`\n== ${name} ==`);
 function syncTripsToLogic() {
   state.trips = $all('.trip-row').map((row, i) => {
     const text = row.querySelector('.trip-main b').textContent;
-    const sub = row.querySelector('.trip-main .sub').textContent; // "武汉 → 岳阳东 · 181 km"
+    const sub = row.querySelector('.trip-main .sub').textContent; // "武汉 到 岳阳东 · 181 km"
     let stName = null;
-    const arrow = sub.split(' → ');
+    const arrow = sub.split(' 到 ');
     if (arrow.length >= 2) stName = arrow[1].split(' · ')[0];
     const st = stName && ST[stName] ? o(stName) : null;
     const sw = row.querySelector('.switch input');
@@ -120,6 +120,10 @@ async function main() {
   await w.eval('searchPlace("home")');
   const homeName3 = await pageHomeName();
   A('家吸附=贵阳北', homeName3 === '贵阳北', homeName3);
+  A('学校家都改后演示行程自动清除', $all('.trip-row').length === 0, $all('.trip-row').length);
+  // 演示行程已被自动清除, 补回后续流程需要的行程
+  $('tripInput').value = '岳阳'; await w.eval('addTrip()');
+  $('tripInput').value = '重庆'; await w.eval('addTrip()');
   syncTripsToLogic(); const exp3 = evalWith(o('贵阳北'));
   A('UI 总计=逻辑总计', pageUsed() === exp3.used, `${pageUsed()} vs ${exp3.used}`);
   A('结果提示含 贵阳北', $('resultHint').textContent.includes('贵阳北'));
@@ -136,13 +140,13 @@ async function main() {
   A('成都徽章=逻辑判定', (cdPlan.mode === 'direct' && badge.includes('直达')) || (cdPlan.mode === 'transfer' && badge.includes('中转')) || (cdPlan.mode === 'full' && badge.includes('全价')), badge);
 
   G('T5. 切换成都 → 单程');
-  await w.eval('toggleRound(' + state.trips.find(t => t.text === '成都').id + ')');
+  await w.eval('toggleRound(state.trips.find(t => t.text === "成都").id)');
   syncTripsToLogic(); const exp5 = evalWith(o('贵阳北'));
   A('UI 总计=逻辑总计(单程→往返 多一次)', pageUsed() === exp5.used, `${pageUsed()} vs ${exp5.used}`);
   A('默认单程, 切换后显示 往返', $all('.trip-row')[2].querySelector('.switch').textContent.includes('往返'));
 
   G('T6. 删除成都');
-  await w.eval('removeTrip(' + state.trips.find(t => t.text === '成都').id + ')');
+  await w.eval('removeTrip(state.trips.find(t => t.text === "成都").id)');
   A('行程行=2(删除成都后)', $all('.trip-row').length === 2);
   syncTripsToLogic(); const exp6 = evalWith(o('贵阳北'));
   A('UI 总计=逻辑总计', pageUsed() === exp6.used, `${pageUsed()} vs ${exp6.used}`);
@@ -218,7 +222,7 @@ async function main() {
   await w.eval('setChainMode(true)');
   A('串联控件显示', $('chainControls').style.display === 'block');
   A('批量按钮隐藏', $('batchBtns').style.display === 'none');
-  A('路线预览含箭头串联', $('chainPreview').textContent.includes('北京西') && $('chainPreview').textContent.includes('→') && $('chainPreview').textContent.includes('贵阳北'));
+  A('路线预览含串联(到)', $('chainPreview').textContent.includes('北京西') && $('chainPreview').textContent.includes('到') && $('chainPreview').textContent.includes('贵阳北'));
   A('校验含学生票标记', $('chainCheck').textContent.includes('学生票'));
   A('串联总计=1次(单程)', $('totals').querySelector('.total-box .num').textContent.startsWith('1 /'));
   A('串联无折返警告', !$('chainCheck').textContent.includes('折返'));
@@ -264,12 +268,12 @@ async function main() {
   A('添加成功', !!lr && lr.text === '天津→济南', lr && lr.text);
   A('出发地已解析为天津站', lr && lr.from && lr.from.name === '天津', lr && lr.from && lr.from.name);
   A('目的地为济南西', lr && lr.station && lr.station.name === '济南西', lr && lr.station && lr.station.name);
-  A('行程行显示出发地', $all('.trip-row').at(-1).textContent.includes('天津 → 济南'));
+  A('行程行显示出发地', $all('.trip-row').at(-1).textContent.includes('天津 到 济南'));
   await w.eval('removeTrip(' + lr.id + ')');
   $('tripInput').value = '济南';
   await w.eval('addTrip()');
   await wait(300);
-  A('无出发地行程默认从学校出发', $all('.trip-row').at(-1).textContent.includes('北京西 → 济南'));
+  A('无出发地行程默认从学校出发', $all('.trip-row').at(-1).textContent.includes('北京西 到 济南'));
   const tid = await w.eval('state.trips.at(-1).id');
   await w.eval('removeTrip(' + tid + ')');
   $('tripInput').value = '济南';
@@ -448,13 +452,48 @@ async function main() {
   const r0 = optRows()[0];
   A('最优方案置顶(第一行含⭐)', r0.textContent.includes('⭐'));
   A('第一行是最优候选', r0.querySelector('b').textContent.includes('⭐'));
-  A('候选行写明具体路线(学校→…→新家)', r0.textContent.includes('石家庄') && r0.textContent.includes('→'));
+  A('候选行写明具体路线(学校到…到新家)', r0.textContent.includes('石家庄') && r0.textContent.includes('到'));
   A('路线带学生票/全价标记', r0.textContent.includes('学生票') || r0.textContent.includes('全价'));
-  A('当前区间行也写具体路线', $('optCurrent').textContent.includes('→') && $('optCurrent').textContent.includes('学生票'));
+  A('当前区间行也写具体路线', $('optCurrent').textContent.includes('到') && $('optCurrent').textContent.includes('学生票'));
   await w.eval('setOptMode("near")');
   A('离家最近视图下最优仍置顶', optRows()[0].textContent.includes('⭐'));
   await w.eval('setOptMode("save")');
   A('切回最省次数视图恢复', optRows()[0].textContent.includes('⭐'));
+
+  G('T27. "A到B"语法 + 改学校清演示行程 + 显示用"到"');
+  // 用户场景: 学校郑州 家信阳, 输入"武汉到郑州"
+  await w.eval('state.trips.forEach(t => removeTrip(t.id))');
+  await w.eval('setHomeFromStation("信阳")');
+  $('schoolInput').value = '郑州';
+  await w.eval('searchPlace("school")');
+  A('学校已设为郑州', w.eval('state.school.station.city') === '郑州', w.eval('state.school.station.name'));
+  $('tripInput').value = '武汉到郑州';
+  await w.eval('addTrip()');
+  await wait(300);
+  const t27 = await w.eval('state.trips.at(-1)');
+  A('"武汉到郑州"解析出出发地武汉', !!t27.from && t27.from.name === '武汉', JSON.stringify(t27 && { from: t27.from && t27.from.name, to: t27.station && t27.station.name }));
+  A('目的地为郑州', !!t27.station && t27.station.name.includes('郑州'));
+  A('行程行显示"武汉 到 郑州"且无箭头', $all('.trip-row').at(-1).textContent.includes('武汉 到 郑州') && !$all('.trip-row').at(-1).textContent.includes('→'));
+  A('输入占位提示用"到"', $('tripInput').placeholder.includes('天津到济南'));
+  A('向导提示用"到"', w.document.querySelectorAll('.wz-panel')[2].textContent.includes('天津到济南'));
+  // 演示行程自动清除: 模拟演示态(打上demo标记), 学校/家都改成非演示城市后消失
+  await w.eval('state.trips.forEach(t => removeTrip(t.id))');
+  await w.eval('setHomeFromStation("长沙")');
+  $('schoolInput').value = '武汉';
+  await w.eval('searchPlace("school")');
+  $('tripInput').value = '岳阳';
+  await w.eval('addTrip()');
+  await wait(300);
+  await w.eval('state.trips.forEach(t => t.demo = true)');
+  A('演示态(武汉/长沙)行程保留', $all('.trip-row').length === 1, $all('.trip-row').length);
+  $('homeInput').value = '信阳';
+  await w.eval('searchPlace("home")');
+  await wait(300);
+  A('只改家(学校仍武汉)演示行程保留', $all('.trip-row').length === 1, $all('.trip-row').length);
+  $('schoolInput').value = '郑州';
+  await w.eval('searchPlace("school")');
+  await wait(300);
+  A('学校家都改后演示行程自动清除', $all('.trip-row').length === 0, $all('.trip-row').length);
 
 
 
