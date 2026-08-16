@@ -228,8 +228,9 @@ input[type=range]{width:100%;accent-color:var(--blue)}
 /* 次数统计（两列卡片） */
 .totals{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:14px 0}
 .total-box{background:#fafafa;border:1px solid var(--line);border-radius:12px;padding:12px 14px;text-align:center}
-.total-box.big{background:linear-gradient(135deg,var(--blue-soft),#fff);border-color:rgba(13,148,136,.4);padding:16px 14px}
-.total-box.big .num{font-size:30px}
+.total-box.big{background:linear-gradient(135deg,var(--blue-soft),#fff);border-color:rgba(13,148,136,.4);padding:14px 14px}
+.total-box.big .num{font-size:40px;line-height:1.05}
+.total-box.big .lbl{font-size:12px}
 .total-box.full{grid-column:1/-1;background:#f7f7f8}
 .total-box .num{font-size:21px;font-weight:800;letter-spacing:-.02em;font-variant-numeric:tabular-nums;line-height:1.1}
 .total-box .lbl{font-size:11px;color:var(--muted);margin-top:2px}
@@ -1629,11 +1630,11 @@ function renderChain() {
         : '⚠️ ' + segs.length + ' 段全部超出区间（区间 ' + esc(S.name) + ' ↔ ' + esc(H.name) + ' 太小）。路线不要求到家——只要每段在区间内即可。把目的地改成"✅ 区间内可去"的城市，或把"家"改到更远城市扩大区间';
   document.getElementById('totals').innerHTML =
     '<div class="total-box big"><div class="num ' + (used > state.budget ? 'num-red' : 'num-blue') + '">' + used +
-    '<span style="font-size:16px;color:var(--muted)"> / ' + state.budget + '</span></div><div class="lbl">整条路线消耗</div></div>' +
-    '<div class="total-box big"><div class="num num-orange">' + (c ? c.segs.length : 0) +
-    '</div><div class="lbl">串联段数（换乘 ' + Math.max(0, (c ? c.segs.length : 0) - 1) + ' 次）</div></div>' +
+    '<span style="font-size:20px;color:var(--muted)"> / ' + state.budget + '</span></div><div class="lbl">整条路线消耗</div></div>' +
     '<div class="total-box"><div class="num ' + (remain < 0 ? 'num-red' : 'num-green') + '">' + remain +
     '</div><div class="lbl">剩余次数（预算 ' + state.budget + '）</div></div>' +
+    '<div class="total-box big"><div class="num num-orange">' + (c ? c.segs.length : 0) +
+    '</div><div class="lbl">串联段数（换乘 ' + Math.max(0, (c ? c.segs.length : 0) - 1) + ' 次）</div></div>' +
     '<div class="total-box"><div class="num ' + (ok ? 'num-green' : 'num-red') + '">' + (ok ? '1' : (plan ? plan.groups.length : 0)) +
     '</div><div class="lbl">联程合并为几次</div></div>' +
     '<div class="total-box full"><div class="num ' + (ok && splitN > used ? 'num-gray' : 'num-green') + '">' + splitN +
