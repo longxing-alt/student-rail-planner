@@ -50,11 +50,13 @@ nav .spacer{flex:1}
 .dropdown-menu{display:none;position:absolute;right:0;top:calc(100% + 8px);width:620px;max-width:90vw;background:#fff;border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow-md);padding:14px;z-index:100;grid-template-columns:1fr 1fr;gap:14px}
 .dropdown-menu.open{display:grid}
 @media(max-width:760px){.dropdown-menu{grid-template-columns:1fr;width:88vw}}
-.dropdown-menu .dd-col b{display:block;font-size:12.5px;margin-bottom:8px;color:var(--text)}
-.dropdown-menu ul{list-style:none}
-.dropdown-menu li{font-size:12px;color:var(--muted);line-height:1.65;padding:5px 0;border-bottom:1px dashed var(--line)}
-.dropdown-menu li:last-child{border-bottom:none}
-.dropdown-menu li b{color:var(--text)}
+.dropdown-menu .dd-col>div:first-child{font-size:12.5px;font-weight:700;margin-bottom:8px;color:var(--text)}
+.dd-rule{display:flex;align-items:center;gap:8px;padding:6px 9px;border:1px solid var(--line);border-radius:9px;background:#fafafa;margin-bottom:6px;font-size:12px;line-height:1.5}
+.dd-rule:last-child{margin-bottom:0}
+.dd-tag{flex:none;text-align:center;font-weight:700;color:#fff;background:linear-gradient(135deg,#06b6d4,#10b981);border-radius:6px;padding:2px 7px;font-size:11px;min-width:44px}
+.dd-rule.official .dd-tag{background:linear-gradient(135deg,#8b5cf6,#6366f1)}
+.dd-rule b{color:var(--text);flex:none;white-space:nowrap}
+.dd-rule em{font-style:normal;color:var(--muted);flex:1}
 .dd-arrow{font-size:10px;vertical-align:1px}
 .ver{font-size:11px;color:var(--muted);border:1px solid var(--line);border-radius:99px;padding:2px 8px}
 
@@ -333,26 +335,22 @@ footer b{color:var(--text)}
       <button class="nav-link dropdown-toggle" onclick="toggleRulesMenu(event)">规则 <span class="dd-arrow">▾</span></button>
       <div class="dropdown-menu" id="rulesMenu">
         <div class="dd-col">
-          <b>📐 计算规则（本工具）</b>
-          <ul>
-            <li><b>直达 = 1 次</b>：目的地在区间走廊带内</li>
-            <li><b>中转 = 1 次</b>：换乘站与终点都在区间内、绕行 ≤ 1.5×</li>
-            <li><b>联程 = 1 次</b>：5 天内多段只扣 1 次（串联路线模式）</li>
-            <li><b>往返 = 2 次</b>，单程 = 1 次</li>
-            <li><b>全价 = 0 次</b>：终点超出区间，12306 不发售学生票</li>
-            <li><b>区间优化</b>：枚举 367 站找最省次数的"家"</li>
-          </ul>
+          <div>📐 计算规则（本工具）</div>
+          <div class="dd-rule"><span class="dd-tag">直达</span><b>1 次</b><em>目的地在区间走廊带内</em></div>
+          <div class="dd-rule"><span class="dd-tag">中转</span><b>1 次</b><em>换乘站与终点都在区间内、绕行 ≤ 1.5×</em></div>
+          <div class="dd-rule"><span class="dd-tag">联程</span><b>1 次</b><em>5 天内多段只扣 1 次（串联路线模式）</em></div>
+          <div class="dd-rule"><span class="dd-tag">往返</span><b>2 次</b><em>单程 1 次</em></div>
+          <div class="dd-rule"><span class="dd-tag">全价</span><b>0 次</b><em>终点超出区间，12306 不发售学生票</em></div>
+          <div class="dd-rule"><span class="dd-tag">优化</span><b>最省</b><em>枚举 367 站找最省次数的"家"</em></div>
         </div>
         <div class="dd-col">
-          <b>📋 官方规则对照（2026-08-14 核实）</b>
-          <ul>
-            <li><b>次数</b>：每学年 4 次单程（10.1–次年 9.30），退票全部退返</li>
-            <li><b>区间修改</b>：家庭端不限次数、线上改、无需盖章；学校端须与学信网一致</li>
-            <li><b>同城通用</b>：按城市填区间，同城站通用；可不满、不可超出</li>
-            <li><b>中转</b>：5 天/120h 联程只扣 1 次；换乘站须在区间内；折返不合并</li>
-            <li><b>绕行</b>：近径路/不故意绕远（实测阈值 150%）</li>
-            <li><b>票价</b>：普速 5 折；动车执行价 75 折（≥4 折），席别已扩至一等座/卧铺</li>
-          </ul>
+          <div>📋 官方规则对照（2026-08-14 核实）</div>
+          <div class="dd-rule official"><span class="dd-tag">次数</span><b>4 次/学年</b><em>10.1–次年 9.30，退票全部退返</em></div>
+          <div class="dd-rule official"><span class="dd-tag">区间修改</span><b>家庭端不限</b><em>线上改、无需盖章；学校端须与学信网一致</em></div>
+          <div class="dd-rule official"><span class="dd-tag">同城通用</span><b>同城站通用</b><em>按城市填区间；可不满、不可超出</em></div>
+          <div class="dd-rule official"><span class="dd-tag">中转</span><b>5 天/1 次</b><em>120h 联程只扣 1 次；换乘站须在区间内；折返不合并</em></div>
+          <div class="dd-rule official"><span class="dd-tag">绕行</span><b>≤150%</b><em>近径路/不故意绕远（实测阈值）</em></div>
+          <div class="dd-rule official"><span class="dd-tag">票价</span><b>5 折/75 折</b><em>普速 5 折；动车执行价 75 折（≥4 折），含一等座/卧铺</em></div>
         </div>
       </div>
     </div>
