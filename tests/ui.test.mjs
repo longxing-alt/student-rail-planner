@@ -562,6 +562,25 @@ async function main() {
   A('进度条节点角色为起点/中转/终点', $('chainPreview').textContent.includes('开始') && $('chainPreview').textContent.includes('中转') && $('chainPreview').textContent.includes('结束'));
   await w.eval('state.routeStart = null; renderAll();');
 
+  G('T30. 优化器支持拉远家扩大区间(用户场景: 学校清远/家广州/去武汉南京上海扬州苏州杭州回广州)');
+  await w.eval('setChainMode(true)');
+  await w.eval('state.trips.forEach(t => removeTrip(t.id))');
+  $('schoolInput').value = '清远';
+  await w.eval('searchPlace("school")');
+  $('homeInput').value = '广州南';
+  await w.eval('searchPlace("home")');
+  $('fromInput').value = '广州南';
+  await w.eval('setRouteFrom()');
+  for (const c of ['武汉', '南京', '上海', '扬州', '苏州', '杭州', '广州']) { $('tripInput').value = c; await w.eval('addTrip()'); }
+  await w.eval('chainAutoSort()');
+  A('家=广州南时全超区间(0次)', w.eval('planGroups().used') === 0, w.eval('planGroups().used'));
+  const sb30 = w.eval('smartBest()');
+  A('⭐找到拉远方案(区间内全覆盖7段)', !!sb30 && sb30.covered === 7 && sb30.used > 0, sb30 ? sb30.s[0] + ' used=' + sb30.used + ' cov=' + sb30.covered : 'null');
+  await w.eval('applyBest()');
+  A('应用后全部段学生票且used>0', w.eval('planGroups().used') > 0 && w.eval('chainEvalCurrent().segs.filter(s=>s.inInt).length') === 7,
+    w.eval('state.home.station.name') + ' used=' + w.eval('planGroups().used'));
+  await w.eval('state.routeStart = null; renderAll();');
+
 
 
 

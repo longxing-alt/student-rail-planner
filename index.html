@@ -882,7 +882,7 @@ function chainEval(S, H, stList, rStart, rEnd) {
   }
   return {
     segs, total: Math.round(total), direct: Math.round(direct),
-    maxRatio: +maxRatio.toFixed(2), foldback, foldAt,
+    maxRatio: +maxRatio.toFixed(2), foldback, foldAt, pts,
     ok: !foldback && maxRatio <= state.ratio && segs.every(s => s.inInt),
   };
 }
@@ -903,12 +903,11 @@ function chainEvalCurrent() {
 }
 /* 最优分段规划: 整条无法联程时, 切成 连续区间内段(每组合1次联程) + 全价段, 总次数最少
    组断开条件: 段超区间 / 段间折返(方向回头) / 组内累计绕行超 ratio */
-function planGroups() {
-  const c = chainEvalCurrent();
+function planGroups(cc) {
+  const c = cc || chainEvalCurrent();
   if (!c) return null;
   const S = state.school && state.school.station;
-  const start = state.routeStart || S;
-  const pts = [start, ...state.trips.map(t => t.station), ...(state.chainEnd ? [state.chainEnd] : [])];
+  const pts = c.pts || []; // 与 chainEval 完全一致的点序列
   const groups = [], full = [];
   let cur = null;
   c.segs.forEach((sg, i) => {
@@ -1283,7 +1282,19 @@ function tripRouteStr(res) {
 }
 function renderOpt() {
   if (!state.school || !state.home) return;
-  const cur = evalAll();
+  let cur;
+  if (state.chainMode) {
+    // 链式: 覆盖=区间内段数, 次数=最优分段次数
+    const cc = chainEvalCurrent();
+    const pl = planGroups(cc);
+    const inN = cc ? cc.segs.filter(sg => sg.inInt).length : 0;
+    cur = {
+      used: cc && cc.ok ? (state.chainRound ? 2 : 1) : (pl ? pl.used : 0),
+      covered: inN, direct: 0, transfer: 0, fail: cc ? cc.segs.length - inN : 0,
+    };
+  } else {
+    cur = evalAll();
+  }
   if (!cur) return;
   const homePt = homePoint();
   const cands = [];
@@ -1294,8 +1305,12 @@ function renderOpt() {
     if (state.chainMode) {
       cc = chainEval(S, stToObj(s), chainMidStations(), state.routeStart || S,
         chainEndPoint() || stToObj(s));
-      r = cc && cc.ok ? { used: state.chainRound ? 2 : 1, covered: state.trips.length, direct: 0, transfer: 1, fail: 0 }
-        : { used: 0, covered: 0, direct: 0, transfer: 0, fail: 1 };
+      const pl = cc ? planGroups(cc) : null;
+      const inN = cc ? cc.segs.filter(sg => sg.inInt).length : 0;
+      r = cc ? {
+        used: cc.ok ? (state.chainRound ? 2 : 1) : (pl ? pl.used : 0),
+        covered: inN, direct: 0, transfer: 1, fail: cc.segs.length - inN,
+      } : null;
     } else {
       res = evalWith(stToObj(s));
       r = res;
@@ -1313,8 +1328,9 @@ function renderOpt() {
   const kmOf = c => (isFinite(c.kmHome) ? c.kmHome : 1e9);
   let list = cands.slice();
   if (mode === 'save') {
+    // 最省次数: 覆盖优先(区间内段数多), 再按次数少 → 支持拉远家扩大区间
     list = list.filter(c => c.covered >= 1);
-    list.sort((a, b) => (a.used - b.used) || (b.covered - a.covered) ||
+    list.sort((a, b) => (b.covered - a.covered) || (a.used - b.used) ||
       ((b.sameCity ? 1 : 0) - (a.sameCity ? 1 : 0)) || (kmOf(a) - kmOf(b)));
   } else if (mode === 'full') {
     list = list.filter(c => state.trips.length > 0 && c.covered === state.trips.length);
@@ -1381,8 +1397,13 @@ function smartBest() {
   if (!state.school || !state.home || !state.trips.length) return null;
   let cur;
   if (state.chainMode) {
+    // 链式: 覆盖=区间内段数, 次数=最优分段次数(拉远家可扩大区间)
     const cc = chainEvalCurrent();
-    cur = { covered: cc && cc.ok ? state.trips.length : 0, used: cc && cc.ok ? (state.chainRound ? 2 : 1) : 0 };
+    const pl = planGroups(cc);
+    cur = {
+      covered: cc ? cc.segs.filter(sg => sg.inInt).length : 0,
+      used: cc && cc.ok ? (state.chainRound ? 2 : 1) : (pl ? pl.used : 0),
+    };
   } else {
     cur = evalAll();
   }
@@ -1395,16 +1416,22 @@ function smartBest() {
     if (state.chainMode) {
       const cc = chainEval(state.school.station, stToObj(s), chainMidStations(),
         state.routeStart || state.school.station, chainEndPoint() || stToObj(s));
-      r = cc && cc.ok ? { used: state.chainRound ? 2 : 1, covered: state.trips.length } : { used: 0, covered: 0 };
+      const pl = cc ? planGroups(cc) : null;
+      r = cc ? {
+        used: cc.ok ? (state.chainRound ? 2 : 1) : (pl ? pl.used : 0),
+        covered: cc.segs.filter(sg => sg.inInt).length,
+      } : null;
     } else {
       r = evalWith(stToObj(s));
     }
     if (!r) continue;
-    if (r.covered < Math.max(1, cur.covered)) continue;
+    // 覆盖优先(不减少区间内段数), 再按次数最少 → 支持把"家"拉远扩大区间
+    if (r.covered < cur.covered) continue;
     const sameCity = state.home.station && s[1] === state.home.station.city;
     const km = homePt ? dist({ lat: s[2], lon: s[3] }, homePt) : 1e9;
-    if (!best || r.used < best.used || (r.used === best.used &&
-      ((sameCity ? 1 : 0) > (best.sameCity ? 1 : 0) || (sameCity === best.sameCity && km < best.km)))) {
+    if (!best || r.covered > best.covered ||
+      (r.covered === best.covered && (r.used < best.used ||
+        (r.used === best.used && ((sameCity ? 1 : 0) > (best.sameCity ? 1 : 0) || (sameCity === best.sameCity && km < best.km)))))) {
       best = { s, used: r.used, covered: r.covered, sameCity, km };
     }
   }
