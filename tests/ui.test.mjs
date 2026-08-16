@@ -297,10 +297,9 @@ async function main() {
   await wait(300);
   A('5天规则提示存在(日历天)', $('fiveDayTip').style.display === 'block' && $('fiveDayTip').textContent.includes('5 个日历天'));
   A('默认单程(串联)', $('chainRoundLabel').textContent.includes('单程'));
-  const firstId = await w.eval('state.trips[0].id');
-  const secondId = await w.eval('state.trips[1].id');
-  await w.eval('tripDragStart({}, ' + firstId + ')');
-  await w.eval('tripDrop({preventDefault(){}}, ' + secondId + ')');
+  // 链式列表拖拽: 起点行=索引0, 郑州=1, 长沙=2 → 把郑州拖到长沙位置
+  await w.eval('stopDragStart({dataTransfer:{setData(){}}, target:null}, 1)');
+  await w.eval('stopDrop({preventDefault(){}, dataTransfer:{getData:()=>"1"}}, 2)');
   A('拖拽后顺序反转(长沙在前)', (await w.eval('state.trips[0].text')) === '长沙');
   w.prompt = () => '广州';
   await w.eval('setChainEnd()');
@@ -524,32 +523,33 @@ async function main() {
   A('独立行程显示节点进度条', $('chainPreview').innerHTML.includes('route-chain'));
   A('独立行程段提示含判定', $('chainPreview').textContent.includes('学生票') || $('chainPreview').textContent.includes('全价'));
 
-  G('T29. 步骤③: 出发地→添加地点→起点/中转/终点→拖拽排序→规划');
+  G('T29. 结果区列表: 起点/中转/终点徽章 + 拖拽 + 规划(步骤③只留输入)');
   await w.eval('setChainMode(true)');
   $('homeInput').value = '信阳';
   await w.eval('searchPlace("home")');
   $('schoolInput').value = '武汉';
   await w.eval('searchPlace("school")');
   await w.eval('state.trips.forEach(t => removeTrip(t.id))');
+  A('步骤③无地点列表(只留输入)', !w.document.getElementById('stopList'));
   A('出发地输入框预填学校', $('fromInput').value.includes('武汉'), $('fromInput').value);
-  A('列表不显示学校/家', !$('stopList').textContent.includes('学校') && !$('stopList').textContent.includes('信阳'));
-  A('地点列表: 起点=武汉', $('stopList').textContent.includes('起点') && $('stopList').textContent.includes('武汉'));
-  A('规划按钮在最后地点右侧', $('stopList').textContent.includes('规划'));
   $('tripInput').value = '岳阳';
   await w.eval('addTrip()');
-  A('单个地点=终点(岳阳东)', $('stopList').textContent.includes('终点') && $('stopList').textContent.includes('岳阳东'));
+  A('结果区列表有起点行(武汉)', $all('.stop-row').length === 1 && $all('.stop-row')[0].textContent.includes('起点') && $all('.stop-row')[0].textContent.includes('武汉'), $all('.stop-row').length);
+  A('列表不显示学校/家字样', !$('tripList').textContent.includes('学校') && !$('tripList').textContent.includes('信阳'));
+  A('单个地点=终点(岳阳东)', $all('.trip-row').at(-1).textContent.includes('终点') && $all('.trip-row').at(-1).textContent.includes('岳阳东'));
+  A('规划按钮在最后地点右侧', $all('.trip-row').at(-1).textContent.includes('规划'));
   $('tripInput').value = '重庆';
   await w.eval('addTrip()');
-  A('两个地点: 中转+终点', $('stopList').textContent.includes('中转') && $('stopList').textContent.includes('终点'));
+  A('两个地点: 中转+终点', $all('.trip-row')[0].textContent.includes('中转') && $all('.trip-row')[1].textContent.includes('终点'));
   // 拖拽: 把岳阳东(索引1)拖到起点之前 → 岳阳东成为起点
   await w.eval('stopReorder(1, 0)');
   A('拖动后第一个=起点(岳阳东)', w.eval('state.routeStart && state.routeStart.name') === '岳阳东', w.eval('state.routeStart && state.routeStart.name'));
   A('拖动后行程重排', w.eval('state.trips.map(t => t.station.name).join(",")'), w.eval('state.trips.map(t => t.station.name).join(",")'));
-  A('最后地点=终点(重庆北)', $('stopList').textContent.includes('终点') && $('stopList').textContent.includes('重庆北'));
+  A('最后地点=终点(重庆北)', $all('.trip-row').at(-1).textContent.includes('终点') && $all('.trip-row').at(-1).textContent.includes('重庆北'));
   $('fromInput').value = '长沙';
   await w.eval('setRouteFrom()');
   A('自定义出发地生效', w.eval('state.routeStart && state.routeStart.name') && w.eval('state.routeStart.name').includes('长沙'), w.eval('state.routeStart && state.routeStart.name'));
-  A('列表起点=长沙', $('stopList').textContent.includes('起点') && $('stopList').textContent.includes('长沙'));
+  A('列表起点=长沙', $all('.stop-row')[0].textContent.includes('起点') && $all('.stop-row')[0].textContent.includes('长沙'));
   A('进度条起点=长沙', $('chainPreview').textContent.includes('长沙'));
   await w.eval('state.touched = false; state.resultFloated = false; onPlan()');
   await wait(300);

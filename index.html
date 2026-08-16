@@ -414,7 +414,6 @@ footer b{color:var(--text)}
             <input id="tripInput" type="text" placeholder="添加地点，如：武汉 / 天津到济南">
             <button class="btn btn-primary" onclick="addTrip()">添加地点</button>
           </div>
-          <div id="stopList" style="margin:6px 0 2px"></div>
           <div id="planHint" style="font-size:11.5px;color:var(--muted);margin-top:5px"></div>
           <div id="zoneCities" class="hot-line"></div>
         </div>
@@ -1109,6 +1108,9 @@ function renderTotals(res) {
 
 function renderTrips() {
   const el = document.getElementById('tripList');
+  const fi = document.getElementById('fromInput');
+  const S0 = state.school && state.school.station;
+  if (fi) fi.value = state.routeStart ? state.routeStart.name : (S0 && !fi.value.trim() ? S0.name : (fi.value || ''));
   if (!state.trips.length) { el.innerHTML = '<div style="color:var(--muted);font-size:13px;padding:6px 2px">还没有行程，在"想去哪"输入城市添加 👇</div>'; return; }
   const row = (tp, i, main, chip, extra) =>
     '<div class="trip-row fade-in" draggable="true" ondragstart="tripDragStart(event,' + tp.id + ')" ondragover="tripDragOver(event,' + tp.id + ')" ondrop="tripDrop(event,' + tp.id + ')" ondragend="tripDragEnd()">' +
@@ -1117,19 +1119,37 @@ function renderTrips() {
     '<div class="trip-main">' + main + '</div>' + chip + extra + '</div>';
   if (state.chainMode) {
     const c = chainEvalCurrent();
-    el.innerHTML = state.trips.map((tp, i) => {
-      const seg = c ? c.segs[i] : null;
-      const prev = i === 0 ? (state.school && state.school.station ? state.school.station.name : '学校') : state.trips[i - 1].station.name;
-      // 行程自带出发地(如"武汉到郑州")时按真实出发地显示, 否则显示串联上一站
+    // 统一列表: 起点行(.stop-row) + 行程行(.trip-row, 中转/终点徽章), 全部可拖拽(第一个=起点,最后=终点)
+    const items = stopItems();
+    el.innerHTML = items.map((it, i) => {
+      const isFirst = i === 0, isLast = i === items.length - 1;
+      const role = isFirst ? '起点' : isLast ? '终点' : '中转';
+      const roleCls = isFirst ? 'role-start' : isLast ? 'role-end' : 'role-mid';
+      const name = it.st ? it.st.name : '？';
+      const dragAttrs = 'draggable="true" ondragstart="stopDragStart(event,' + i + ')" ondragover="stopDragOver(event)" ondrop="stopDrop(event,' + i + ')" ondragend="stopDragEnd(event)"';
+      if (isFirst) {
+        return '<div class="stop-row stop-start fade-in" ' + dragAttrs + '>' +
+          '<span class="drag-handle" title="拖动排序">≡</span>' +
+          '<span class="stop-role ' + roleCls + '">' + role + '</span><b>' + esc(name) + '</b>' +
+          '<em>出发地</em><span class="spacer"></span></div>';
+      }
+      const tp = it.tp, idx = i - 1;
+      const seg = c ? c.segs[idx] : null;
+      const prev = idx === 0 ? (S0 ? S0.name : '学校') : state.trips[idx - 1].station.name;
       const fromShown = tp.from ? tp.from.name : prev;
       const kmTxt = (tp.from && tp.station) ? Math.round(dist(tp.from, tp.station)) : (seg ? seg.km : null);
       const main = '<b>' + esc(tp.text) + '</b>' +
         '<div class="sub">' + esc(fromShown) + ' 到 ' + esc(tp.station ? tp.station.name : '坐标点') +
         (kmTxt != null ? ' · ' + kmTxt + ' km' : '') + '</div>';
       const chip = '<span class="chip ' + (seg && seg.inInt ? 'chip-green' : 'chip-red') + '">' + (seg && seg.inInt ? '✓ 区间内' : '⚠ 区间外') + '</span>';
-      return row(tp, i, main, chip,
-        '<button class="btn btn-ghost btn-sm" title="在地图上定位" onclick="panTo(' + i + ')">定位</button>' +
-        '<button class="btn btn-danger btn-sm" title="删除" onclick="removeTrip(' + tp.id + ')">删除</button>');
+      return '<div class="trip-row fade-in" ' + dragAttrs + '>' +
+        '<span class="drag-handle" title="拖动排序">≡</span>' +
+        '<span class="stop-role ' + roleCls + '">' + role + '</span>' +
+        '<div class="trip-main">' + main + '</div>' + chip +
+        '<button class="btn btn-ghost btn-sm" title="在地图上定位" onclick="panTo(' + idx + ')">定位</button>' +
+        '<button class="btn btn-danger btn-sm" title="删除" onclick="removeTrip(' + tp.id + ')">删除</button>' +
+        (isLast ? '<button class="btn btn-primary btn-sm" onclick="onPlan()">🚀 规划</button>' : '') +
+        '</div>';
     }).join('');
     return;
   }
@@ -1388,7 +1408,9 @@ function stopReorder(fromIdx, toIdx) {
   const [moved] = items.splice(fromIdx, 1);
   items.splice(toIdx, 0, moved);
   const first = items[0];
-  state.routeStart = first.st || null;
+  // 起点=拖到第一位的行程; 若第一行仍是默认起点占位(站=学校)则保持"默认=学校"
+  const S = state.school && state.school.station;
+  state.routeStart = first.tp ? first.st : (S && first.st && first.st.name === S.name ? null : (first.st || null));
   const rest = items.slice(1);
   state.trips = [];
   rest.forEach(item => {
@@ -1403,8 +1425,9 @@ function stopReorder(fromIdx, toIdx) {
     (state.trips.length ? state.trips.at(-1).station.name : '？') + '）');
 }
 function stopDragStart(ev, i) {
+  if (!ev.dataTransfer) return;
   ev.dataTransfer.setData('text/plain', String(i));
-  const row = ev.target.closest('.stop-row');
+  const row = ev.target && ev.target.closest ? ev.target.closest('.stop-row, .trip-row') : null;
   if (row) row.classList.add('drag-over');
 }
 function stopDragOver(ev) {
@@ -1419,32 +1442,8 @@ function stopDrop(ev, toIdx) {
   if (Number.isInteger(fromIdx) && fromIdx !== toIdx) stopReorder(fromIdx, toIdx);
 }
 function stopDragEnd(ev) {
-  const row = ev.target.closest('.stop-row');
+  const row = ev.target && ev.target.closest ? ev.target.closest('.stop-row, .trip-row') : null;
   if (row) row.classList.remove('drag-over');
-}
-function renderStopList() {
-  const el = document.getElementById('stopList');
-  if (!el) return;
-  const S = state.school && state.school.station;
-  const fi = document.getElementById('fromInput');
-  if (fi) fi.value = state.routeStart ? state.routeStart.name : (S && !fi.value.trim() ? S.name : (fi.value || ''));
-  const items = stopItems();
-  const rows = items.map((it, i) => {
-    const isFirst = i === 0, isLast = i === items.length - 1;
-    const role = isFirst ? '起点' : isLast ? '终点' : '中转';
-    const roleCls = isFirst ? 'role-start' : isLast ? 'role-end' : 'role-mid';
-    const name = it.st ? it.st.name : '？';
-    const sub = it.tp && it.tp.from ? '从 ' + it.tp.from.name + ' 出发' : '';
-    return '<div class="stop-row" draggable="true" ondragstart="stopDragStart(event,' + i + ')" ondragover="stopDragOver(event)" ondrop="stopDrop(event,' + i + ')" ondragend="stopDragEnd(event)">' +
-      '<span class="drag-handle">≡</span>' +
-      '<span class="stop-role ' + roleCls + '">' + role + '</span><b>' + esc(name) + '</b>' +
-      (sub ? '<em>' + esc(sub) + '</em>' : '') +
-      '<span class="spacer"></span>' +
-      (it.tp ? '<button class="btn btn-ghost btn-sm" onclick="removeTrip(' + it.tp.id + ')">删除</button>' : '') +
-      (isLast ? '<button class="btn btn-primary btn-sm" onclick="onPlan()">🚀 规划</button>' : '') +
-      '</div>';
-  });
-  el.innerHTML = rows.join('');
 }
 /* 出发地(路线起点, 默认学校) */
 async function setRouteFrom() {
@@ -1945,10 +1944,9 @@ function renderAll() {
     renderIntervalViz();
     renderTrips();
     renderMap();
-    renderStopList();
     return;
   }
-  if (state.chainMode) { renderChain(); renderTrips(); renderOpt(); renderMap(); renderStopList(); return; }
+  if (state.chainMode) { renderChain(); renderTrips(); renderOpt(); renderMap(); return; }
   const res = evalAll();
   if (!res) {
     document.getElementById('resultHint').textContent = '学校或家庭尚未吸附到车站，请先设置有效地址。';
@@ -1966,7 +1964,6 @@ function renderAll() {
   renderTrips();
   renderOpt();
   renderMap();
-  renderStopList();
 }
 
 /* ---------- 交互 ---------- */
