@@ -212,6 +212,9 @@ input[type=range]{width:100%;accent-color:var(--blue)}
 .role-start{background:linear-gradient(135deg,#0ea5e9,#0d9488)}
 .role-mid{background:#64748b}
 .role-end{background:linear-gradient(135deg,#34d399,#059669)}
+.issue-badge{font-size:10.5px;font-weight:700;border-radius:99px;padding:2px 8px;flex:none}
+.issue-fb{color:#b45309;background:#fef3c7;border:1px solid rgba(217,119,6,.45)}
+.issue-dt{color:#b91c1c;background:#fee2e2;border:1px solid rgba(239,68,68,.35)}
 
 /* 直线图 */
 .route-head{display:flex;align-items:center;gap:10px;margin:12px 0 6px}
@@ -1152,6 +1155,21 @@ function renderTrips() {
     const c = chainEvalCurrent();
     // 统一列表: 起点行(.stop-row) + 行程行(.trip-row, 中转/终点徽章), 全部可拖拽(第一个=起点,最后=终点)
     const items = stopItems();
+    // 问题站标注: 回头段终点(↺) / 首个累计绕远超限点(⚠绕远)
+    const startPt = state.routeStart || S0;
+    const pts = [startPt, ...state.trips.map(t => t.station), ...(state.chainEnd ? [state.chainEnd] : [])];
+    const fbRow = {}, dtRow = {};
+    let cum = 0, ratioBad = false;
+    if (c) {
+      c.segs.forEach((sg, i) => {
+        cum += sg.km;
+        if (i > 0 && pts[i - 1] && pts[i] && pts[i + 1]) {
+          const p0 = pts[i - 1], A = pts[i], B = pts[i + 1];
+          if ((A.lon - p0.lon) * (B.lon - A.lon) + (A.lat - p0.lat) * (B.lat - A.lat) < 0) fbRow[i] = true;
+        }
+        if (!ratioBad && cum / dist(S0, pts[i + 1]) > state.ratio) { ratioBad = true; dtRow[i] = true; }
+      });
+    }
     el.innerHTML = items.map((it, i) => {
       const isFirst = i === 0, isLast = i === items.length - 1;
       const role = isFirst ? '起点' : isLast ? '终点' : '中转';
@@ -1173,10 +1191,12 @@ function renderTrips() {
         '<div class="sub">' + esc(fromShown) + ' 到 ' + esc(tp.station ? tp.station.name : '坐标点') +
         (kmTxt != null ? ' · ' + kmTxt + ' km' : '') + '</div>';
       const chip = '<span class="chip ' + (seg && seg.inInt ? 'chip-green' : 'chip-red') + '">' + (seg && seg.inInt ? '✓ 区间内' : '⚠ 区间外') + '</span>';
+      const issue = (fbRow[idx] ? '<span class="issue-badge issue-fb">↺ 回头</span>' : '') +
+        (dtRow[idx] ? '<span class="issue-badge issue-dt">⚠ 绕远</span>' : '');
       return '<div class="trip-row fade-in" ' + dragAttrs + '>' +
         '<span class="drag-handle" title="拖动排序">≡</span>' +
         '<span class="stop-role ' + roleCls + '">' + role + '</span>' +
-        '<div class="trip-main">' + main + '</div>' + chip +
+        '<div class="trip-main">' + main + '</div>' + chip + issue +
         '<button class="btn btn-ghost btn-sm" title="在地图上定位" onclick="panTo(' + idx + ')">定位</button>' +
         '<button class="btn btn-danger btn-sm" title="删除" onclick="removeTrip(' + tp.id + ')">删除</button>' +
         (isLast ? '<button class="btn btn-primary btn-sm" onclick="onPlan()">🚀 规划</button>' : '') +
@@ -1618,8 +1638,9 @@ document.addEventListener('click', () => {
 const GUIDE_STEPS = [
   { sel: '#schoolInput', num: '1', title: '填学校', text: '填你的学校，固定不动。', pos: 'bottom' },
   { sel: '#homeInput', num: '2', title: '填家', text: '填你家（或想去的地方），可随便改。', pos: 'bottom' },
-  { sel: '#tripInput', num: '3', title: '加想去的地方', text: '点下面 <b>✅ 区间内可去</b> 的城市，或直接输入。', pos: 'bottom' },
-  { sel: '#intervalViz', num: '4', title: '看区间线', text: '🟢 绿=能去 · 🟠 橙=可能被查 · 🔴 红=不能。改"家"就能换一片绿。', pos: 'bottom' },
+  { sel: '#tripInput', num: '3', title: '加想去的地方', text: '先写出发地点"设为起点"，再点 <b>✅ 区间内可去</b> 或直接输入（可写"天津到济南"）。', pos: 'bottom' },
+  { sel: '#tripList', num: '4', title: '拖动排序', text: '下面每一行都能 <b>拖动 ≡</b>：第一个=起点、最后一个=终点，中间=中转。最后点 <b>🚀 规划</b> 看结果。', pos: 'bottom' },
+  { sel: '#intervalViz', num: '5', title: '看区间线', text: '🟢 绿=能去 · 🟠 橙=可能被查 · 🔴 红=不能。改"家"就能换一片绿。', pos: 'bottom' },
 ];
 let guideIdx = 0;
 function startGuide() {

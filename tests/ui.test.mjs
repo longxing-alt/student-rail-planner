@@ -251,7 +251,9 @@ async function main() {
   await w.eval('nextSpot()');
   A('第3步: 添加目的地', $('spotTitle').textContent.includes('想去的地方'));
   await w.eval('nextSpot()');
-  A('第4步: 看区间线', $('spotTitle').textContent.includes('看区间线'));
+  A('第4步: 拖动排序', $('spotTitle').textContent.includes('拖动排序') && $('spotText').textContent.includes('拖动'));
+  await w.eval('nextSpot()');
+  A('第5步: 看区间线', $('spotTitle').textContent.includes('看区间线'));
   A('最后一步显示完成按钮', $('spotDone').style.display !== 'none');
   await w.eval('closeGuide()');
   A('完成后 spotlight 隐藏', $('spotlight').style.display === 'none');
@@ -438,6 +440,7 @@ async function main() {
   await w.eval('setChainMode(true)');
   A('折返警告出现(岳阳东在长沙南北边)', $('chainCheck').textContent.includes('回头路'));
   A('回头段可视化(↺标记+条纹)', $('chainPreview').textContent.includes('↺') && $('chainPreview').innerHTML.includes('repeating-linear-gradient'), $('chainPreview').textContent.slice(0, 60));
+  A('列表行标注回头站(岳阳)', $all('.trip-row')[1].textContent.includes('↺ 回头'), $all('.trip-row')[1].textContent.slice(0, 40));
   A('整条路线消耗 2 次(折返分两段联程)', $('totals').querySelector('.total-box .num').textContent.startsWith('2 /'));
   A('提示最优分段', $('resultHint').textContent.includes('最优分段'));
   A('提示含原因:走了回头路', $('resultHint').textContent.includes('走了回头路'));
