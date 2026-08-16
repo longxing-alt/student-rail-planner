@@ -1521,7 +1521,7 @@ function renderChain() {
         (sg.inInt ? '✅ 学生票（可单独买 · 扣1次）' : '⚠️ 超区间'),
     }))) +
     (c && !ok && plan ? '<div class="chain-tip" style="background:var(--blue-soft);color:#0f766e">🔗 <b>最优分段（次数最少）</b>：' + planTxt + ' → 共 ' + planUsed + ' 次</div>' : '') +
-    '<div class="chain-tip">💡 区间内任意一小段都可以单独买（各扣 1 次）；整条 5 天内联程购买只扣 1 次。</div>';
+    '<div class="chain-tip">💡 路线不要求到家：只要每段都在 学校↔家 区间内即可买学生票（各段可单独买·各扣 1 次）；整条 5 天内联程购买只扣 1 次。</div>';
   document.getElementById('chainEndLabel').textContent = state.chainEnd
     ? state.chainEnd.name + '（' + state.chainEnd.city + '）'
     : (state.trips.length && state.trips.at(-1).station ? state.trips.at(-1).station.name : '家');
@@ -1560,7 +1560,7 @@ function renderChain() {
       ? '整条路线按联程计 <b>' + used + ' 次</b>' + (state.chainRound ? '（往返）' : '（单程）')
       : plan.groups.length
         ? '⚠️ 无法整条联程（' + reason + '）→ <b>最优分段：联程 ' + planUsed + ' 次</b>' + (fullN ? ' + 全价 ' + fullN + ' 段' : '')
-        : '⚠️ ' + segs.length + ' 段全部超出区间（区间 ' + esc(S.name) + ' ↔ ' + esc(H.name) + ' 太小）→ 把"家"改到沿途城市后部分段可学生票';
+        : '⚠️ ' + segs.length + ' 段全部超出区间（区间 ' + esc(S.name) + ' ↔ ' + esc(H.name) + ' 太小）。路线不要求到家——只要每段在区间内即可。把目的地改成"✅ 区间内可去"的城市，或把"家"改到更远城市扩大区间';
   document.getElementById('totals').innerHTML =
     '<div class="total-box"><div class="num ' + (used > state.budget ? 'num-red' : 'num-blue') + '">' + used +
     '<span style="font-size:14px;color:var(--muted)"> / ' + state.budget + '</span></div><div class="lbl">整条路线消耗</div></div>' +
@@ -1581,7 +1581,7 @@ function renderChain() {
     ? '⚠️ 无法整条联程（' + reason + '）。<b>最优分段</b>：' + planTxt + '，共 <b>' + planUsed + ' 次</b>' + (state.chainRound ? '（往返）' : '') + '。' +
       (c.foldback ? (foldBackBadStation(c) ? '去掉回头的那一站，或把"家"改到它后面。' : '点"🪄 自动排序"消除折返。') : '') +
       (fullN ? '全价段不扣次数，可单独购票。' : '')
-    : '⚠️ ' + segs.length + ' 段全部超出区间（区间 ' + esc(S.name) + ' ↔ ' + esc(H.name) + ' 太小）→ 把"家"改到沿途城市，或减少目的地。') + '</div>';
+    : '⚠️ ' + segs.length + ' 段全部超出区间（区间 ' + esc(S.name) + ' ↔ ' + esc(H.name) + ' 太小）。路线不要求到家——只要每段在区间内即可。把目的地改成"✅ 区间内可去"的城市，或把"家"改到更远城市扩大区间。') + '</div>';
   document.getElementById('banners').innerHTML = banners;
   document.getElementById('tripRows').innerHTML = '';
   document.getElementById('routeLine').innerHTML = '';
@@ -1833,7 +1833,7 @@ function suggestFix() {
       c.segs.forEach((s, i) => {
         if (!s.inInt) {
           const bad = i < c.segs.length - 1 ? s.to : s.from;
-          tips.push('「' + s.from + '到' + s.to + '」超出区间（' + s.km + 'km 全价）。把"家"改到 <b>' + esc(s.to) + '</b>，这段就变成区间内学生票。');
+          tips.push('「' + s.from + '到' + s.to + '」超出区间（' + s.km + 'km 全价）。路线不要求到家——把目的地改到区间内，或把"家"改到 <b>' + esc(s.to) + '</b>，这段就变成学生票。');
         }
       });
       if (c.foldback) {
@@ -2159,7 +2159,7 @@ function applyModalHTML() {
       ? '✅ 整条路线可按 <b>1 次</b>联程购买' + (state.chainRound ? '（往返 2 次）' : '') + '，直接去 12306 用"中转/联程"方式购票。'
       : (plan && plan.groups.length
         ? '🔗 <b>最优分段</b>：' + planTxt + ' → 共 <b>' + plan.used + ' 次</b>' + (state.chainRound ? '（往返）' : '') + '；全价段不扣次数。'
-        : '⚠️ 全部段超出区间，无法用学生票——把"家"改到沿途城市后部分段可学生票。');
+        : '⚠️ 全部段超出区间，无法用学生票。路线不要求到家——只要每段在区间内即可：把目的地改成"区间内可去"的城市，或把"家"改远扩大区间。');
   } else {
     const res = evalAll();
     route = tripRouteStr(res) || '';
