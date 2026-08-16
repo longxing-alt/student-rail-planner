@@ -7,7 +7,7 @@
     "test": "tests"
   },
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "node tests/logic.test.mjs && node tests/ui.test.mjs"
   },
   "keywords": [],
   "author": "",
