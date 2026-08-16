@@ -16,7 +16,7 @@
   --bg:#fafafa; --surface:#ffffff; --line:#e7e5e4;
   --text:#18181b; --muted:#71717a; --muted-2:#a1a1aa;
   --green:#16a34a; --green-soft:rgba(22,163,74,.08);
-  --orange:#d97706; --orange-soft:rgba(217,119,6,.08);
+  --orange:#8b5cf6; --orange-soft:rgba(139,92,246,.08);
   --red:#dc2626; --red-soft:rgba(220,38,38,.06);
   --blue:#0d9488; --blue-soft:rgba(13,148,136,.08);
   --radius:16px;
@@ -127,7 +127,7 @@ input[type=range]{width:100%;accent-color:var(--blue)}
 .demo-tip{margin-bottom:12px;padding:10px 14px;border-radius:12px;font-size:13px;line-height:1.7;background:var(--blue-soft);border:1px solid rgba(37,99,235,.22);color:#1e40af}
 .warn-banner{margin:12px 0;padding:11px 14px;border-radius:12px;font-size:13px;background:var(--red-soft);border:1px solid rgba(220,38,38,.2);color:var(--red)}
 .ok-banner{margin:12px 0;padding:11px 14px;border-radius:12px;font-size:13px;background:var(--green-soft);border:1px solid rgba(22,163,74,.2);color:var(--green)}
-.advice{margin:8px 0;padding:10px 13px;border-radius:11px;font-size:13px;line-height:1.7;background:var(--orange-soft);border:1px solid rgba(217,119,6,.28);color:#92400e}
+.advice{margin:8px 0;padding:10px 13px;border-radius:11px;font-size:13px;line-height:1.7;background:var(--orange-soft);border:1px solid rgba(139,92,246,.28);color:#5b21b6}
 .advice.good{background:var(--green-soft);border-color:rgba(22,163,74,.22);color:var(--green)}
 .advice b{color:var(--text)}
 
@@ -165,8 +165,8 @@ input[type=range]{width:100%;accent-color:var(--blue)}
   .iv-legend{font-size:11.5px;color:var(--muted);margin-top:4px}
   .hot-chip.ok{color:#15803d;border-color:rgba(22,163,74,.4);background:var(--green-soft)}
   .hot-chip.ok:hover{background:#dcfce7;border-color:#22c55e;color:#166534}
-  .hot-chip.edge{color:#b45309;border-color:rgba(217,119,6,.4);background:var(--orange-soft)}
-  .hot-chip.edge:hover{background:#fef3c7;border-color:#f59e0b;color:#92400e}
+  .hot-chip.edge{color:#6d28d9;border-color:rgba(139,92,246,.4);background:var(--orange-soft)}
+  .hot-chip.edge:hover{background:#ede9fe;border-color:#8b5cf6;color:#5b21b6}
   /* 站点进度条 */
 .route-chain{display:flex;align-items:flex-start;gap:0;padding:16px 4px 8px;justify-content:center}
 .rc-node{display:flex;flex-direction:column;align-items:center;gap:4px;width:84px;flex:none;cursor:pointer;border-radius:10px;padding:4px 2px;transition:background .15s}
@@ -213,7 +213,7 @@ input[type=range]{width:100%;accent-color:var(--blue)}
 .role-mid{background:#64748b}
 .role-end{background:linear-gradient(135deg,#34d399,#059669)}
 .issue-badge{font-size:10.5px;font-weight:700;border-radius:99px;padding:2px 8px;flex:none}
-.issue-fb{color:#b45309;background:#fef3c7;border:1px solid rgba(217,119,6,.45)}
+.issue-fb{color:#6d28d9;background:#ede9fe;border:1px solid rgba(139,92,246,.45)}
 .issue-dt{color:#b91c1c;background:#fee2e2;border:1px solid rgba(239,68,68,.35)}
 
 /* 直线图 */
@@ -267,7 +267,7 @@ input[type=range]{width:100%;accent-color:var(--blue)}
 .pin-school{background:linear-gradient(135deg,#0ea5e9,#0d9488)}
 .pin-home{background:linear-gradient(135deg,#34d399,#059669)}
 .pin-dir{background:linear-gradient(135deg,#22d3ee,#0d9488)}
-.pin-tr{background:linear-gradient(135deg,#fb923c,#ea580c)}
+.pin-tr{background:linear-gradient(135deg,#a78bfa,#7c3aed)}
 .pin-fail{background:#a1a1aa}
 
 /* 区间优化 */
@@ -283,7 +283,7 @@ input[type=range]{width:100%;accent-color:var(--blue)}
 .opt-main .sub{font-size:11.5px;color:var(--muted)}
 .opt-route{font-size:12px;color:var(--muted);margin-top:2px;line-height:1.6}
 .opt-route .r-ok{color:#16a34a;font-weight:600}
-.opt-route .r-warn{color:#d97706;font-weight:600}
+.opt-route .r-warn{color:#8b5cf6;font-weight:600}
 .opt-route .r-bad{color:#dc2626;font-weight:600}
 .opt-meta{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 .opt-used{font-size:16px;font-weight:800;font-variant-numeric:tabular-nums}
@@ -478,7 +478,7 @@ footer b{color:var(--text)}
           <button class="btn btn-ghost btn-sm" id="mapToggleBtn" onclick="toggleMap()">🗺️ 收起地图</button>
         </div>
         <div id="demoTip" class="demo-tip" style="display:none"></div>
-        <div id="fiveDayTip" style="font-size:12px;color:#92400e;background:rgba(217,119,6,.08);border:1px solid rgba(217,119,6,.28);border-radius:10px;padding:8px 11px;margin:4px 0 10px;display:none">
+        <div id="fiveDayTip" style="font-size:12px;color:#5b21b6;background:rgba(139,92,246,.08);border:1px solid rgba(139,92,246,.28);border-radius:10px;padding:8px 11px;margin:4px 0 10px;display:none">
           ⏱ <b>联程 5 天规则</b>：整段行程从<b>出发日</b>到<b>结束日</b>必须在 <b>5 个日历天</b>内完成（按天数算，不是按 120 小时算）。
         </div>
         <div id="chainPreview" style="font-size:15px;line-height:2;margin-bottom:4px"></div>
@@ -504,7 +504,7 @@ footer b{color:var(--text)}
         <span><i style="background:#34d399"></i>家(可拖动)</span>
         <span><i style="background:#e4e4e7;border-top:1px dashed #e4e4e7;height:0"></i>优惠区间</span>
         <span><i style="background:#818cf8"></i>直达优惠</span>
-        <span><i style="background:#fb923c"></i>中转优惠</span>
+        <span><i style="background:#a78bfa"></i>中转优惠</span>
         <span><i style="background:#52525b"></i>全价(不扣次数)</span>
       </div>
     </div>
@@ -1092,9 +1092,9 @@ function renderMap() {
       const nm = tp.round ? '往返' : '单程';
       if (tp.plan.mode === 'transfer' && tp.plan.station) {
         L.polyline([[S.point.lat, S.point.lon], [tp.plan.station.lat, tp.plan.station.lon]],
-          { color: '#fb923c', weight: 2.5, opacity: .8 }).addTo(fg);
+          { color: '#a78bfa', weight: 2.5, opacity: .8 }).addTo(fg);
         L.polyline([[tp.plan.station.lat, tp.plan.station.lon], [D.lat, D.lon]],
-          { color: '#fb923c', weight: 2.5, opacity: .8 }).addTo(fg);
+          { color: '#a78bfa', weight: 2.5, opacity: .8 }).addTo(fg);
       } else {
         L.polyline([[S.point.lat, S.point.lon], [D.lat, D.lon]],
           { color: tp.plan.mode === 'direct' ? '#818cf8' : '#52525b', weight: 2.5,
@@ -1464,10 +1464,10 @@ function renderSoloChain() {
   const segMeta = res ? res.perTrip.map(tp => {
     const ok = tp.plan.ok, mode = tp.plan.mode;
     return {
-      color: !ok ? '#ef4444' : mode === 'edge' ? '#f59e0b' : '#22c55e',
+      color: !ok ? '#ef4444' : mode === 'edge' ? '#8b5cf6' : '#22c55e',
       tip: esc((tp.from ? tp.from.name : S.name)) + '到' + esc(tp.station ? tp.station.name : tp.text) + ' ' +
         Math.round(tp.plan.direct) + 'km · ' +
-        (!ok ? '⚠️ 全价（不扣次数）' : mode === 'edge' ? '🟠 区间边缘·可能被查（扣 ' + tp.used + ' 次）' : '✅ ' +
+        (!ok ? '⚠️ 全价（不扣次数）' : mode === 'edge' ? '🟣 区间边缘·可能被查（扣 ' + tp.used + ' 次）' : '✅ ' +
           (mode === 'transfer' ? '中转·学生票' : '直达·学生票') + '（扣 ' + tp.used + ' 次）'),
     };
   }) : [];
@@ -1600,10 +1600,10 @@ function renderChain() {
     if (c.foldback) {
       const bad = foldBackBadStation(c);
       check += bad
-        ? '<br><span style="color:#c2410c">⚠️ 走了回头路：<b>' + esc(bad) + '</b> 与前进方向相反，排序救不了——去掉该站，或把"家"改到它后面</span>'
-        : '<br><span style="color:#c2410c">⚠️ 路线走了回头路，12306 联程不会合并——点"🪄 自动排序"或手动调整顺序</span>';
+        ? '<br><span style="color:#7c3aed">⚠️ 走了回头路：<b>' + esc(bad) + '</b> 与前进方向相反，排序救不了——去掉该站，或把"家"改到它后面</span>'
+        : '<br><span style="color:#7c3aed">⚠️ 路线走了回头路，12306 联程不会合并——点"🪄 自动排序"或手动调整顺序</span>';
     }
-    if (c.maxRatio > state.ratio) check += '<br><span style="color:#c2410c">⚠️ 绕路太多（' + c.maxRatio + '×），购票会提示"区间不符"——减少绕路或改家到中间城市</span>';
+    if (c.maxRatio > state.ratio) check += '<br><span style="color:#7c3aed">⚠️ 绕路太多（' + c.maxRatio + '×），购票会提示"区间不符"——减少绕路或改家到中间城市</span>';
   }
   document.getElementById('chainCheck').innerHTML = check;
   // 往返开关同步
@@ -1667,7 +1667,7 @@ const GUIDE_STEPS = [
   { sel: '#homeInput', num: '2', title: '填家', text: '填你家（或想去的地方），可随便改。', pos: 'bottom' },
   { sel: '#tripInput', num: '3', title: '加想去的地方', text: '先写出发地点"设为起点"，再点 <b>✅ 区间内可去</b> 或直接输入（可写"天津到济南"）。', pos: 'bottom' },
   { sel: '#tripList', num: '4', title: '拖动排序', text: '下面每一行都能 <b>拖动 ≡</b>：第一个=起点、最后一个=终点，中间=中转。最后点 <b>🚀 规划</b> 看结果。', pos: 'bottom' },
-  { sel: '#intervalViz', num: '5', title: '看区间线', text: '🟢 绿=能去 · 🟠 橙=可能被查 · 🔴 红=不能。改"家"就能换一片绿。', pos: 'bottom' },
+  { sel: '#intervalViz', num: '5', title: '看区间线', text: '🟢 绿=能去 · 🟣 橙=可能被查 · 🔴 红=不能。改"家"就能换一片绿。', pos: 'bottom' },
 ];
 let guideIdx = 0;
 function startGuide() {
@@ -1680,12 +1680,12 @@ function scrollToElSettled(el, done) {
   const rect = el.getBoundingClientRect();
   const targetY = rect.top + (window.scrollY || 0) - (window.innerHeight - rect.height) / 2;
   try { if (window.scrollTo) window.scrollTo({ top: Math.max(0, targetY), behavior: 'smooth' }); } catch (e) { }
-  let lastY = window.scrollY || 0, stable = 0;
+  let lastY = window.scrollY || 0, stable = 0, start = Date.now();
   const tick = () => {
     const y = window.scrollY || 0;
     if (Math.abs(y - lastY) < 1) stable++; else stable = 0;
     lastY = y;
-    if (stable >= 3) { done(); return; }
+    if (stable >= 3 || Date.now() - start > 1500) { done(); return; } // 稳定或超时兜底, 避免卡死
     if (window.requestAnimationFrame) window.requestAnimationFrame(tick); else done();
   };
   if (window.requestAnimationFrame) window.requestAnimationFrame(tick); else done();
@@ -1695,7 +1695,7 @@ function showSpotStep() {
   const el = document.querySelector(step.sel);
   if (!el) { nextSpot(); return; }
   // 向导同步: 先切换到目标面板, 确保元素可见再定位(否则 rect 为 0 框选错误)
-  const selStep = { '#schoolInput': 0, '#homeInput': 1, '#tripInput': 2 };
+  const selStep = { '#schoolInput': 0, '#homeInput': 1, '#tripInput': 2, '#tripList': 2, '#intervalViz': 2 };
   if (selStep[step.sel] != null && state.guideStep !== selStep[step.sel]) {
     state.guideStep = selStep[step.sel];
     renderWizard();
@@ -1813,7 +1813,7 @@ function renderIntervalViz() {
     const c = corridor(S, H, t.station);
     const inCore = tt >= -0.05 && tt <= 1.05 && c.p <= Math.max(60, 0.32 * L);
     const inEdge = !inCore && tt >= -0.5 && tt <= 1.5 && c.p <= Math.max(90, 0.45 * L);
-    const color = inCore ? '#22c55e' : inEdge ? '#f59e0b' : '#ef4444';
+    const color = inCore ? '#22c55e' : inEdge ? '#8b5cf6' : '#ef4444';
     return '<span class="iv-pt" style="left:' + left + '%;background:' + color + '" title="' +
       esc(t.station.name) + (inCore ? ' 区间内' : inEdge ? ' 边缘' : ' 超区间') + '"></span>';
   }).join('');
@@ -1821,7 +1821,7 @@ function renderIntervalViz() {
     '<div class="iv-line"><span class="iv-node iv-s">🔒 ' + esc(S.name) + '</span>' +
     '<span class="iv-track"><span class="iv-zone"></span>' + pts + '</span>' +
     '<span class="iv-node iv-h">' + esc(H.name) + ' 🔓</span></div>' +
-    '<div class="iv-legend">🟢 区间内可去 · 🟠 边缘（可能被查）· 🔴 超区间</div>';
+    '<div class="iv-legend">🟢 区间内可去 · 🟣 边缘（可能被查）· 🔴 超区间</div>';
   renderZoneCities(S, H, L);
 }
 function renderZoneCities(S, H, L) {
@@ -1869,7 +1869,7 @@ function renderRouteLine() {
     if (res) {
       segs = res.perTrip.map(tp => ({
         label: (tp.from ? tp.from.name + '到' : '') + (tp.station ? tp.station.name : tp.text), km: Math.max(40, tp.plan.direct),
-        color: tp.plan.mode === 'direct' ? '#22c55e' : tp.plan.mode === 'edge' ? '#f59e0b' : tp.plan.mode === 'transfer' ? '#f97316' : '#ef4444',
+        color: tp.plan.mode === 'direct' ? '#22c55e' : tp.plan.mode === 'edge' ? '#8b5cf6' : tp.plan.mode === 'transfer' ? '#8b5cf6' : '#ef4444',
         note: tp.plan.mode === 'direct' ? '直达·学生票' : tp.plan.mode === 'edge' ? '区间边缘·可能被查' : tp.plan.mode === 'transfer' ? '中转·学生票' : '全价',
       }));
     }
