@@ -518,6 +518,32 @@ async function main() {
   A('独立行程显示节点进度条', $('chainPreview').innerHTML.includes('route-chain'));
   A('独立行程段提示含判定', $('chainPreview').textContent.includes('学生票') || $('chainPreview').textContent.includes('全价'));
 
+  G('T29. 步骤③: 出发地→添加地点→开始/中转/结束→规划自动排序');
+  await w.eval('setChainMode(true)');
+  $('homeInput').value = '信阳';
+  await w.eval('searchPlace("home")');
+  $('schoolInput').value = '武汉';
+  await w.eval('searchPlace("school")');
+  await w.eval('state.trips.forEach(t => removeTrip(t.id))');
+  A('出发地输入框预填学校', $('fromInput').value.includes('武汉'), $('fromInput').value);
+  A('地点列表: 开始=学校', $('stopList').textContent.includes('开始') && $('stopList').textContent.includes('武汉'));
+  A('地点列表: 结束=家', $('stopList').textContent.includes('结束') && $('stopList').textContent.includes('信阳'));
+  A('规划按钮在最后地点右侧', $('stopList').textContent.includes('规划'));
+  $('tripInput').value = '岳阳';
+  await w.eval('addTrip()');
+  A('添加后出现中转行', $('stopList').textContent.includes('中转') && $('stopList').textContent.includes('岳阳东'));
+  $('fromInput').value = '长沙';
+  await w.eval('setRouteFrom()');
+  A('自定义出发地生效', w.eval('state.routeStart && state.routeStart.name') && w.eval('state.routeStart.name').includes('长沙'), w.eval('state.routeStart && state.routeStart.name'));
+  A('列表开始=长沙', $('stopList').textContent.includes('长沙'));
+  A('进度条起点=长沙', $('chainPreview').textContent.includes('长沙'));
+  await w.eval('state.touched = false; state.resultFloated = false; onPlan()');
+  await wait(300);
+  A('规划后结果上浮', $('wsResult').classList.contains('float-up'));
+  A('规划后自动排序提示', $('status').textContent.includes('顺路排序'));
+  A('进度条节点角色为开始/中转/结束', $('chainPreview').textContent.includes('开始') && $('chainPreview').textContent.includes('中转') && $('chainPreview').textContent.includes('结束'));
+  await w.eval('state.routeStart = null; renderAll();');
+
 
 
 

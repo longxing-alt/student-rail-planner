@@ -200,6 +200,16 @@ input[type=range]{width:100%;accent-color:var(--blue)}
 .modal-tip{font-size:13px;margin-top:10px}
 .modal-note{font-size:11.5px;color:var(--muted);margin-top:14px;background:#f4f4f5;border-radius:8px;padding:8px 10px}
 
+/* 步骤③ 地点列表: 开始/中转/结束 + 规划按钮 */
+.stop-row{display:flex;align-items:center;gap:8px;padding:6px 10px;border:1px solid var(--line);border-radius:10px;background:#fafafa;margin-bottom:6px;font-size:13px;flex-wrap:wrap}
+.stop-row b{font-size:13.5px}
+.stop-row em{font-style:normal;font-size:11px;color:var(--muted)}
+.stop-row .spacer{flex:1}
+.stop-role{font-size:11px;font-weight:700;border-radius:99px;padding:2px 9px;color:#fff;flex:none}
+.role-start{background:linear-gradient(135deg,#0ea5e9,#0d9488)}
+.role-mid{background:#64748b}
+.role-end{background:linear-gradient(135deg,#34d399,#059669)}
+
 /* 直线图 */
 .route-head{display:flex;align-items:center;gap:10px;margin:12px 0 6px}
 .route-bar{flex:1;display:flex;height:14px;border-radius:8px;overflow:hidden;gap:2px;background:#f4f4f5}
@@ -391,13 +401,18 @@ footer b{color:var(--text)}
             <button class="btn btn-primary" onclick="searchPlace('home')">下一步 →</button>
           </div>
         </div>
-        <!-- 步骤3: 想去哪 -->
+        <!-- 步骤3: 想去哪 → 规划路线 -->
         <div class="wz-panel" data-step="2" style="display:none">
-          <label>③ 想去哪？<em class="wz-sub">可加多个；从哪到哪写"天津到济南"</em></label>
+          <label>③ 规划路线？<em class="wz-sub">先写出发地，再添加地点（可写"天津到济南"），最后点"规划"</em></label>
           <div class="input-row">
-            <input id="tripInput" type="text" placeholder="输入城市，如：北京 / 天津到济南">
-            <button class="btn btn-primary" onclick="addTrip()">添加</button>
+            <input id="fromInput" type="text" placeholder="出发地（默认学校），如：郑州">
+            <button class="btn btn-ghost btn-sm" onclick="setRouteFrom()">设为起点</button>
           </div>
+          <div class="input-row">
+            <input id="tripInput" type="text" placeholder="添加地点，如：武汉 / 天津到济南">
+            <button class="btn btn-primary" onclick="addTrip()">添加地点</button>
+          </div>
+          <div id="stopList" style="margin:6px 0 2px"></div>
           <div id="planHint" style="font-size:11.5px;color:var(--muted);margin-top:5px"></div>
           <div id="zoneCities" class="hot-line"></div>
         </div>
@@ -700,6 +715,7 @@ const state = {
   optBestName: null,
   chainMode: true,    // 联程默认: 多个目的地按顺序串成一条联程路线(整条1次)
   chainEnd: null,     // 串联路线终点(默认=家, 可改为任意想去的地方)
+  routeStart: null,   // 路线出发地(默认=学校, 可改为任意起点)
   touched: false,     // 是否已有用户操作(初始不自动滚动)
   chainRound: false,  // 串联模式下整条路线: 单程=1次 / 往返=2次
   _tid: 0,
@@ -822,22 +838,31 @@ function evalWith(H) {
 function evalAll() { return (state.home && state.home.station) ? evalWith(state.home.station) : null; }
 
 /* ---------- 串联路线：多个目的地按顺序串成一条联程路线 ---------- */
-/* 顺序: 学校 → D1 → D2 → ... → 家。整条路线按联程计 1 次(单程方向)。
-   校验: ① 每段终点在区间内(走廊带) ② 无折返(相邻段方向夹角>90°) ③ 每前缀累计里程 ≤ ratio×从学校直达该点 */
-function chainEval(S, H, stList) {
+/* 顺序: 起点 → D1 → D2 → ... → 终点。整条路线按联程计 1 次(单程方向)。
+   校验: ① 每站终点在区间内(走廊带, 学校/家锚点自动通过) ② 无折返(相邻段方向夹角>90°) ③ 每前缀累计里程 ≤ ratio×从学校直达该点 */
+function chainEval(S, H, stList, rStart, rEnd) {
   if (!S || !H || !stList.length) return null;
-  const pts = [S, ...stList, H];
+  const start = rStart || S, end = rEnd || H;
+  const pts = [start, ...stList, end];
   const direct = dist(S, H);
   const segs = [];
   let total = 0, maxRatio = 0, foldback = false, foldAt = null;
+  const sameName = (a, b) => !!(a && b && a.name === b.name);
   for (let i = 0; i < pts.length - 1; i++) {
     const A = pts[i], B = pts[i + 1];
     const d = dist(A, B);
     total += d;
     let inInt = true;
-    if (i < pts.length - 2) { // 中间目的地须在区间走廊带内(首尾自动通过)
+    // 锚点(学校/家)自动通过; 其余每站(含自定义起点/终点)须在区间走廊带内
+    const aAnchor = i === 0 && sameName(A, S);
+    const bAnchor = i === pts.length - 2 && sameName(B, H);
+    if (!aAnchor) {
+      const { t, p } = corridor(S, H, A);
+      if (!(t >= -0.15 && t <= 1.15 && p <= Math.max(60, 0.32 * direct))) inInt = false;
+    }
+    if (!bAnchor) {
       const { t, p } = corridor(S, H, B);
-      inInt = t >= -0.15 && t <= 1.15 && p <= Math.max(60, 0.32 * direct);
+      if (!(t >= -0.15 && t <= 1.15 && p <= Math.max(60, 0.32 * direct))) inInt = false;
     }
     const ratio = total / dist(S, B);
     maxRatio = Math.max(maxRatio, ratio);
@@ -856,8 +881,10 @@ function chainEval(S, H, stList) {
   };
 }
 function chainEvalCurrent() {
-  const end = state.chainEnd || (state.home && state.home.station);
-  return chainEval(state.school && state.school.station, end, state.trips.map(t => t.station));
+  const S = state.school && state.school.station;
+  const H = state.home && state.home.station;
+  const end = state.chainEnd || H;
+  return chainEval(S, end, state.trips.map(t => t.station), state.routeStart || S, end);
 }
 function foldBackBadStation(c) {
   /* 折返能否靠排序修复: 按投影顺路排序后仍折返 → 返回出问题的站名(排序救不了); 否则 null(可排序修复) */
@@ -867,7 +894,7 @@ function foldBackBadStation(c) {
   if (!S || !H) return null;
   const sorted = state.trips.map(t => t.station).filter(Boolean)
     .sort((a, b) => corridor(S, H, a).t - corridor(S, H, b).t);
-  const c2 = chainEval(S, H, sorted);
+  const c2 = chainEval(S, H, sorted, state.routeStart || S, H);
   return (c2 && c2.foldback) ? (c.foldAt || '某站') : null;
 }
 // ==== PURE LOGIC END ====
@@ -1181,7 +1208,7 @@ function renderOpt() {
     if (s[0] === S.name) continue;
     let r, cc = null, res = null;
     if (state.chainMode) {
-      cc = chainEval(S, stToObj(s), state.trips.map(t => t.station));
+      cc = chainEval(S, stToObj(s), state.trips.map(t => t.station), state.routeStart || S, stToObj(s));
       r = cc && cc.ok ? { used: state.chainRound ? 2 : 1, covered: state.trips.length, direct: 0, transfer: 1, fail: 0 }
         : { used: 0, covered: 0, direct: 0, transfer: 0, fail: 1 };
     } else {
@@ -1281,7 +1308,7 @@ function smartBest() {
     if (s[0] === state.school.station.name) continue;
     let r;
     if (state.chainMode) {
-      const cc = chainEval(state.school.station, stToObj(s), state.trips.map(t => t.station));
+      const cc = chainEval(state.school.station, stToObj(s), state.trips.map(t => t.station), state.routeStart || state.school.station, stToObj(s));
       r = cc && cc.ok ? { used: state.chainRound ? 2 : 1, covered: state.trips.length } : { used: 0, covered: 0 };
     } else {
       r = evalWith(stToObj(s));
@@ -1307,7 +1334,7 @@ function chainBarHTML(nodes, segMeta) {
       const sg = segMeta[i - 1];
       const segColor = sg ? sg.color : '#d4d4d8';
       const dotCls = isStart ? 'start' : isEnd ? 'end' : 'mid';
-      const tag = isStart ? '学校' : isEnd ? (state.chainEnd ? '终点' : '家') : '途经';
+      const tag = isStart ? '开始' : isEnd ? '结束' : '中转';
       return (i > 0 ? '<span class="rc-seg" style="background:' + segColor + '"></span>' : '') +
         '<span class="rc-node" onclick="nodeClick(' + i + ')" title="点击定位该站"><span class="rc-dot ' + dotCls + '"></span><span class="rc-name">' + esc(n.name) + '</span><span class="rc-tag">' + tag + '</span></span>';
     }).join('') + '</div>' +
@@ -1319,8 +1346,9 @@ function chainBarHTML(nodes, segMeta) {
 function renderSoloChain() {
   const S = state.school.station, H = state.home.station;
   const res = evalAll();
+  const start = state.routeStart || S;
   const end = state.chainEnd || H;
-  const nodes = [S, ...state.trips.map(t => t.station), end];
+  const nodes = [start, ...state.trips.map(t => t.station), end];
   const segMeta = res ? res.perTrip.map(tp => {
     const ok = tp.plan.ok, mode = tp.plan.mode;
     return {
@@ -1333,6 +1361,49 @@ function renderSoloChain() {
   }) : [];
   document.getElementById('chainPreview').innerHTML = chainBarHTML(nodes, segMeta);
 }
+/* ---------- 步骤③ 地点列表: 开始/中转/结束 + 规划按钮 ---------- */
+function renderStopList() {
+  const el = document.getElementById('stopList');
+  if (!el) return;
+  const S = state.school && state.school.station;
+  const H = state.home && state.home.station;
+  const start = state.routeStart || S;
+  const end = state.chainEnd || H;
+  const fi = document.getElementById('fromInput');
+  if (fi && !state.routeStart && S && !fi.value.trim()) fi.value = S.name;
+  const rows = [];
+  rows.push('<div class="stop-row"><span class="stop-role role-start">开始</span><b>' + esc(start ? start.name : '？') + '</b>' +
+    (start && S && start.name === S.name ? '<em>学校</em>' : '<em>出发地</em>') + '</div>');
+  state.trips.forEach(tp => {
+    rows.push('<div class="stop-row"><span class="stop-role role-mid">中转</span><b>' + esc(tp.station ? tp.station.name : tp.text) + '</b>' +
+      (tp.from ? '<em>从 ' + esc(tp.from.name) + ' 出发</em>' : '<em>途经</em>') + '</div>');
+  });
+  rows.push('<div class="stop-row"><span class="stop-role role-end">结束</span><b>' + esc(end ? end.name : '家') + '</b>' +
+    (end && H && end.name === H.name ? '<em>家</em>' : '<em>自定义终点</em>') +
+    '<span class="spacer"></span>' +
+    '<button class="btn btn-ghost btn-sm" onclick="setChainEnd()">改终点</button>' +
+    '<button class="btn btn-primary btn-sm" onclick="onPlan()">🚀 规划</button></div>');
+  el.innerHTML = rows.join('');
+}
+/* 出发地(路线起点, 默认学校) */
+async function setRouteFrom() {
+  const q = document.getElementById('fromInput').value.trim();
+  if (!q) { state.routeStart = null; setStatus('出发地已恢复为默认（学校）'); renderStopList(); renderAll(); return; }
+  const r = await resolvePlace(q);
+  if (!r) { setStatus('❌ 未能解析出发地 "' + q + '"'); return; }
+  state.routeStart = r.station || { name: r.label, lat: r.point.lat, lon: r.point.lon };
+  setStatus('🚩 出发地已设为 ' + (state.routeStart.name || r.label));
+  renderStopList();
+  renderAll();
+}
+/* 规划: 自动排序 + 结果上浮(最终区间在结果区展示) */
+function onPlan() {
+  if (!state.school || !state.school.station || !state.home || !state.home.station) { setStatus('请先完成 ① 学校 和 ② 家'); return; }
+  if (!state.trips.length) { setStatus('请先在 ③ 添加地点'); return; }
+  state.touched = true;
+  chainAutoSort(); // 按 学校→家 走廊投影自动排序
+  maybeFloatResult(); // 只有"规划"才下滑到结果
+}
 function renderChain() {
   const S = state.school.station, H = state.home.station;
   const c = chainEvalCurrent();
@@ -1344,8 +1415,9 @@ function renderChain() {
   const bb = document.getElementById('budgetBig');
   if (bb) bb.textContent = state.budget;
   // 路线预览: 站点胶囊链条（每段可单独购买 / 整条联程只扣 1 次）
+  const start = state.routeStart || S;
   const end = state.chainEnd || H;
-  const nodes = [S, ...state.trips.map(t => t.station), end];
+  const nodes = [start, ...state.trips.map(t => t.station), end];
   const segs2 = c ? c.segs : [];
   document.getElementById('chainPreview').innerHTML =
     chainBarHTML(nodes, segs2.map(sg => ({
@@ -1514,13 +1586,16 @@ function closeGuide() {
 /* ---------- 进度条节点点击: 定位该站 ---------- */
 function nodeClick(i) {
   const n = state.trips.length;
-  if (i === 0) { // 学校
-    setGuideStep(0);
-    setStatus('学校（固定）：' + (state.school && state.school.station ? state.school.station.name : ''));
+  const start = state.routeStart || (state.school && state.school.station);
+  const end = state.chainEnd || (state.home && state.home.station);
+  if (i === 0) { // 开始(出发地/学校)
+    if (start && state.school && start.name === state.school.station.name) setGuideStep(0);
+    else { const fi = document.getElementById('fromInput'); if (fi) { try { fi.focus(); } catch (e) { } setGuideStep(2); } }
+    setStatus('开始：' + (start ? start.name : '') + (start && state.school && start.name === state.school.station.name ? '（学校）' : '（出发地）'));
     return;
   }
-  if (i === n + 1) { // 终点(家/自定义)
-    setStatus('终点：' + (state.chainEnd ? state.chainEnd.name : (state.home && state.home.station ? state.home.station.name : '家')));
+  if (i === n + 1) { // 结束(家/自定义终点)
+    setStatus('结束：' + (end ? end.name : '家') + (end && state.home && end.name === state.home.station.name ? '（家）' : '（自定义终点）'));
     return;
   }
   const idx = i - 1;
@@ -1533,7 +1608,7 @@ function nodeClick(i) {
   const c = chainEvalCurrent();
   const sg = c && c.segs[idx];
   const tp = state.trips[idx];
-  setStatus('途经：' + (tp ? tp.text : '') + (sg ? ' ' + sg.km + 'km ' + (sg.inInt ? '✅ 学生票' : '⚠️ 超区间') : ''));
+  setStatus('中转：' + (tp ? tp.text : '') + (sg ? ' ' + sg.km + 'km ' + (sg.inInt ? '✅ 学生票' : '⚠️ 超区间') : ''));
 }
 /* ---------- 结果区: 完成自动上浮 / 改输入自动下沉 ---------- */
 
@@ -1809,9 +1884,10 @@ function renderAll() {
     renderIntervalViz();
     renderTrips();
     renderMap();
+    renderStopList();
     return;
   }
-  if (state.chainMode) { renderChain(); renderTrips(); renderOpt(); renderMap(); return; }
+  if (state.chainMode) { renderChain(); renderTrips(); renderOpt(); renderMap(); renderStopList(); return; }
   const res = evalAll();
   if (!res) {
     document.getElementById('resultHint').textContent = '学校或家庭尚未吸附到车站，请先设置有效地址。';
@@ -1829,6 +1905,7 @@ function renderAll() {
   renderTrips();
   renderOpt();
   renderMap();
+  renderStopList();
 }
 
 /* ---------- 交互 ---------- */
