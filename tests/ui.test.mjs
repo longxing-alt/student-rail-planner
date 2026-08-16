@@ -222,7 +222,7 @@ async function main() {
   await w.eval('setChainMode(true)');
   A('串联控件显示', $('chainControls').style.display === 'block');
   A('批量按钮隐藏', $('batchBtns').style.display === 'none');
-  A('路线预览含串联(到)', $('chainPreview').textContent.includes('北京西') && $('chainPreview').textContent.includes('到') && $('chainPreview').textContent.includes('贵阳北'));
+  A('路线预览含串联(到)', $('chainPreview').textContent.includes('北京西') && $('chainPreview').textContent.includes('到') && $('chainPreview').textContent.includes('长沙'));
   A('校验含学生票标记', $('chainCheck').textContent.includes('学生票'));
   A('串联总计=1次(单程)', $('totals').querySelector('.total-box .num').textContent.startsWith('1 /'));
   A('串联无折返警告', !$('chainCheck').textContent.includes('折返'));
@@ -376,20 +376,26 @@ async function main() {
   $('tripInput').value = '岳阳';
   await w.eval('addTrip()');
   await wait(500);
-  A('完成匹配后结果区上浮', $('wsResult').classList.contains('float-up'), $('wsResult').className);
+  A('添加地点后结果区不上浮(仅规划才上浮)', !$('wsResult').classList.contains('float-up'), $('wsResult').className);
+  await w.eval('onPlan()');
+  await wait(500);
+  A('规划后结果区上浮', $('wsResult').classList.contains('float-up'), $('wsResult').className);
   await w.eval('setGuideStep(0)');
   A('改输入时结果区下沉', $('wsResult').classList.contains('sink'));
   await w.eval('setGuideStep(2)');
   await wait(600);
 
-  G('T23. 仅添加才下滑');
+  G('T23. 仅规划才下滑');
   await w.eval('state.touched = true; state.resultFloated = false; searchPlace("school")'); // 改输入不应上浮
   await wait(200);
   A('改输入后不上浮', !$('wsResult').classList.contains('float-up'));
   $('tripInput').value = '岳阳';
-  await w.eval('state.resultFloated = false; addTrip()'); // 添加才上浮
+  await w.eval('state.resultFloated = false; addTrip()'); // 添加地点不应上浮
   await wait(300);
-  A('添加后上浮', $('wsResult').classList.contains('float-up'));
+  A('添加地点后不上浮', !$('wsResult').classList.contains('float-up'));
+  await w.eval('state.resultFloated = false; onPlan()'); // 规划才上浮
+  await wait(300);
+  A('规划后上浮', $('wsResult').classList.contains('float-up'));
 
   G('T24. 未完成三步不显示结果区');
   await w.eval('state.trips.forEach(t => removeTrip(t.id))');
@@ -435,11 +441,11 @@ async function main() {
   A('整条路线消耗 0 次(联程不可合并)', $('totals').querySelector('.total-box .num').textContent.startsWith('0 /'));
   A('提示拆开单独买最低', $('resultHint').textContent.includes('拆开单独买最低'));
   A('提示含原因:走了回头路', $('resultHint').textContent.includes('走了回头路'));
-  A('拆开买最低=3段×1次=3', $all('.total-box .num')[4].textContent === '3', $all('.total-box .num')[4].textContent);
+  A('拆开买最低=2段×1次=2', $all('.total-box .num')[4].textContent === '2', $all('.total-box .num')[4].textContent);
   A('警示横幅给出拆开方案', $('banners').textContent.includes('拆开单独买'));
   A('建议点自动排序(可排序修复)', $('chainCheck').textContent.includes('自动排序') && !$('chainCheck').textContent.includes('排序救不了'));
   await w.eval('state.chainRound = true; renderChain();');
-  A('往返: 拆开买最低=3段×2次=6', $all('.total-box .num')[4].textContent === '6', $all('.total-box .num')[4].textContent);
+  A('往返: 拆开买最低=2段×2次=4', $all('.total-box .num')[4].textContent === '4', $all('.total-box .num')[4].textContent);
   await w.eval('state.chainRound = false; renderChain();');
   await w.eval('chainAutoSort()');
   A('自动排序把岳阳排在长沙前', $all('.trip-main b')[0].textContent === '岳阳' && $all('.trip-main b')[1].textContent === '长沙', $all('.trip-main b').map(b=>b.textContent).join(' | '));
@@ -518,7 +524,7 @@ async function main() {
   A('独立行程显示节点进度条', $('chainPreview').innerHTML.includes('route-chain'));
   A('独立行程段提示含判定', $('chainPreview').textContent.includes('学生票') || $('chainPreview').textContent.includes('全价'));
 
-  G('T29. 步骤③: 出发地→添加地点→开始/中转/结束→规划自动排序');
+  G('T29. 步骤③: 出发地→添加地点→起点/中转/终点→拖拽排序→规划');
   await w.eval('setChainMode(true)');
   $('homeInput').value = '信阳';
   await w.eval('searchPlace("home")');
@@ -526,22 +532,30 @@ async function main() {
   await w.eval('searchPlace("school")');
   await w.eval('state.trips.forEach(t => removeTrip(t.id))');
   A('出发地输入框预填学校', $('fromInput').value.includes('武汉'), $('fromInput').value);
-  A('地点列表: 开始=学校', $('stopList').textContent.includes('开始') && $('stopList').textContent.includes('武汉'));
-  A('地点列表: 结束=家', $('stopList').textContent.includes('结束') && $('stopList').textContent.includes('信阳'));
+  A('列表不显示学校/家', !$('stopList').textContent.includes('学校') && !$('stopList').textContent.includes('信阳'));
+  A('地点列表: 起点=武汉', $('stopList').textContent.includes('起点') && $('stopList').textContent.includes('武汉'));
   A('规划按钮在最后地点右侧', $('stopList').textContent.includes('规划'));
   $('tripInput').value = '岳阳';
   await w.eval('addTrip()');
-  A('添加后出现中转行', $('stopList').textContent.includes('中转') && $('stopList').textContent.includes('岳阳东'));
+  A('单个地点=终点(岳阳东)', $('stopList').textContent.includes('终点') && $('stopList').textContent.includes('岳阳东'));
+  $('tripInput').value = '重庆';
+  await w.eval('addTrip()');
+  A('两个地点: 中转+终点', $('stopList').textContent.includes('中转') && $('stopList').textContent.includes('终点'));
+  // 拖拽: 把岳阳东(索引1)拖到起点之前 → 岳阳东成为起点
+  await w.eval('stopReorder(1, 0)');
+  A('拖动后第一个=起点(岳阳东)', w.eval('state.routeStart && state.routeStart.name') === '岳阳东', w.eval('state.routeStart && state.routeStart.name'));
+  A('拖动后行程重排', w.eval('state.trips.map(t => t.station.name).join(",")'), w.eval('state.trips.map(t => t.station.name).join(",")'));
+  A('最后地点=终点(重庆北)', $('stopList').textContent.includes('终点') && $('stopList').textContent.includes('重庆北'));
   $('fromInput').value = '长沙';
   await w.eval('setRouteFrom()');
   A('自定义出发地生效', w.eval('state.routeStart && state.routeStart.name') && w.eval('state.routeStart.name').includes('长沙'), w.eval('state.routeStart && state.routeStart.name'));
-  A('列表开始=长沙', $('stopList').textContent.includes('长沙'));
+  A('列表起点=长沙', $('stopList').textContent.includes('起点') && $('stopList').textContent.includes('长沙'));
   A('进度条起点=长沙', $('chainPreview').textContent.includes('长沙'));
   await w.eval('state.touched = false; state.resultFloated = false; onPlan()');
   await wait(300);
   A('规划后结果上浮', $('wsResult').classList.contains('float-up'));
   A('规划后自动排序提示', $('status').textContent.includes('顺路排序'));
-  A('进度条节点角色为开始/中转/结束', $('chainPreview').textContent.includes('开始') && $('chainPreview').textContent.includes('中转') && $('chainPreview').textContent.includes('结束'));
+  A('进度条节点角色为起点/中转/终点', $('chainPreview').textContent.includes('开始') && $('chainPreview').textContent.includes('中转') && $('chainPreview').textContent.includes('结束'));
   await w.eval('state.routeStart = null; renderAll();');
 
 

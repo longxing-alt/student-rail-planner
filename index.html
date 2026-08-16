@@ -200,8 +200,10 @@ input[type=range]{width:100%;accent-color:var(--blue)}
 .modal-tip{font-size:13px;margin-top:10px}
 .modal-note{font-size:11.5px;color:var(--muted);margin-top:14px;background:#f4f4f5;border-radius:8px;padding:8px 10px}
 
-/* 步骤③ 地点列表: 开始/中转/结束 + 规划按钮 */
+/* 步骤③ 地点列表: 起点/中转/终点 + 规划按钮 */
 .stop-row{display:flex;align-items:center;gap:8px;padding:6px 10px;border:1px solid var(--line);border-radius:10px;background:#fafafa;margin-bottom:6px;font-size:13px;flex-wrap:wrap}
+.stop-row[draggable="true"]{cursor:grab}
+.stop-row.drag-over{border-color:var(--blue);background:#eff6ff;box-shadow:0 0 0 2px rgba(37,99,235,.2)}
 .stop-row b{font-size:13.5px}
 .stop-row em{font-style:normal;font-size:11px;color:var(--muted)}
 .stop-row .spacer{flex:1}
@@ -841,7 +843,8 @@ function evalAll() { return (state.home && state.home.station) ? evalWith(state.
 /* 顺序: 起点 → D1 → D2 → ... → 终点。整条路线按联程计 1 次(单程方向)。
    校验: ① 每站终点在区间内(走廊带, 学校/家锚点自动通过) ② 无折返(相邻段方向夹角>90°) ③ 每前缀累计里程 ≤ ratio×从学校直达该点 */
 function chainEval(S, H, stList, rStart, rEnd) {
-  if (!S || !H || !stList.length) return null;
+  if (!S || !H) return null;
+  if (!stList.length && !rEnd) return null;
   const start = rStart || S, end = rEnd || H;
   const pts = [start, ...stList, end];
   const direct = dist(S, H);
@@ -880,11 +883,20 @@ function chainEval(S, H, stList, rStart, rEnd) {
     ok: !foldback && maxRatio <= state.ratio && segs.every(s => s.inInt),
   };
 }
+function chainEndPoint() { // 路线终点: 改终点优先, 否则最后一个地点
+  return state.chainEnd || (state.trips.length ? state.trips[state.trips.length - 1].station : null);
+}
+function chainMidStations() { // 中间点: 有自定义终点时全部行程都是中间点
+  return state.chainEnd ? state.trips.map(t => t.station) : state.trips.slice(0, -1).map(t => t.station);
+}
 function chainEvalCurrent() {
   const S = state.school && state.school.station;
   const H = state.home && state.home.station;
-  const end = state.chainEnd || H;
-  return chainEval(S, end, state.trips.map(t => t.station), state.routeStart || S, end);
+  const trips = state.trips;
+  if (!trips.length && !state.chainEnd) return null;
+  const start = state.routeStart || S;
+  const end = chainEndPoint();
+  return chainEval(S, H, chainMidStations(), start, end);
 }
 function foldBackBadStation(c) {
   /* 折返能否靠排序修复: 按投影顺路排序后仍折返 → 返回出问题的站名(排序救不了); 否则 null(可排序修复) */
@@ -894,7 +906,8 @@ function foldBackBadStation(c) {
   if (!S || !H) return null;
   const sorted = state.trips.map(t => t.station).filter(Boolean)
     .sort((a, b) => corridor(S, H, a).t - corridor(S, H, b).t);
-  const c2 = chainEval(S, H, sorted, state.routeStart || S, H);
+  const c2 = chainEval(S, H, (state.chainEnd ? sorted : sorted.slice(0, -1)), state.routeStart || S,
+    state.chainEnd || (sorted.length ? sorted[sorted.length - 1] : H));
   return (c2 && c2.foldback) ? (c.foldAt || '某站') : null;
 }
 // ==== PURE LOGIC END ====
@@ -1208,7 +1221,8 @@ function renderOpt() {
     if (s[0] === S.name) continue;
     let r, cc = null, res = null;
     if (state.chainMode) {
-      cc = chainEval(S, stToObj(s), state.trips.map(t => t.station), state.routeStart || S, stToObj(s));
+      cc = chainEval(S, stToObj(s), chainMidStations(), state.routeStart || S,
+        chainEndPoint() || stToObj(s));
       r = cc && cc.ok ? { used: state.chainRound ? 2 : 1, covered: state.trips.length, direct: 0, transfer: 1, fail: 0 }
         : { used: 0, covered: 0, direct: 0, transfer: 0, fail: 1 };
     } else {
@@ -1308,7 +1322,8 @@ function smartBest() {
     if (s[0] === state.school.station.name) continue;
     let r;
     if (state.chainMode) {
-      const cc = chainEval(state.school.station, stToObj(s), state.trips.map(t => t.station), state.routeStart || state.school.station, stToObj(s));
+      const cc = chainEval(state.school.station, stToObj(s), chainMidStations(),
+        state.routeStart || state.school.station, chainEndPoint() || stToObj(s));
       r = cc && cc.ok ? { used: state.chainRound ? 2 : 1, covered: state.trips.length } : { used: 0, covered: 0 };
     } else {
       r = evalWith(stToObj(s));
@@ -1347,8 +1362,7 @@ function renderSoloChain() {
   const S = state.school.station, H = state.home.station;
   const res = evalAll();
   const start = state.routeStart || S;
-  const end = state.chainEnd || H;
-  const nodes = [start, ...state.trips.map(t => t.station), end];
+  const nodes = [start, ...state.trips.map(t => t.station)];
   const segMeta = res ? res.perTrip.map(tp => {
     const ok = tp.plan.ok, mode = tp.plan.mode;
     return {
@@ -1361,39 +1375,85 @@ function renderSoloChain() {
   }) : [];
   document.getElementById('chainPreview').innerHTML = chainBarHTML(nodes, segMeta);
 }
-/* ---------- 步骤③ 地点列表: 开始/中转/结束 + 规划按钮 ---------- */
+/* ---------- 步骤③ 地点列表: 起点/中转/终点(可拖动, 不显示学校/家) ---------- */
+function stopItems() {
+  const S = state.school && state.school.station;
+  const items = [{ key: 'start', st: state.routeStart || S, tp: null }];
+  state.trips.forEach(tp => items.push({ key: 'trip', st: tp.station, tp }));
+  return items;
+}
+/* 拖动后重建: 第1项=起点(出发地), 其余=行程, 最后=终点 */
+function stopReorder(fromIdx, toIdx) {
+  const items = stopItems();
+  const [moved] = items.splice(fromIdx, 1);
+  items.splice(toIdx, 0, moved);
+  const first = items[0];
+  state.routeStart = first.st || null;
+  const rest = items.slice(1);
+  state.trips = [];
+  rest.forEach(item => {
+    if (item.tp) state.trips.push(item.tp);
+    else if (item.st) state.trips.push({ id: ++state._tid, text: item.st.name, from: null,
+      point: { lat: item.st.lat, lon: item.st.lon }, station: item.st, round: false });
+  });
+  const fi = document.getElementById('fromInput');
+  if (fi && state.routeStart) fi.value = state.routeStart.name;
+  renderAll();
+  setStatus('🔀 已调整：第一个为起点（' + (state.routeStart ? state.routeStart.name : '？') + '），最后为终点（' +
+    (state.trips.length ? state.trips.at(-1).station.name : '？') + '）');
+}
+function stopDragStart(ev, i) {
+  ev.dataTransfer.setData('text/plain', String(i));
+  const row = ev.target.closest('.stop-row');
+  if (row) row.classList.add('drag-over');
+}
+function stopDragOver(ev) {
+  ev.preventDefault();
+  const row = ev.target.closest('.stop-row');
+  if (row) row.classList.add('drag-over');
+}
+function stopDrop(ev, toIdx) {
+  ev.preventDefault();
+  document.querySelectorAll('.stop-row.drag-over').forEach(r => r.classList.remove('drag-over'));
+  const fromIdx = parseInt(ev.dataTransfer.getData('text/plain'), 10);
+  if (Number.isInteger(fromIdx) && fromIdx !== toIdx) stopReorder(fromIdx, toIdx);
+}
+function stopDragEnd(ev) {
+  const row = ev.target.closest('.stop-row');
+  if (row) row.classList.remove('drag-over');
+}
 function renderStopList() {
   const el = document.getElementById('stopList');
   if (!el) return;
   const S = state.school && state.school.station;
-  const H = state.home && state.home.station;
-  const start = state.routeStart || S;
-  const end = state.chainEnd || H;
   const fi = document.getElementById('fromInput');
-  if (fi && !state.routeStart && S && !fi.value.trim()) fi.value = S.name;
-  const rows = [];
-  rows.push('<div class="stop-row"><span class="stop-role role-start">开始</span><b>' + esc(start ? start.name : '？') + '</b>' +
-    (start && S && start.name === S.name ? '<em>学校</em>' : '<em>出发地</em>') + '</div>');
-  state.trips.forEach(tp => {
-    rows.push('<div class="stop-row"><span class="stop-role role-mid">中转</span><b>' + esc(tp.station ? tp.station.name : tp.text) + '</b>' +
-      (tp.from ? '<em>从 ' + esc(tp.from.name) + ' 出发</em>' : '<em>途经</em>') + '</div>');
+  if (fi) fi.value = state.routeStart ? state.routeStart.name : (S && !fi.value.trim() ? S.name : (fi.value || ''));
+  const items = stopItems();
+  const rows = items.map((it, i) => {
+    const isFirst = i === 0, isLast = i === items.length - 1;
+    const role = isFirst ? '起点' : isLast ? '终点' : '中转';
+    const roleCls = isFirst ? 'role-start' : isLast ? 'role-end' : 'role-mid';
+    const name = it.st ? it.st.name : '？';
+    const sub = it.tp && it.tp.from ? '从 ' + it.tp.from.name + ' 出发' : '';
+    return '<div class="stop-row" draggable="true" ondragstart="stopDragStart(event,' + i + ')" ondragover="stopDragOver(event)" ondrop="stopDrop(event,' + i + ')" ondragend="stopDragEnd(event)">' +
+      '<span class="drag-handle">≡</span>' +
+      '<span class="stop-role ' + roleCls + '">' + role + '</span><b>' + esc(name) + '</b>' +
+      (sub ? '<em>' + esc(sub) + '</em>' : '') +
+      '<span class="spacer"></span>' +
+      (it.tp ? '<button class="btn btn-ghost btn-sm" onclick="removeTrip(' + it.tp.id + ')">删除</button>' : '') +
+      (isLast ? '<button class="btn btn-primary btn-sm" onclick="onPlan()">🚀 规划</button>' : '') +
+      '</div>';
   });
-  rows.push('<div class="stop-row"><span class="stop-role role-end">结束</span><b>' + esc(end ? end.name : '家') + '</b>' +
-    (end && H && end.name === H.name ? '<em>家</em>' : '<em>自定义终点</em>') +
-    '<span class="spacer"></span>' +
-    '<button class="btn btn-ghost btn-sm" onclick="setChainEnd()">改终点</button>' +
-    '<button class="btn btn-primary btn-sm" onclick="onPlan()">🚀 规划</button></div>');
   el.innerHTML = rows.join('');
 }
 /* 出发地(路线起点, 默认学校) */
 async function setRouteFrom() {
   const q = document.getElementById('fromInput').value.trim();
-  if (!q) { state.routeStart = null; setStatus('出发地已恢复为默认（学校）'); renderStopList(); renderAll(); return; }
+  if (!q) { state.routeStart = null; setStatus('出发地已恢复为默认（学校）'); renderAll(); return; }
   const r = await resolvePlace(q);
   if (!r) { setStatus('❌ 未能解析出发地 "' + q + '"'); return; }
   state.routeStart = r.station || { name: r.label, lat: r.point.lat, lon: r.point.lon };
   setStatus('🚩 出发地已设为 ' + (state.routeStart.name || r.label));
-  renderStopList();
   renderAll();
 }
 /* 规划: 自动排序 + 结果上浮(最终区间在结果区展示) */
@@ -1416,8 +1476,7 @@ function renderChain() {
   if (bb) bb.textContent = state.budget;
   // 路线预览: 站点胶囊链条（每段可单独购买 / 整条联程只扣 1 次）
   const start = state.routeStart || S;
-  const end = state.chainEnd || H;
-  const nodes = [start, ...state.trips.map(t => t.station), end];
+  const nodes = [start, ...state.trips.map(t => t.station), ...(state.chainEnd ? [state.chainEnd] : [])];
   const segs2 = c ? c.segs : [];
   document.getElementById('chainPreview').innerHTML =
     chainBarHTML(nodes, segs2.map(sg => ({
@@ -1426,7 +1485,9 @@ function renderChain() {
         (sg.inInt ? '✅ 学生票（可单独买 · 扣1次）' : '⚠️ 超区间'),
     }))) +
     '<div class="chain-tip">💡 区间内任意一小段都可以单独买（各扣 1 次）；整条 5 天内联程购买只扣 1 次。</div>';
-  document.getElementById('chainEndLabel').textContent = state.chainEnd ? state.chainEnd.name + '（' + state.chainEnd.city + '）' : '家';
+  document.getElementById('chainEndLabel').textContent = state.chainEnd
+    ? state.chainEnd.name + '（' + state.chainEnd.city + '）'
+    : (state.trips.length && state.trips.at(-1).station ? state.trips.at(-1).station.name : '家');
   // 校验明细
   let check = '';
   if (!c) {
@@ -1587,7 +1648,7 @@ function closeGuide() {
 function nodeClick(i) {
   const n = state.trips.length;
   const start = state.routeStart || (state.school && state.school.station);
-  const end = state.chainEnd || (state.home && state.home.station);
+  const end = state.chainEnd || (state.trips.length && state.trips.at(-1).station) || (state.home && state.home.station);
   if (i === 0) { // 开始(出发地/学校)
     if (start && state.school && start.name === state.school.station.name) setGuideStep(0);
     else { const fi = document.getElementById('fromInput'); if (fi) { try { fi.focus(); } catch (e) { } setGuideStep(2); } }
@@ -1961,7 +2022,6 @@ async function addTrip() {
   setStatus('✅ 已添加：' + (from ? fromQ + ' 到 ' : '') + toQ + (from ? '（自定义出发地）' : ''));
   renderAll();
   fitAll();
-  maybeFloatResult(); // 只有"添加"才下滑到结果
 }
 function editFrom(id) {
   const t = state.trips.find(x => x.id === id);
@@ -2087,7 +2147,6 @@ async function quickAdd(city) {
   state.touched = true;
   state.trips.push({ id: ++state._tid, text: city, point: r.point, station: r.station, round: false });
   renderAll(); fitAll();
-  maybeFloatResult(); // 只有"添加"才下滑到结果
 }
 function bindEvents() {
   document.getElementById('budgetInput').addEventListener('change', e => {
