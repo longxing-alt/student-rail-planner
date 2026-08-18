@@ -2606,6 +2606,8 @@ async function init() {
   renderAll();
   fitAll();
   setStatus('✅ 演示已加载：武汉 ↔ 长沙（岳阳在区间内 / 重庆超区间），说明见"规划结果"卡片顶部。');
+  // 桌面端默认展开地图; 手机端收起(走底部"地图"Tab)
+  if (window.innerWidth > 768) setTimeout(toggleMap, 300);
 }
 
 /* ============================================================
