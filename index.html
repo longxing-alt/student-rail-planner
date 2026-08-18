@@ -8,9 +8,7 @@
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🚄</text></svg>">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
 <style>
 /* ===== 简约工作区风格 (Linear/shadcn/emil 借鉴) ===== */
 :root{
@@ -1231,15 +1229,48 @@ function pin(role, label) {
     iconSize: [34, 34], iconAnchor: [17, 31], popupAnchor: [0, -26] });
 }
 function setStatus(msg) { document.getElementById('status').textContent = msg || ''; }
+/* ---------- Leaflet 懒加载: 首次用到地图才异步加载(unpkg→bootcdn 兜底), 不再阻塞首屏 ---------- */
+let mapStarted = false, mapLoading = null;
+function loadCssRel(href) { const l = document.createElement('link'); l.rel = 'stylesheet'; l.href = href; document.head.appendChild(l); }
+function loadJs(src) { return new Promise((res, rej) => { const s = document.createElement('script'); s.src = src; s.onload = () => res(); s.onerror = () => rej(new Error('fail ' + src)); document.head.appendChild(s); }); }
+const MAP_CDNS = [
+  ['https://unpkg.com/leaflet@1.9.4/dist/leaflet.js', 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css'],
+  ['https://cdn.bootcdn.net/ajax/libs/leaflet/1.9.4/leaflet.js', 'https://cdn.bootcdn.net/ajax/libs/leaflet/1.9.4/leaflet.min.css'],
+];
+function ensureMap() {
+  if (mapStarted) return Promise.resolve();
+  if (!mapLoading) {
+    mapLoading = (async () => {
+      for (const [js, css] of MAP_CDNS) {
+        try {
+          if (!window.L) await loadJs(js);
+          if (!window.L) throw new Error('L missing');
+          loadCssRel(css);
+          initMap();
+          mapStarted = true;
+          renderMap();
+          return true;
+        } catch (e) { /* 换下一个 CDN */ }
+      }
+      document.getElementById('status').textContent = '⚠️ 地图组件加载失败，请检查网络';
+      mapLoading = null; // 允许重试
+      return false;
+    })();
+  }
+  return mapLoading;
+}
 function toggleMap() {
   const w = document.getElementById('mapWrap');
   const show = w.style.display === 'none';
   w.style.display = show ? 'block' : 'none';
   document.getElementById('mapToggleBtn').textContent = show ? '🗺️ 收起地图' : '🗺️ 查看地图';
-  if (show && map) setTimeout(() => map.invalidateSize(), 120);
+  if (show) {
+    ensureMap().then(() => { if (map) setTimeout(() => map.invalidateSize(), 60); });
+    fitAll();
+  }
 }
 function fitAll() {
-  if (!map) return;
+  if (!map) return; // 未初始化不触发加载; toggleMap/mTab 会先 ensureMap
   const pts = [];
   if (state.school) pts.push([state.school.point.lat, state.school.point.lon]);
   if (state.home) pts.push([state.home.point.lat, state.home.point.lon]);
@@ -2542,7 +2573,6 @@ function bindEvents() {
 async function init() {
   bindEvents();
   initTouchDrag();
-  initMap();
   document.getElementById('mapToggleBtn').textContent = '🗺️ 查看地图'; // 地图默认收起
   // 演示默认数据：武汉上学，家长沙；行程 岳阳(区间内直达) + 重庆(超出区间→全价)
   const S = await resolvePlace('武汉');
@@ -2751,7 +2781,7 @@ function mTab(page) {
     const w = document.getElementById('mapWrap');
     w.style.display = 'block';
     document.getElementById('mMapPanel').style.display = 'block';
-    if (window.L && map) setTimeout(() => map.invalidateSize(), 60);
+    ensureMap().then(() => { if (map) setTimeout(() => map.invalidateSize(), 60); });
     fitAll();
   }
   if (page === 'plan' && window.innerWidth >= 769) {
