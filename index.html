@@ -383,8 +383,13 @@ body[data-tab="rules"] .wrap #app,body[data-tab="rules"] .wrap #optimize{display
 body[data-tab="rules"] #rulesPage{display:grid!important}
 
 /* ===== 移动端视图（小程序同款） ===== */
-.m-root{display:none;flex-direction:column;gap:10px;padding:0 0 90px}
-.m-card{background:#fff;border:1px solid var(--line);border-bottom:1px solid var(--line);padding:14px 14px;border-radius:16px}
+.m-root{display:none;flex-direction:column;gap:10px;padding:0 0 80px}
+.m-brand{display:flex;align-items:center;gap:9px;margin-bottom:10px}
+.m-brand-logo{width:28px;height:28px;border-radius:8px;background:#18181b;color:#fff;font-size:13px;font-weight:800;display:flex;align-items:center;justify-content:center}
+.m-brand-name{font-size:15px;font-weight:700;letter-spacing:-.01em}
+.m-status{background:#f4f4f5;border:1px solid var(--line);border-radius:10px;padding:6px 12px;font-size:12px;color:var(--muted);margin-bottom:12px}
+.m-workspace{background:#fff;border:1px solid var(--line);border-radius:18px;overflow:hidden;box-shadow:0 1px 2px rgba(16,24,40,.05),0 12px 28px -16px rgba(16,24,40,.16)}
+.m-card{background:#fff;border-bottom:1px solid var(--line);padding:15px 14px}
 .m-card-title{font-size:14px;font-weight:700;margin-bottom:8px}
 .m-card-title .m-sub{font-weight:400;font-size:11px;color:var(--muted);margin-left:6px}
 .m-row{display:flex;gap:8px;align-items:center}
@@ -435,6 +440,8 @@ body[data-tab="rules"] #rulesPage{display:grid!important}
 
 /* 移动端 ≤768px: 隐藏桌面内容, 仅显示移动视图 + Tab 栏 */
 @media(max-width:768px){
+  body nav:not(.tabbar){display:none}
+  footer{display:none}
   .wrap .hide-phone,.wrap #app,.wrap #optimize{display:none}
   .tabbar{display:flex!important}
   .m-root{display:flex!important}
@@ -690,8 +697,12 @@ body[data-tab="map"] .m-panel,body[data-tab="map"] #mMapPanel{display:block}
 
   <!-- ================= 移动端视图（小程序同款，≤768px 显示） ================= -->
   <div class="m-root" id="mRoot">
-    <!-- 规划面板 -->
-    <div class="m-panel" id="mPlan">
+  <!-- 品牌头（小程序同款） -->
+  <div class="m-brand"><span class="m-brand-logo">优</span><span class="m-brand-name">学生优惠 · 区间规划器</span></div>
+  <div class="m-status" id="mStatus"></div>
+  <!-- 规划面板（白色圆角工作区，小程序同款） -->
+  <div class="m-panel" id="mPlan">
+    <div class="m-workspace">
       <div class="m-card">
         <div class="m-card-title">① 学校 <span class="m-sub">区间固定端点（须与学信网一致）</span></div>
         <div class="m-row"><input id="mSchoolInput" type="text" placeholder="输入学校城市，如：北京"><button class="btn btn-primary" onclick="mSchoolNext()">下一步</button></div>
@@ -716,12 +727,12 @@ body[data-tab="map"] .m-panel,body[data-tab="map"] #mMapPanel{display:block}
         </div>
       </div>
     </div>
-    <!-- 地图面板 -->
-    <div class="m-panel" id="mMapPanel" style="display:none"></div>
   </div>
+  <!-- 地图面板 -->
+  <div class="m-panel" id="mMapPanel" style="display:none"></div>
+</div>
 
-  <!-- ================= 底部 Tab 栏 ================= -->
-  <nav class="tabbar" id="tabBar">
+<nav class="tabbar" id="tabBar">
     <button class="tb" data-tab="plan" onclick="mTab('plan')">🏠 规划</button>
     <button class="tb" data-tab="rules" onclick="mTab('rules')">📖 规则</button>
     <button class="tb" data-tab="map" onclick="mTab('map')">🗺️ 地图</button>
@@ -1228,7 +1239,10 @@ function pin(role, label) {
   return L.divIcon({ className: '', html: '<div class="pin ' + cls + '"><span>' + label + '</span></div>',
     iconSize: [34, 34], iconAnchor: [17, 31], popupAnchor: [0, -26] });
 }
-function setStatus(msg) { document.getElementById('status').textContent = msg || ''; }
+function setStatus(msg) {
+  const se = document.getElementById('status'); if (se) se.textContent = msg || '';
+  const me = document.getElementById('mStatus'); if (me) me.textContent = msg || '';
+}
 /* ---------- Leaflet 懒加载: 首次用到地图才异步加载(unpkg→bootcdn 兜底), 不再阻塞首屏 ---------- */
 let mapStarted = false, mapLoading = null;
 function loadCssRel(href) { const l = document.createElement('link'); l.rel = 'stylesheet'; l.href = href; document.head.appendChild(l); }
