@@ -1,0 +1,420 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>简化版原型 · 学生票区间规划器</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:#e8e8ec;font-family:-apple-system,'PingFang SC','Microsoft YaHei',sans-serif;display:flex;justify-content:center;padding:24px 0}
+  /* 手机画幅 375×812 */
+  .phone{width:375px;height:812px;background:#fafafa;border-radius:36px;border:10px solid #1c1c1e;box-shadow:0 24px 60px rgba(0,0,0,.35);overflow:hidden;position:relative;display:flex;flex-direction:column}
+  .phone::before{content:'';position:absolute;top:0;left:50%;transform:translateX(-50%);width:130px;height:22px;background:#1c1c1e;border-radius:0 0 14px 14px;z-index:10}
+  .screen{flex:1;overflow-y:auto;padding:34px 14px 20px}
+  .statusbar{position:sticky;top:0;z-index:9;background:#fafafa;padding:8px 2px 6px;font-size:11px;color:#71717a}
+  /* 品牌 */
+  .brand{display:flex;align-items:center;gap:8px;margin-bottom:12px}
+  .brand .logo{width:26px;height:26px;border-radius:8px;background:#18181b;color:#fff;display:grid;place-items:center;font-size:12px;font-weight:800}
+  .brand .name{font-size:14px;font-weight:700}
+  /* 输入卡片 */
+  .card{background:#fff;border:1px solid #e7e5e4;border-radius:14px;padding:14px;margin-bottom:10px;box-shadow:0 1px 2px rgba(16,24,40,.05)}
+  .card .label{font-size:13px;font-weight:700;margin-bottom:8px}
+  .card .label .sub{font-weight:400;font-size:11px;color:#71717a;margin-left:6px}
+  .row{display:flex;gap:8px;align-items:center}
+  input{flex:1;min-width:0;border:1px solid #d6d3d1;border-radius:10px;padding:10px 12px;font-size:15px;outline:none;font-family:inherit}
+  input:focus{border-color:#0d9488;box-shadow:0 0 0 3px rgba(13,148,136,.12)}
+  .btn{border:none;border-radius:10px;padding:10px 14px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;white-space:nowrap}
+  .btn.primary{background:linear-gradient(135deg,#06b6d4,#10b981);color:#fff}
+  .btn.ghost{background:#fff;border:1px solid #d6d3d1;color:#18181b}
+  .btn.sm{padding:6px 10px;font-size:12px;border-radius:8px}
+  .btn.danger{color:#dc2626;background:transparent}
+  .btn:active{transform:scale(.97)}
+  .btn:disabled{opacity:.45;cursor:not-allowed}
+  /* 目的地列表 */
+  .dest-list{margin-top:4px}
+  .dest{display:flex;align-items:center;gap:8px;background:#fafafa;border:1px solid #e7e5e4;border-radius:12px;padding:9px 10px;margin-bottom:8px;cursor:grab;transition:box-shadow .15s}
+  .dest.dragging{opacity:.5;transform:scale(.98)}
+  .dest .handle{color:#c4c4cc;font-size:12px;font-weight:700}
+  .dest.ok{background:rgba(34,197,94,.09);border-color:rgba(34,197,94,.45)}
+  .dest.edge{background:rgba(245,158,11,.09);border-color:rgba(245,158,11,.45)}
+  .dest.bad{background:rgba(239,68,68,.09);border-color:rgba(239,68,68,.45)}
+  .ring{width:18px;height:18px;border-radius:50%;border:3px solid #d4d4d8;flex:none;display:grid;place-items:center}
+  .ring.start{border-color:#06b6d4;background:linear-gradient(135deg,#06b6d4,#0d9488)}
+  .ring.start .dot{color:#fff;font-size:10px;font-weight:800}
+  .dest.start{background:#f0fdfa;border-color:rgba(13,148,136,.4)}
+  .ring.none{border-color:#d4d4d8;background:#f4f4f5}
+  .ring.ok{border-color:#22c55e;background:rgba(34,197,94,.12)}
+  .ring.edge{border-color:#f59e0b;background:rgba(245,158,11,.12)}
+  .ring.bad{border-color:#ef4444;background:rgba(239,68,68,.12)}
+  .dest .name{flex:1;font-size:13.5px;font-weight:700}
+  .dest .status{font-size:10.5px;color:#71717a}
+  .dest .x{border:none;background:none;color:#a1a1aa;font-size:15px;cursor:pointer;padding:4px 6px}
+  .dest .x:hover{color:#dc2626}
+  .hint{font-size:11px;color:#71717a;margin:2px 0 8px;line-height:1.6}
+  .plan-wrap{position:sticky;bottom:0;background:linear-gradient(180deg,rgba(250,250,250,0),#fafafa 30%);padding:10px 0 2px}
+  .plan-wrap .btn{width:100%;padding:13px;font-size:15px;border-radius:12px}
+  /* 结果 */
+  .result{display:none}
+  .result.show{display:block;animation:fadeIn .3s ease}
+  @keyframes fadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+  .advice-card{background:rgba(139,92,246,.08);border:1px solid rgba(139,92,246,.3);border-radius:12px;padding:11px 13px;font-size:12.5px;line-height:1.7;color:#5b21b6;margin-bottom:10px}
+  .advice-card b{color:#18181b}
+  .advice-card .best{color:#16a34a;font-weight:700}
+  /* 区间图 */
+  .iv{border:1px solid #e7e5e4;border-radius:14px;background:#fff;padding:14px;margin-bottom:10px}
+  .iv-line{display:flex;align-items:center;gap:6px}
+  .iv-line.top{margin:4px 0 10px}
+  .iv-node{font-size:11px;font-weight:700;color:#fff;padding:3px 6px;border-radius:7px;white-space:nowrap}
+  .iv-node.s{background:linear-gradient(135deg,#06b6d4,#0d9488)}
+  .iv-node.h{background:linear-gradient(135deg,#34d399,#059669)}
+  .iv-track{position:relative;flex:1;height:26px;min-width:60px}
+  .iv-zone{position:absolute;top:50%;left:0;right:0;height:6px;transform:translateY(-50%);border-radius:3px;background:linear-gradient(90deg,rgba(14,165,233,.3),rgba(16,185,129,.5))}
+  .iv-pt{position:absolute;top:50%;width:12px;height:12px;border-radius:50%;transform:translate(-50%,-50%);border:2px solid #fff;box-shadow:0 1px 3px rgba(0,0,0,.3)}
+  .iv-pt.ok{background:#22c55e}.iv-pt.edge{background:#f59e0b}.iv-pt.bad{background:#ef4444}
+  .iv-legend{display:flex;gap:10px;margin-top:6px;font-size:10.5px;color:#71717a}
+  .iv-legend i{width:8px;height:8px;border-radius:50%;display:inline-block;margin-right:4px;vertical-align:1px}
+  /* 消耗次数 */
+  .used{display:flex;align-items:baseline;gap:8px;margin-bottom:8px}
+  .used .num{font-size:34px;font-weight:800}
+  .used .unit{font-size:12px;color:#71717a}
+  .meta{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px}
+  .chip{font-size:11px;font-weight:600;padding:2px 9px;border-radius:99px}
+  .chip.green{color:#16a34a;background:rgba(22,163,74,.08)}
+  .chip.orange{color:#d97706;background:rgba(245,158,11,.1)}
+  .chip.red{color:#dc2626;background:rgba(220,38,38,.06)}
+  .modal-mask{position:fixed;inset:0;background:rgba(24,24,27,.5);display:flex;align-items:center;justify-content:center;z-index:99;padding:20px}
+  .modal-card{background:#fff;border-radius:16px;max-width:330px;width:100%;padding:18px;box-shadow:0 24px 70px rgba(0,0,0,.35);animation:slideUp .32s cubic-bezier(.22,.9,.32,1) both}
+  .modal-title{font-size:15px;font-weight:800;margin-bottom:10px}
+  .modal-body{font-size:13px;line-height:1.9;color:#52525b}
+  .modal-body b{color:#18181b}
+  .modal-body .best{color:#16a34a;font-weight:800}
+  .modal-body .note{font-size:11px;color:#a1a1aa;margin-top:10px;background:#f4f4f5;border-radius:8px;padding:7px 9px;line-height:1.6}
+  .modal-foot{display:flex;justify-content:flex-end;margin-top:14px}
+  .step2,.step3{display:none}
+  /* ===== 浮动动效 ===== */
+  @keyframes floatIn{from{opacity:0;transform:translateY(24px)}to{opacity:1;transform:none}}
+  .step2.show,.step3.show,.stepDepart.show{display:block;animation:floatIn .42s cubic-bezier(.22,.9,.32,1) both}
+  @keyframes floatUp{from{opacity:.2;transform:translateY(26px)}to{opacity:1;transform:none}}
+  .result.show{animation:floatUp .5s cubic-bezier(.22,.9,.32,1) both}
+  @keyframes rowIn{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
+  .dest.in{animation:rowIn .3s cubic-bezier(.22,.9,.32,1) both}
+  .dest.in:nth-child(2){animation-delay:.04s}.dest.in:nth-child(3){animation-delay:.08s}
+  .dest.in:nth-child(4){animation-delay:.12s}.dest.in:nth-child(5){animation-delay:.16s}
+  .dest.in:nth-child(6){animation-delay:.2s}.dest.in:nth-child(7){animation-delay:.24s}
+  .dest.in:nth-child(8){animation-delay:.28s}.dest.in:nth-child(9){animation-delay:.32s}
+  @keyframes popIn{from{transform:scale(.3);opacity:0}to{transform:scale(1);opacity:1}}
+  .ring.ok,.ring.edge,.ring.bad{animation:popIn .35s cubic-bezier(.22,.9,.32,1) both}
+  @keyframes slideUp{from{opacity:0;transform:translateY(60px)}to{opacity:1;transform:none}}
+  .modal-card{animation:slideUp .32s cubic-bezier(.22,.9,.32,1) both}
+  .modal-mask{animation:fadeIn .2s ease both}
+  .step2.show,.step3.show{display:block;animation:fadeIn .25s ease}
+</style>
+</head>
+<body>
+<div class="phone">
+  <div class="screen">
+    <div class="statusbar" id="status">填写学校开始</div>
+    <div class="brand"><div class="logo">优</div><div class="name">学生优惠 · 区间规划器</div></div>
+
+    <!-- 步骤1: 学校 -->
+    <div class="card step1" id="step1">
+      <div class="label">① 学校 <span class="sub">区间固定端点（须与学信网一致）</span></div>
+      <div class="row">
+        <input id="schoolInput" placeholder="输入学校城市，如：武汉">
+        <button class="btn primary" onclick="nextSchool()">下一步</button>
+      </div>
+    </div>
+
+    <!-- 步骤2: 出发地(区间另一端 + 行程起点) -->
+    <div class="card stepDepart" id="stepDepart">
+      <div class="label">② 出发地 <span class="sub">区间另一端 + 行程起点</span></div>
+      <div class="row">
+        <input id="departInput" placeholder="输入出发城市，如：石家庄">
+        <button class="btn primary" onclick="nextDepart()">下一步</button>
+      </div>
+      <div class="hint" style="margin-top:8px">优惠区间 = 学校 ↔ 出发地（颜色判定用它）。优化建议会告诉你"把区间改为 学校↔X"，请按它在铁路学生优惠资质中自行修改真实家庭地址。</div>
+    </div>
+
+    <!-- 步骤3: 目的地 + 规划 -->
+    <div class="step3" id="step3">
+      <div class="card">
+        <div class="label">③ 想去哪 <span class="sub">点【一键规划】后判定：绿=区间内 · 橙=可能被查 · 红=超区间</span></div>
+        <div class="row">
+          <input id="tripInput" placeholder="添加城市，如：岳阳" onkeydown="if(event.key==='Enter')addTrip()">
+          <button class="btn primary" onclick="addTrip()">添加</button>
+        </div>
+        <div class="hint">每个框可 ✕ 删除、按住 ≡ 拖动排序（第一个=最先去）</div>
+      </div>
+      <!-- 常驻区间线: 学校—家, 规划后圆点着色 -->
+      <div class="iv-line top" id="ivTop">
+        <span class="iv-node s" id="ivTopS">学校</span>
+        <span class="iv-track"><span class="iv-zone"></span><span id="ivTopPts"></span></span>
+        <span class="iv-node h" id="ivTopH">出发地</span>
+      </div>
+      <div class="dest-list" id="destList"></div>
+      <div class="plan-wrap">
+        <button class="btn primary" id="planBtn" onclick="onPlan()" disabled>🚀 一键规划行程</button>
+      </div>
+
+      <!-- 结果 -->
+      <div class="result" id="result">
+        <div class="advice-card" id="adviceCard"></div>
+        <div class="card">
+          <div class="used"><span class="num" id="usedNum">–</span><span class="unit">次 / 预算 4 · 剩余 <b id="remainNum">4</b> 次</span></div>
+          <div class="meta" id="metaChips"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 区间建议弹窗 -->
+<div class="modal-mask" id="modal" style="display:none" onclick="if(event.target===this)closeModal()">
+  <div class="modal-card">
+    <div class="modal-title">🎯 区间优化建议</div>
+    <div class="modal-body" id="modalBody"></div>
+    <div class="modal-foot">
+      <button class="btn ghost" id="applyBtn" style="margin-right:auto" onclick="applySuggestion()">采用推荐区间</button>
+      <button class="btn primary" onclick="closeModal()">知道了</button>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ============ 真实车站库（与网页版/小程序版一致） ============ */
+const STATIONS = [
+  ["北京西","北京",39.895,116.322,1],["北京南","北京",39.865,116.379,1],["北京丰台","北京",39.852,116.301,0],
+  ["天津","天津",39.135,117.202,1],["天津西","天津",39.161,117.158,0],["石家庄","石家庄",38.056,114.490,1],
+  ["保定东","保定",38.858,115.498,0],["邯郸东","邯郸",36.610,114.530,0],["唐山","唐山",39.622,118.178,0],
+  ["秦皇岛","秦皇岛",39.950,119.601,0],["张家口","张家口",40.762,114.887,0],["太原南","太原",37.750,112.600,1],
+  ["呼和浩特东","呼和浩特",40.846,111.760,1],["沈阳北","沈阳",41.821,123.435,1],["大连北","大连",38.980,121.620,1],
+  ["长春西","长春",43.830,125.180,1],["哈尔滨西","哈尔滨",45.632,126.570,1],["上海虹桥","上海",31.197,121.323,1],
+  ["上海","上海",31.251,121.456,0],["苏州","苏州",31.329,120.621,0],["无锡","无锡",31.568,120.308,0],
+  ["南京南","南京",31.970,118.794,1],["杭州东","杭州",30.290,120.210,1],["宁波","宁波",29.861,121.549,0],
+  ["温州南","温州",27.966,120.640,0],["合肥南","合肥",31.800,117.300,1],["福州","福州",26.100,119.300,1],
+  ["厦门北","厦门",24.636,118.130,1],["南昌西","南昌",28.620,115.780,1],["济南西","济南",36.672,116.880,1],
+  ["青岛","青岛",36.062,120.318,0],["郑州东","郑州",34.720,113.771,1],["郑州","郑州",34.747,113.656,0],
+  ["洛阳龙门","洛阳",34.589,112.516,0],["开封北","开封",34.857,114.288,0],["武汉","武汉",30.607,114.422,1],
+  ["汉口","武汉",30.620,114.255,0],["襄阳东","襄阳",32.012,112.230,0],["长沙南","长沙",28.150,113.066,1],
+  ["株洲西","株洲",27.804,113.103,0],["衡阳东","衡阳",26.901,112.621,0],["岳阳东","岳阳",29.372,113.199,0],
+  ["广州南","广州",22.990,113.269,1],["广州","广州",23.147,113.260,0],["深圳北","深圳",22.609,114.028,1],
+  ["珠海","珠海",22.219,113.528,0],["南宁东","南宁",22.840,108.421,1],["桂林北","桂林",25.317,110.297,0],
+  ["海口东","海口",20.020,110.362,0],["成都东","成都",30.630,104.140,1],["重庆北","重庆",29.611,106.547,1],
+  ["贵阳北","贵阳",26.630,106.640,1],["昆明南","昆明",24.880,102.860,1],["拉萨","拉萨",29.650,91.120,1],
+  ["西安北","西安",34.374,108.937,1],["兰州西","兰州",36.070,103.750,1],["西宁","西宁",36.610,101.810,1],
+  ["银川","银川",38.481,106.221,1],["乌鲁木齐","乌鲁木齐",43.781,87.582,1],["信阳东","信阳",32.161,114.160,0],
+  ["驻马店西","驻马店",33.008,114.051,0],["商丘","商丘",34.421,115.657,0],["阜阳西","阜阳",32.928,115.782,0],
+  ["九江","九江",29.708,116.011,0],["萍乡北","萍乡",27.681,113.812,0],["郴州西","郴州",25.780,112.946,0],
+  ["湛江西","湛江",21.249,110.331,0],["遵义","遵义",27.722,106.911,0],["六盘水","六盘水",26.590,104.830,0],
+  ["绵阳","绵阳",31.473,104.723,0],["南充北","南充",30.828,106.088,0],["达州","达州",31.218,107.479,0],
+  ["延安","延安",36.590,109.496,0],["榆林","榆林",38.287,109.731,0],["天水南","天水",34.580,105.700,0],
+  ["张掖西","张掖",38.923,100.453,0],["嘉峪关南","嘉峪关",39.762,98.279,0],["克拉玛依","克拉玛依",45.580,84.890,0],
+];
+const HUBS = STATIONS.filter(s=>s[4]);
+const R = 6371;
+const hav=(a,b)=>{const dLat=(b.lat-a.lat)*Math.PI/180,dLon=(b.lon-a.lon)*Math.PI/180;const s=Math.sin(dLat/2)**2+Math.cos(a.lat*Math.PI/180)*Math.cos(b.lat*Math.PI/180)*Math.sin(dLon/2)**2;return 2*R*Math.asin(Math.sqrt(s))};
+const dist=(a,b)=>hav(a,b);
+function corridor(S,H,D){const lat0=(S.lat+H.lat)/2*Math.PI/180;const toX=l=>(l.lon-S.lon)*111.32*Math.cos(lat0);const toY=l=>(l.lat-S.lat)*110.57;const hx=toX(H),hy=toY(H),dx=toX(D),dy=toY(D);const L2=hx*hx+hy*hy;if(L2<1e-6)return{t:0,p:Math.hypot(dx,dy)};const t=(dx*hx+dy*hy)/L2;return{t,p:Math.hypot(dx-hx*t,dy-hy*t)}}
+function inIntervalBelt(S,H,P,tLo,tHi,band){const L=dist(S,H);if(L<15)return true;const{t,p}=corridor(S,H,P);return t>=tLo&&t<=tHi&&p<=band}
+/* 目的地判定: 0=超区间(红) 1=边缘可能被查(橙) 2=区间内(绿) */
+function judge(S,H,D){
+  const L=dist(S,H);
+  const{t,p}=corridor(S,H,D);
+  const inCore=t>=-0.05&&t<=1.05&&p<=Math.max(60,0.32*L);
+  if(inCore)return 2;
+  const inEdge=t>=-0.5&&t<=1.5&&p<=Math.max(90,0.45*L);
+  return inEdge?1:0;
+}
+/* 最优区间建议: 枚举全部车站, 覆盖优先+次数最少 (smartBest 简化版) */
+function smartBest(S,H,trips){
+  let best=null;
+  const cur=trips.map(d=>judge(S,H,d.station));
+  const curCover=cur.filter(x=>x===2).length;
+  for(const s of STATIONS){
+    if(s[0]===S.name)continue;
+    const H2={lat:s[2],lon:s[3]};
+    const cover=trips.filter(d=>judge(S,H2,d.station)===2).length;
+    if(cover<curCover)continue;
+    const bad=trips.filter(d=>judge(S,H2,d.station)===0).length;
+    const km=dist({lat:s[2],lon:s[3]},{lat:H.lat,lon:H.lon});
+    if(!best||cover>best.cover||(cover===best.cover&&(bad<best.bad||(bad===best.bad&&km<best.km))))best={s,cover,bad,km};
+  }
+  return best;
+}
+/* 顺路排序: 沿 学校→出发地 走廊投影 */
+function sortByRoute(S,H,trips){return trips.slice().sort((a,b)=>corridor(S,H,b.station).t-corridor(S,H,a.station).t)} // 降序: 出发地侧在前
+
+/* ============ 状态 ============ */
+const state={school:null,depart:null,intervalEnd:null,trips:[],planned:false,anim:false};
+
+/* 固定测试数据: 学校=北京 出发地=石家庄 目的地=… */
+function initDemo(){
+  state.school=st('北京');
+  state.depart=st('石家庄');
+  state.intervalEnd=state.depart; // 区间端点初始=出发地; 点"采用推荐区间"后单独变
+  document.getElementById('schoolInput').value='北京';
+  document.getElementById('departInput').value='石家庄';
+  for(const c of ['哈尔滨','昆明','长沙','贵阳','乌鲁木齐','北京']){
+    const s=st(c);
+    if(s)state.trips.push({name:s.name,city:s.city,station:s,text:c});
+  }
+  document.getElementById('stepDepart').classList.add('show');
+  document.getElementById('step3').classList.add('show');
+  document.getElementById('planBtn').disabled=false;
+  renderIVTop();
+  renderList();
+  setStatus('测试数据：学校 北京 · 出发地 石家庄 · 6 个目的地，点【一键规划】看效果');
+}
+function st(name){const row=STATIONS.find(s=>s[0]===name||s[1]===name);return row?{name:row[0],city:row[1],lat:row[2],lon:row[3]}:null}
+function setStatus(m){document.getElementById('status').textContent=m}
+function esc(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}
+
+/* 步骤1 → 2 */
+function nextSchool(){
+  const q=document.getElementById('schoolInput').value.trim();
+  const s=st(q);
+  if(!s){setStatus('未收录该城市（内置 '+STATIONS.length+' 站），试试输入车站名');return}
+  state.school=s;
+  document.getElementById('stepDepart').classList.add('show');
+  setStatus('学校：'+s.name+' · '+s.city+'，填写出发地');
+}
+/* 步骤2 出发地 → 步骤3 目的地 */
+function nextDepart(){
+  const q=document.getElementById('departInput').value.trim();
+  const d=st(q);
+  if(!d){setStatus('未收录该城市，试试输入车站名');return}
+  state.depart=d;
+  if(!state.intervalEnd)state.intervalEnd=d;
+  state.planned=false;
+  renderList();
+  document.getElementById('step3').classList.add('show');
+  document.getElementById('planBtn').disabled=false;
+  setStatus('出发地：'+d.name+' · '+d.city+'（区间 '+state.school.name+' ↔ '+state.intervalEnd.name+'），添加想去的地方');
+}
+/* 目的地 */
+function addTrip(){
+  const q=document.getElementById('tripInput').value.trim();
+  if(!q)return;
+  const s=st(q);
+  if(!s){setStatus('未收录 "'+q+'"');return}
+  state.trips.push({name:s.name,city:s.city,station:s,text:q});
+  document.getElementById('tripInput').value='';
+  state.anim=true; renderList();
+  setStatus('已添加：'+q+'（'+(state.trips.length)+' 个目的地）');
+}
+function removeTrip(i){state.trips.splice(i,1);state.anim=false;renderList();setStatus('已删除')}
+/* 渲染列表: 规划前灰色中性圈+无原因; 规划后着色+原因 */
+function renderList(){
+  const el=document.getElementById('destList');
+  const S=state.school,H=state.intervalEnd;
+  const DEP=state.depart;
+  const startRow='<div class="dest start">'+
+      '<span class="handle">≡</span>'+
+      '<span class="ring start"><span class="dot">起</span></span>'+
+      '<span class="name">'+esc(DEP?DEP.name:'出发地')+'</span>'+
+      '<span class="status">起点 · 出发地</span>'+
+    '</div>';
+  if(!state.trips.length){el.innerHTML=startRow+'<div style="color:#a1a1aa;font-size:12px;padding:6px 2px">还没有目的地，在上方输入添加 👆</div>';return}
+  el.innerHTML=startRow+state.trips.map((t,i)=>{
+    const planned=state.planned&&S&&H;
+    const j=planned?judge(S,H,t.station):-1;
+    const boxCls=j===2?'ok':j===1?'edge':j===0?'bad':'';
+    const ring=j===2?'ok':j===1?'edge':j===0?'bad':'none';
+    const stTxt=j===2?'区间内':j===1?'可能被查':j===0?'超区间':'';
+    return '<div class="dest '+boxCls+' '+(state.anim?'in':'')+'" draggable="true" ondragstart="dragStart(event,'+i+')" ondragover="dragOver(event,'+i+')" ondrop="drop(event,'+i+')" ondragend="dragEnd()">'+
+      '<span class="handle">≡</span>'+
+      '<span class="ring '+ring+'"></span>'+
+      '<span class="name">'+esc(t.text)+'</span>'+
+      (stTxt?'<span class="status">'+stTxt+'</span>':'')+
+      '<button class="x" onclick="removeTrip('+i+')">✕</button>'+
+    '</div>';
+  }).join('');
+  state.anim=false;
+  renderIVTop();
+}
+let dragId=null;
+function dragStart(e,i){dragId=i;if(e.dataTransfer)e.dataTransfer.effectAllowed='move'}
+function dragOver(e,i){e.preventDefault();if(e.dataTransfer)e.dataTransfer.dropEffect='move'}
+function drop(e,i){e.preventDefault();if(dragId==null||dragId===i){dragId=null;return}
+  const [it]=state.trips.splice(dragId,1);state.trips.splice(i,0,it);dragId=null;state.anim=false;renderList();setStatus('已调整顺序')}
+function dragEnd(){dragId=null}
+/* 常驻区间线: 学校—线—出发地; 规划后圆点着色 */
+function renderIVTop(){
+  const S=state.school,H=state.intervalEnd;
+  if(!S||!H)return;
+  document.getElementById('ivTopS').textContent=S.name;
+  document.getElementById('ivTopH').textContent=H.name;
+  let pts='';
+  if(state.planned){
+    pts=state.trips.map(t=>{
+      const j=judge(S,H,t.station);
+      const{t:tt}=corridor(S,H,t.station);
+      const left=Math.min(90,Math.max(10,(tt+0.05)/1.1*100));
+      const cls=j===2?'ok':j===1?'edge':'bad';
+      return '<span class="iv-pt '+cls+'" style="left:'+left+'%"></span>';
+    }).join('');
+  }
+  document.getElementById('ivTopPts').innerHTML=pts;
+}
+
+/* 一键规划: 出发地=区间端点+起点, 目的地按"出发地→学校"方向顺路排序; 判定着色; 弹窗告知区间建议 */
+function onPlan(){
+  if(!state.trips.length){setStatus('先添加想去的地方');return}
+  // 1) 出发地作为起点: 从出发地一侧向学校一侧顺路排序(走廊 t 降序)
+  state.trips=sortByRoute(state.school,state.intervalEnd,state.trips);
+  // 2) 判定(用用户自己的出发地, 不自动更改)
+  state.planned=true;
+  renderList();
+  const S=state.school,H=state.intervalEnd;
+  const jrs=state.trips.map(t=>judge(S,H,t.station));
+  const okN=jrs.filter(x=>x===2).length,edgeN=jrs.filter(x=>x===1).length,badN=jrs.filter(x=>x===0).length;
+  // 3) 弹窗: 区间应该改到哪(学校→最优站)
+  const best=smartBest(S,H,state.trips);
+  state.suggest=best&&!(best.s[0]===H.name)?best.s:null;
+  let tip;
+  if(state.suggest){
+    // 推荐区间下的判定预览(绿/橙/红)
+    const H2={lat:state.suggest[2],lon:state.suggest[3]};
+    const j2=state.trips.map(t=>judge(S,H2,t.station));
+    const g2=j2.filter(x=>x===2).length,e2=j2.filter(x=>x===1).length,b2=j2.filter(x=>x===0).length;
+    tip='当前区间（'+esc(S.name)+' ↔ '+esc(H.name)+'）太小，多数目的地<b>超出区间（红）</b>。<br><br>'+
+      '把<b>区间</b>改为：<b>'+esc(S.name)+'</b>（你的学校）→ <span class="best">'+state.suggest[0]+' · '+state.suggest[1]+'</span><br>'+
+      '→ '+state.trips.length+' 个目的地：<b style="color:#22c55e">'+g2+' 绿</b> / <b style="color:#f59e0b">'+e2+' 橙</b> / <b style="color:#ef4444">'+b2+' 红</b>'+
+      '<div class="note">采用后，颜色按 <b>学校 '+esc(S.name)+' ↔ '+state.suggest[0]+'</b> 判定，你的出发地（'+esc(state.depart.name)+'）保持不变。请同时在<b>铁路学生优惠资质核验</b>中把真实家庭地址改为 '+state.suggest[0]+'（学校端不动）。红的=不能去。</div>';
+  }else{
+    tip='当前区间已是最优：<b>'+esc(S.name)+'</b> ↔ <b>'+esc(H.name)+'</b> → 区间内 '+okN+'/'+state.trips.length+' 站。'+
+      '<div class="note">当前出发地保持不变。</div>';
+  }
+  document.getElementById('modalBody').innerHTML=tip;
+  document.getElementById('applyBtn').style.display=state.suggest?'inline-flex':'none';
+  document.getElementById('modal').style.display='flex';
+  // 4) 上方常驻区间线已由 renderList 着色
+  // 5) 消耗次数: 存在可买学生票的段(区间内/边缘) → 整条 5 天内联程 = 1 次; 超区间段另购全价(不扣学生次数)
+  const used=(okN+edgeN)>0?1:0;
+  const remain=4-used;
+  document.getElementById('usedNum').textContent=used;
+  document.getElementById('remainNum').textContent=remain;
+  document.getElementById('metaChips').innerHTML=
+    '<span class="chip green">区间内 '+okN+'/'+state.trips.length+'</span>'+
+    (edgeN?'<span class="chip orange">可能被查 '+edgeN+'</span>':'')+
+    (badN?'<span class="chip red">超区间 '+badN+'（另购全价）</span>':'')+
+    '<span class="chip green">整条联程 '+(used>0?used:'0')+' 次（5 天内）</span>';
+  document.getElementById('result').classList.add('show');
+  document.getElementById('result').scrollIntoView({behavior:'smooth',block:'start'});
+  setStatus('已按顺路排序：出发地 '+esc(H.name)+' → '+state.trips.map(t=>t.text).join(' → '));
+}
+function closeModal(){document.getElementById('modal').style.display='none'}
+function applySuggestion(){
+  if(!state.suggest)return;
+  // 只改"区间端点"(判定用), 出发地保持不动
+  state.intervalEnd={name:state.suggest[0],city:state.suggest[1],lat:state.suggest[2],lon:state.suggest[3]};
+  state.planned=true;
+  renderList();
+  renderIVTop();
+  closeModal();
+  setStatus('区间端点改为 '+state.intervalEnd.name+'（学校 '+state.school.name+' ↔ '+state.intervalEnd.name+'），颜色已按新区间判定；出发地保持 '+state.depart.name);
+}
+initDemo();
+</script>
+</body>
+</html>

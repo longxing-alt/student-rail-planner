@@ -1,0 +1,13 @@
+{
+  "pages": ["pages/index/index"],
+  "window": {
+    "navigationBarTitleText": "学生票区间规划器",
+    "navigationBarBackgroundColor": "#fafafa",
+    "navigationBarTextStyle": "black",
+    "backgroundColor": "#fafafa",
+    "backgroundTextStyle": "light"
+  },
+  "style": "v2",
+  "lazyCodeLoading": "requiredComponents",
+  "sitemapLocation": "sitemap.json"
+}

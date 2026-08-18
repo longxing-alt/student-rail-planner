@@ -7,7 +7,8 @@
     "test": "tests"
   },
   "scripts": {
-    "test": "node tests/logic.test.mjs && node tests/ui.test.mjs"
+    "test": "node tests/logic.test.mjs && node tests/ui.test.mjs && node tests/logic-mp.test.mjs && node tests/mp-flow.test.mjs && node tests/web-mobile.test.mjs",
+    "build:mp": "node scripts/build-mp-logic.mjs && node scripts/gen-pins.mjs && node scripts/gen-avatar.mjs && node scripts/sync-mini.mjs"
   },
   "keywords": [],
   "author": "",
@@ -15,5 +16,8 @@
   "type": "commonjs",
   "dependencies": {
     "jsdom": "^24.1.3"
+  },
+  "devDependencies": {
+    "miniprogram-automator": "^0.12.1"
   }
 }

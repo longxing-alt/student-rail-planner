@@ -3,6 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#fafafa">
 <title>学生票 · 优惠区间规划器</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🚄</text></svg>">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -243,8 +244,10 @@ input[type=range]{width:100%;accent-color:var(--blue)}
 .trip-row:hover{border-color:#d6d3d1;background:#fff}
 .trip-row[draggable="true"]{cursor:grab}
 .trip-row.drag-over{border-color:var(--blue);background:#f0fdfa;box-shadow:0 0 0 2px rgba(13,148,136,.2)}
-.drag-handle{color:#d4d4d8;cursor:grab;font-size:14px;user-select:none;flex:none;padding:0 2px}
+.drag-handle{color:#d4d4d8;cursor:grab;font-size:14px;user-select:none;flex:none;padding:0 2px;-webkit-user-select:none;touch-action:none}
 .drag-handle:hover{color:#a1a1aa}
+.stop-row,.trip-row{touch-action:pan-y}
+.stop-row.dragging,.trip-row.dragging{opacity:.5;transform:scale(.98)}
 .trip-idx{width:22px;height:22px;border-radius:7px;display:grid;place-items:center;font-size:11.5px;font-weight:700;background:var(--blue-soft);color:var(--blue);flex:none}
 .trip-main{flex:1;min-width:150px}
 .trip-main b{font-size:13.5px}
@@ -294,9 +297,9 @@ input[type=range]{width:100%;accent-color:var(--blue)}
 .opt-used{font-size:16px;font-weight:800;font-variant-numeric:tabular-nums}
 
 /* 引导 */
-#spotlight{position:fixed;inset:0;z-index:1000;cursor:pointer}
+#spotlight{position:fixed;inset:0;z-index:1000;cursor:pointer;pointer-events:none}
 #spotHole{position:absolute;border-radius:14px;border:2.5px solid var(--blue);box-shadow:0 0 0 9999px rgba(15,15,20,.62),0 10px 40px rgba(13,148,136,.3);transition:left .5s cubic-bezier(.22,.9,.32,1),top .5s cubic-bezier(.22,.9,.32,1),width .5s cubic-bezier(.22,.9,.32,1),height .5s cubic-bezier(.22,.9,.32,1),opacity .28s ease;pointer-events:none;opacity:0}
-#spotCard{position:fixed;width:min(340px,86vw);background:#fff;border:1px solid var(--line);border-radius:16px;box-shadow:var(--shadow-md);padding:15px 17px;z-index:1001;cursor:default;animation:spotIn .35s ease both}
+#spotCard{position:fixed;width:min(340px,86vw);background:#fff;border:1px solid var(--line);border-radius:16px;box-shadow:var(--shadow-md);padding:15px 17px;z-index:1001;cursor:default;pointer-events:auto;animation:spotIn .35s ease both}
 @keyframes spotIn{from{opacity:0;transform:translateY(10px) scale(.97)}to{opacity:1;transform:none}}
 .spot-title{font-size:15px;font-weight:800;margin-bottom:6px;color:var(--text)}
 .spot-title .st-num{display:inline-grid;place-items:center;width:22px;height:22px;border-radius:7px;background:linear-gradient(135deg,#06b6d4,#10b981);color:#fff;font-size:12px;margin-right:8px;vertical-align:-4px}
@@ -307,7 +310,7 @@ input[type=range]{width:100%;accent-color:var(--blue)}
 .spot-dots .dot{width:7px;height:7px;border-radius:50%;background:#d4d4d8;transition:all .3s}
 .spot-dots .dot.on{background:var(--blue);transform:scale(1.35)}
 
-footer{border-top:1px solid var(--line);margin-top:50px;padding:26px 0 40px;text-align:center;color:var(--muted);font-size:12.5px}
+footer{border-top:1px solid var(--line);margin-top:50px;padding:26px 0 80px;text-align:center;color:var(--muted);font-size:12.5px}
 footer b{color:var(--text)}
 
 .fade-in{animation:fadeIn .4s ease both}
@@ -318,6 +321,133 @@ footer b{color:var(--text)}
   *{transition-duration:.01ms!important;animation-duration:.01ms!important}
 }
 
+/* ===== 手机端优化 ===== */
+@media (max-width:640px){
+  .hide-m{display:none!important}
+  .wrap{padding:0 12px max(44px,env(safe-area-inset-bottom))}
+  nav .inner{padding:0 12px;height:48px;gap:8px}
+  .brand{font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .nav-link{padding:4px 8px;font-size:12.5px}
+  .ver{font-size:10px;padding:1px 6px}
+  .dropdown-menu{max-height:72vh;overflow-y:auto}
+  .workspace{border-radius:14px;margin-top:12px}
+  .ws-input{padding:16px 14px 12px}
+  .ws-divider{margin:0 14px}
+  .ws-result{padding:16px 14px 20px}
+  .wz-step{padding:6px 11px;font-size:12.5px;gap:5px}
+  input[type=text],input[type=number]{font-size:16px} /* 防 iOS 聚焦自动放大 */
+  .chain-mini{padding:8px 10px}
+  .chain-row{gap:8px}
+  .ws-used b{font-size:36px}
+  .ws-top{gap:10px}
+  .ws-top #mapToggleBtn{order:1;margin-left:auto}
+  .ws-top .hint{order:2;min-width:0;flex:1 1 100%}
+  .btn{padding:8px 12px;font-size:12.5px}
+  .btn-sm{padding:7px 10px;font-size:12px}
+  .iv-node{font-size:12px;padding:5px 8px}
+  .iv-track{min-width:90px}
+  .route-chain{overflow-x:auto;-webkit-overflow-scrolling:touch;justify-content:flex-start;padding:14px 2px 6px}
+  .rc-node{width:60px;padding:4px 1px}
+  .rc-dot{width:18px;height:18px}
+  .rc-seg{min-width:16px;margin:8px -28px 0}
+  .rc-name{font-size:11.5px;max-width:58px;overflow:hidden;text-overflow:ellipsis}
+  .chain-seg-tip{gap:5px}
+  .seg-tip-item{font-size:11.5px}
+  #totals{gap:8px;margin:12px 0}
+  .total-box{padding:10px 8px}
+  .total-box.big{padding:12px 8px}
+  .total-box.big .num{font-size:32px}
+  .total-box .num{font-size:19px}
+  .trip-row,.stop-row{gap:7px;padding:8px 9px}
+  .trip-main{flex:1 1 100%;min-width:0}
+  .drag-handle{font-size:16px;padding:2px 4px}
+  .map-card{border-radius:12px;margin-top:12px}
+  #map{height:280px}
+  .sec-title{font-size:17px;margin-top:26px}
+  .modal-mask{padding:10px}
+  .modal-card{max-height:92vh;border-radius:14px}
+  .modal-body{padding:14px}
+  .modal-stats{gap:8px}
+  .modal-stats>div{padding:8px 6px}
+  footer{margin-top:32px;padding:20px 0 max(30px,env(safe-area-inset-bottom))}
+}
+@media (max-width:420px){ .ver{display:none} }
+
+/* ===== 底部 Tab 栏（规划/规则/地图） ===== */
+.tabbar{position:fixed;left:0;right:0;bottom:0;z-index:150;display:flex;background:rgba(255,255,255,.95);backdrop-filter:blur(10px);border-top:1px solid var(--line);max-width:1080px;margin:0 auto;padding:6px 8px calc(6px + env(safe-area-inset-bottom))}
+.tabbar .tb{flex:1;background:none;border:none;font-family:inherit;font-size:12px;color:var(--muted);padding:8px 4px;border-radius:10px;cursor:pointer;font-weight:600}
+.tabbar .tb:hover{background:#f1f1f2;color:var(--text)}
+.tabbar .tb.on{color:#0f766e;background:rgba(13,148,136,.08)}
+.rules-page{padding:0 20px 90px;max-width:720px;margin:0 auto;display:none;grid-template-columns:1fr 1fr;gap:14px}
+.rules-page .sec-head{grid-column:1/-1}
+.rules-page .dd-rule{white-space:normal}
+body[data-tab="rules"] .wrap #app,body[data-tab="rules"] .wrap #optimize{display:none}
+body[data-tab="rules"] #rulesPage{display:grid!important}
+
+/* ===== 移动端视图（小程序同款） ===== */
+.m-root{display:none;flex-direction:column;gap:10px;padding:0 0 90px}
+.m-card{background:#fff;border:1px solid var(--line);border-bottom:1px solid var(--line);padding:14px 14px;border-radius:16px}
+.m-card-title{font-size:14px;font-weight:700;margin-bottom:8px}
+.m-card-title .m-sub{font-weight:400;font-size:11px;color:var(--muted);margin-left:6px}
+.m-row{display:flex;gap:8px;align-items:center}
+.m-row input{flex:1;min-width:0;background:#fff;border:1px solid #d6d3d1;border-radius:10px;color:var(--text);padding:12px 13px;font-size:16px;min-height:48px;outline:none;font-family:inherit}
+.m-hint{font-size:11px;color:var(--muted);margin-top:8px;line-height:1.7}
+.m-iv{display:flex;align-items:center;gap:6px;margin:8px 0 12px}
+.m-iv-node{flex:none;white-space:nowrap;font-size:11px;font-weight:700;padding:4px 8px;border-radius:8px;color:#fff}
+.m-iv-s{background:linear-gradient(135deg,#06b6d4,#0d9488)}
+.m-iv-h{background:linear-gradient(135deg,#34d399,#059669)}
+.m-iv-track{position:relative;flex:1;min-width:60px;height:26px}
+.m-iv-zone{position:absolute;top:50%;left:0;right:0;height:6px;transform:translateY(-50%);border-radius:3px;background:linear-gradient(90deg,rgba(14,165,233,.3),rgba(16,185,129,.5))}
+.m-iv-pt{position:absolute;top:50%;width:12px;height:12px;border-radius:50%;transform:translate(-50%,-50%);border:2px solid #fff;box-shadow:0 1px 3px rgba(0,0,0,.3)}
+.m-iv-pt.ok{background:#22c55e}.m-iv-pt.edge{background:#f59e0b}.m-iv-pt.bad{background:#ef4444}
+.m-list{display:flex;flex-direction:column;gap:8px}
+.m-dest{display:flex;align-items:center;gap:8px;background:#fafafa;border:1px solid var(--line);border-radius:12px;padding:9px 10px}
+.m-dest.start{background:#f0fdfa;border-color:rgba(13,148,136,.45)}
+.m-dest.ok{background:rgba(34,197,94,.09);border-color:rgba(34,197,94,.45)}
+.m-dest.edge{background:rgba(245,158,11,.09);border-color:rgba(245,158,11,.45)}
+.m-dest.bad{background:rgba(239,68,68,.09);border-color:rgba(239,68,68,.45)}
+.m-dest.dragging{opacity:.5;transform:scale(.98)}
+.m-handle{color:#c4c4cc;font-size:14px;font-weight:700;cursor:grab;padding:4px 2px;touch-action:none;user-select:none}
+.m-ring{width:18px;height:18px;border-radius:50%;border:3px solid #d4d4d8;flex:none;display:grid;place-items:center}
+.m-ring.start{border-color:#06b6d4;background:linear-gradient(135deg,#06b6d4,#0d9488);color:#fff;font-size:10px;font-weight:800}
+.m-ring.ok{border-color:#22c55e;background:rgba(34,197,94,.12)}
+.m-ring.edge{border-color:#f59e0b;background:rgba(245,158,11,.12)}
+.m-ring.bad{border-color:#ef4444;background:rgba(239,68,68,.12)}
+.m-dest .m-name{flex:1;font-size:13.5px;font-weight:700}
+.m-dest .m-st{font-size:10.5px;color:var(--muted)}
+.m-dest .m-x{font-size:15px;color:#a1a1aa;background:none;border:none;cursor:pointer;padding:4px 6px}
+.m-dest .m-x:hover{color:var(--red)}
+.m-plan-wrap{margin-top:14px}
+.m-plan-btn{width:100%;padding:14px!important;font-size:16px;border-radius:14px}
+.m-result{margin-top:14px}
+.m-used{display:flex;align-items:baseline;gap:8px}
+.m-used b{font-size:34px;font-weight:800;letter-spacing:-.03em;line-height:1}
+.m-used span{font-size:12px;color:var(--muted)}
+.m-chips{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+.m-chip{font-size:11px;font-weight:600;padding:2px 9px;border-radius:99px}
+.m-chip.green{color:#16a34a;background:rgba(22,163,74,.08)}
+.m-chip.orange{color:#d97706;background:rgba(245,158,11,.1)}
+.m-chip.red{color:#dc2626;background:rgba(220,38,38,.06)}
+.m-chip.gray{color:#9ca3af;background:#f4f4f5}
+.m-empty{color:#a1a1aa;font-size:12px;padding:6px 2px}
+#mModal .modal-body{font-size:13px;line-height:1.9;color:var(--muted)}
+#mModal .modal-body b{color:var(--text)}
+#mModal .m-best{color:#16a34a;font-weight:800}
+#mModal .modal-note{font-size:11px;color:var(--muted);margin-top:10px;background:#f4f4f5;border-radius:8px;padding:8px 10px}
+
+/* 移动端 ≤768px: 隐藏桌面内容, 仅显示移动视图 + Tab 栏 */
+@media(max-width:768px){
+  .wrap .hide-phone,.wrap #app,.wrap #optimize{display:none}
+  .tabbar{display:flex!important}
+  .m-root{display:flex!important}
+  body[data-tab="map"] .m-panel{display:none!important}
+  body[data-tab="map"] #mMapPanel{display:block!important}
+  body[data-tab="rules"] .m-panel{display:none!important}
+}
+/* 桌面端点击 Tab: 回到对应区块 */
+body[data-tab="plan"] .wrap #app{display:block}
+body[data-tab="map"] #mapWrap{display:block!important}
+body[data-tab="map"] .m-panel,body[data-tab="map"] #mMapPanel{display:block}
 </style>
 </head>
 <body>
@@ -328,8 +458,8 @@ footer b{color:var(--text)}
     <div class="logo">优</div>
     <div class="brand">学生优惠 · 区间规划器</div>
     <div class="spacer"></div>
-    <a class="nav-link" href="#app">开始规划</a>
-    <a class="nav-link" href="#optimize">区间优化</a>
+    <a class="nav-link hide-m" href="#app">开始规划</a>
+    <a class="nav-link hide-m" href="#optimize">区间优化</a>
     <a class="nav-link" href="javascript:void(0)" onclick="startGuide()">新手引导</a>
     <div class="dropdown">
       <button class="nav-link dropdown-toggle" onclick="toggleRulesMenu(event)">规则 <span class="dd-arrow">▾</span></button>
@@ -494,24 +624,6 @@ footer b{color:var(--text)}
         <div id="advice"></div>
       </div>
     </div>
-
-    <!-- 地图（可折叠） -->
-    <div class="map-card" id="mapWrap" style="display:none">
-      <div class="map-tools">
-        <span class="lbl">可拖动绿色图钉移动"家" · 右上角切换底图/显示车站</span>
-        <button class="btn btn-ghost btn-sm" onclick="fitAll()">⌖ 适应视野</button>
-      </div>
-      <div id="map"></div>
-      <div id="status"></div>
-      <div class="legend">
-        <span><i style="background:#6366f1"></i>学校(固定)</span>
-        <span><i style="background:#34d399"></i>家(可拖动)</span>
-        <span><i style="background:#e4e4e7;border-top:1px dashed #e4e4e7;height:0"></i>优惠区间</span>
-        <span><i style="background:#818cf8"></i>直达优惠</span>
-        <span><i style="background:#a78bfa"></i>中转优惠</span>
-        <span><i style="background:#52525b"></i>全价(不扣次数)</span>
-      </div>
-    </div>
   </section>
 
   <!-- ================= 区间优化 ================= -->
@@ -532,6 +644,99 @@ footer b{color:var(--text)}
       <div id="optList"></div>
     </div>
   </section>
+
+  <!-- ================= 地图（全局复用：桌面内嵌 / 移动"地图"Tab 展示） ================= -->
+  <div class="map-card" id="mapWrap" style="display:none">
+    <div class="map-tools">
+      <span class="lbl">可拖动绿色图钉移动"家" · 右上角切换底图/显示车站</span>
+      <button class="btn btn-ghost btn-sm" onclick="fitAll()">⌖ 适应视野</button>
+    </div>
+    <div id="map"></div>
+    <div id="status"></div>
+    <div class="legend">
+      <span><i style="background:#6366f1"></i>学校(固定)</span>
+      <span><i style="background:#34d399"></i>家(可拖动)</span>
+      <span><i style="background:#e4e4e7;border-top:1px dashed #e4e4e7;height:0"></i>优惠区间</span>
+      <span><i style="background:#818cf8"></i>直达优惠</span>
+      <span><i style="background:#a78bfa"></i>中转优惠</span>
+      <span><i style="background:#52525b"></i>全价(不扣次数)</span>
+    </div>
+  </div>
+
+  <!-- ================= 规则页（📖规则 Tab） ================= -->
+  <div class="rules-page" id="rulesPage">
+    <div class="sec-head" style="margin:18px 0 12px">
+      <div class="kicker">Rules</div>
+      <div class="sec-title">计算规则</div>
+      <div class="sec-sub">本工具计算规则 · 12306 官方规则对照（2026-08-14 核实）</div>
+    </div>
+    <div class="dd-col">
+      <div>📐 计算规则（本工具）</div>
+      <div class="dd-rule"><span class="dd-tag">直达</span><b>1 次</b><em>目的地在区间走廊带内</em></div>
+      <div class="dd-rule"><span class="dd-tag">中转</span><b>1 次</b><em>换乘站与终点都在区间内、绕行 ≤ 1.5×</em></div>
+      <div class="dd-rule"><span class="dd-tag">联程</span><b>1 次</b><em>5 天内多段只扣 1 次（串联路线模式）</em></div>
+      <div class="dd-rule"><span class="dd-tag">往返</span><b>2 次</b><em>单程 1 次</em></div>
+      <div class="dd-rule"><span class="dd-tag">全价</span><b>0 次</b><em>终点超出区间，12306 不发售学生票</em></div>
+      <div class="dd-rule"><span class="dd-tag">优化</span><b>最省</b><em>枚举 367 站找最省次数的"家"</em></div>
+    </div>
+    <div class="dd-col">
+      <div>📋 官方规则对照（2026-08-14 核实）</div>
+      <div class="dd-rule official"><span class="dd-tag">次数</span><b>4 次/学年</b><em>10.1–次年 9.30，退票全部退返</em></div>
+      <div class="dd-rule official"><span class="dd-tag">区间修改</span><b>家庭端不限</b><em>线上改、无需盖章；学校端须与学信网一致</em></div>
+      <div class="dd-rule official"><span class="dd-tag">同城通用</span><b>同城站通用</b><em>按城市填区间；可不满、不可超出</em></div>
+      <div class="dd-rule official"><span class="dd-tag">中转</span><b>5 天/1 次</b><em>120h 联程只扣 1 次；换乘站须在区间内；折返不合并</em></div>
+      <div class="dd-rule official"><span class="dd-tag">绕行</span><b>≤150%</b><em>近径路/不故意绕远（实测阈值）</em></div>
+      <div class="dd-rule official"><span class="dd-tag">票价</span><b>5 折/75 折</b><em>普速 5 折；动车执行价 75 折（≥4 折），含一等座/卧铺</em></div>
+    </div>
+  </div>
+
+  <!-- ================= 移动端视图（小程序同款，≤768px 显示） ================= -->
+  <div class="m-root" id="mRoot">
+    <!-- 规划面板 -->
+    <div class="m-panel" id="mPlan">
+      <div class="m-card">
+        <div class="m-card-title">① 学校 <span class="m-sub">区间固定端点（须与学信网一致）</span></div>
+        <div class="m-row"><input id="mSchoolInput" type="text" placeholder="输入学校城市，如：北京"><button class="btn btn-primary" onclick="mSchoolNext()">下一步</button></div>
+      </div>
+      <div class="m-card" id="mDepartCard" style="display:none">
+        <div class="m-card-title">② 出发地 <span class="m-sub">区间端点 + 行程起点</span></div>
+        <div class="m-row"><input id="mDepartInput" type="text" placeholder="输入出发城市，如：石家庄"><button class="btn btn-primary" onclick="mDepartNext()">下一步</button></div>
+        <div class="m-hint">优惠区间 = 学校 ↔ 出发地。优化建议会告诉你"把区间改为 学校↔X"，请按它在铁路学生优惠资质中修改真实家庭地址。</div>
+      </div>
+      <div id="mDest" style="display:none">
+        <div class="m-card">
+          <div class="m-card-title">③ 想去哪 <span class="m-sub">点【一键规划】后判定：绿=区间内 · 橙=可能被查 · 红=超区间</span></div>
+          <div class="m-row"><input id="mTripInput" type="text" placeholder="添加想去的地方，如：长沙"><button class="btn btn-primary" onclick="mAddTrip()">添加</button><button class="btn btn-ghost btn-sm" id="mClearBtn" style="display:none" onclick="mClear()">清空</button></div>
+          <div class="m-hint">每个框可 ✕ 删除 · 按住 ≡ 拖动排序 · 改动后请重新【一键规划】</div>
+        </div>
+        <div class="m-iv"><span class="m-iv-node m-iv-s" id="mIvS">学校</span><span class="m-iv-track"><span class="m-iv-zone"></span><span id="mIvPts"></span></span><span class="m-iv-node m-iv-h" id="mIvH">出发地</span></div>
+        <div class="m-list" id="mList"></div>
+        <div class="m-plan-wrap"><button class="btn btn-primary m-plan-btn" onclick="mPlan()">🚀 一键规划行程</button></div>
+        <div class="m-result" id="mResult" style="display:none">
+          <div class="m-used"><b id="mUsedNum">–</b><span>次 / 预算 4 · 剩余 <b id="mRemain">4</b> 次</span></div>
+          <div id="mChips" class="m-chips"></div>
+        </div>
+      </div>
+    </div>
+    <!-- 地图面板 -->
+    <div class="m-panel" id="mMapPanel" style="display:none"></div>
+  </div>
+
+  <!-- ================= 底部 Tab 栏 ================= -->
+  <nav class="tabbar" id="tabBar">
+    <button class="tb" data-tab="plan" onclick="mTab('plan')">🏠 规划</button>
+    <button class="tb" data-tab="rules" onclick="mTab('rules')">📖 规则</button>
+    <button class="tb" data-tab="map" onclick="mTab('map')">🗺️ 地图</button>
+  </nav>
+
+  <!-- 移动端区间建议弹窗 -->
+  <div class="modal-mask" id="mModal" style="display:none" onclick="if(event.target===this)closeMModal()">
+    <div class="modal-card">
+      <div class="modal-head">🎯 区间优化建议</div>
+      <div class="modal-body" id="mModalBody"></div>
+      <div class="modal-foot"><button class="btn btn-ghost btn-sm" id="mApplyBtn" style="display:none" onclick="mApply()">采用推荐区间</button><button class="btn btn-primary btn-sm" onclick="closeMModal()">知道了</button></div>
+    </div>
+  </div>
 
 <footer>
   <div>学生优惠 · 区间规划器 —— 帮助你把每学年有限的优惠次数花在刀刃上</div>
@@ -946,9 +1151,7 @@ function foldBackBadStation(c) {
     state.chainEnd || (sorted.length ? sorted[sorted.length - 1] : H));
   return (c2 && c2.foldback) ? (c.foldAt || '某站') : null;
 }
-// ==== PURE LOGIC END ====
-
-/* ---------- 车站/地址解析（离线优先，在线兜底） ---------- */
+/* ---------- 车站/城市纯函数（无 DOM 依赖，供小程序版共用） ---------- */
 function cleanCity(s) { return String(s || '').replace(/市|省|自治州|地区|盟|县|区|壮族|回族|维吾尔|苗|侗|布依|彝|土家族/g, ''); }
 function stationOf(name) { return STATIONS.find(s => s[0] === name) || null; }
 function nearestStation(pt, maxKm) {
@@ -960,7 +1163,9 @@ function nearestStation(pt, maxKm) {
   return best;
 }
 function stToObj(s) { return s ? { name: s[0], city: s[1], lat: s[2], lon: s[3], hub: !!s[4] } : null; }
+// ==== PURE LOGIC END ====
 
+/* ---------- 车站/地址解析（离线优先，在线兜底） ---------- */
 async function fetchGeo(q) {
   const ctrl = new AbortController();
   const t = setTimeout(() => ctrl.abort(), 6000);
@@ -1015,8 +1220,9 @@ function initMap() {
       '<br>' + s[2].toFixed(3) + ', ' + s[3].toFixed(3));
     stationLayer.addLayer(c);
   }
+  const isSmallScreen = !!(window.matchMedia && window.matchMedia('(max-width:640px)').matches);
   L.control.layers({ '高德 · 街道': gaode, 'OpenStreetMap': osm }, { '🚉 显示全部车站': stationLayer },
-    { position: 'topright', collapsed: false }).addTo(map);
+    { position: 'topright', collapsed: isSmallScreen }).addTo(map);
 }
 function pin(role, label) {
   const cls = role === 'school' ? 'pin-school' : role === 'home' ? 'pin-home'
@@ -1526,6 +1732,59 @@ function stopDrop(ev, toIdx) {
 function stopDragEnd(ev) {
   const row = ev.target && ev.target.closest ? ev.target.closest('.stop-row, .trip-row') : null;
   if (row) row.classList.remove('drag-over');
+}
+/* ---------- 手机触摸拖拽排序（HTML5 拖拽在触屏无效，改用指针事件） ---------- */
+let tDrag = null;
+function initTouchDrag() {
+  if (!window.PointerEvent) return; // 桌面环境仍走原生 draggable
+  const list = document.getElementById('tripList');
+  const rowOf = t => t && t.closest ? t.closest('.stop-row, .trip-row') : null;
+  list.addEventListener('pointerdown', ev => {
+    if (ev.pointerType === 'mouse') return; // 触摸/手写笔才接管
+    const handle = ev.target.closest && ev.target.closest('.drag-handle');
+    const row = rowOf(ev.target);
+    if (!handle || !row || row.parentElement !== list) return;
+    ev.preventDefault(); // 阻止滚动与点击穿透
+    const i = [...list.children].indexOf(row);
+    tDrag = { fromIdx: i, targetIdx: i, row };
+    row.classList.add('dragging');
+  });
+  document.addEventListener('pointermove', ev => {
+    if (!tDrag) return;
+    ev.preventDefault();
+    // 指针下的行: 优先命中的行; 落在行间隙时按 Y 坐标就近取行
+    let tRow = rowOf(document.elementFromPoint(ev.clientX, ev.clientY));
+    if (!tRow || tRow.parentElement !== list) {
+      tRow = null;
+      for (const c of list.children) {
+        const r = c.getBoundingClientRect();
+        if (ev.clientY >= r.top && ev.clientY <= r.bottom) { tRow = c; break; }
+      }
+    }
+    list.querySelectorAll('.drag-over').forEach(r => r.classList.remove('drag-over'));
+    if (tRow && tRow !== tDrag.row) {
+      tDrag.targetIdx = [...list.children].indexOf(tRow);
+      tRow.classList.add('drag-over');
+    }
+  });
+  const end = () => {
+    if (!tDrag) return;
+    const { fromIdx, targetIdx, row } = tDrag;
+    tDrag = null;
+    row.classList.remove('dragging');
+    list.querySelectorAll('.drag-over').forEach(r => r.classList.remove('drag-over'));
+    if (fromIdx !== targetIdx) reorderRow(fromIdx, targetIdx);
+  };
+  document.addEventListener('pointerup', end);
+  document.addEventListener('pointercancel', end);
+}
+/* 通用行重排: 串联模式走 stopReorder(含起点行), 独立模式只调行程顺序 */
+function reorderRow(fromIdx, toIdx) {
+  if (state.chainMode) { stopReorder(fromIdx, toIdx); return; }
+  const [item] = state.trips.splice(fromIdx, 1);
+  state.trips.splice(toIdx, 0, item);
+  renderAll();
+  setStatus('🔀 已调整行程顺序');
 }
 /* 出发地(路线起点, 默认学校) */
 async function setRouteFrom() {
@@ -2282,6 +2541,7 @@ function bindEvents() {
 }
 async function init() {
   bindEvents();
+  initTouchDrag();
   initMap();
   document.getElementById('mapToggleBtn').textContent = '🗺️ 查看地图'; // 地图默认收起
   // 演示默认数据：武汉上学，家长沙；行程 岳阳(区间内直达) + 重庆(超出区间→全价)
@@ -2303,6 +2563,262 @@ async function init() {
   fitAll();
   setStatus('✅ 演示已加载：武汉 ↔ 长沙（岳阳在区间内 / 重庆超区间），说明见"规划结果"卡片顶部。');
 }
+
+/* ============================================================
+ * 移动端视图（小程序同款，≤768px 显示）
+ * 共享桌面 state(school/home/trips) 与车站/几何函数；独立 UI 与交互相应
+ * ============================================================ */
+function mJudge(S, H, D) {
+  if (!S || !H || !D) return 0;
+  const L = dist(S, H);
+  if (L < 15) return dist(S, D) <= 50 ? 2 : 0;
+  const { t, p } = corridor(S, H, D);
+  const inCore = t >= -0.05 && t <= 1.05 && p <= Math.max(60, 0.32 * L);
+  if (inCore) return 2;
+  const inEdge = t >= -0.5 && t <= 1.5 && p <= Math.max(90, 0.45 * L);
+  return inEdge ? 1 : 0;
+}
+function mSmartBest(S, H, trips) {
+  let best = null;
+  const curCover = trips.filter(t => mJudge(S, H, t.station) === 2).length;
+  for (const s of STATIONS) {
+    if (s[0] === S.name) continue;
+    const H2 = { lat: s[2], lon: s[3] };
+    const cover = trips.filter(t => mJudge(S, H2, t.station) === 2).length;
+    if (cover < curCover) continue;
+    const bad = trips.filter(t => mJudge(S, H2, t.station) === 0).length;
+    const km = dist({ lat: s[2], lon: s[3] }, { lat: H.lat, lon: H.lon });
+    if (!best || cover > best.cover || (cover === best.cover && (bad < best.bad || (bad === best.bad && km < best.km)))) {
+      best = { st: { name: s[0], city: s[1], lat: s[2], lon: s[3] }, cover, bad };
+    }
+  }
+  return best;
+}
+let mDrag = null;
+function mSchoolNext() {
+  const q = document.getElementById('mSchoolInput').value.trim();
+  resolvePlace(q).then(r => {
+    if (!r) { setStatus('未收录该城市（内置 ' + STATIONS.length + ' 站），试试输入车站名'); return; }
+    state.school = { text: q, point: r.point, station: r.station };
+    document.getElementById('mDepartCard').style.display = 'block';
+    setStatus('学校：' + r.station.name + ' · ' + r.station.city + '，填写出发地');
+  });
+}
+function mDepartNext() {
+  const q = document.getElementById('mDepartInput').value.trim();
+  resolvePlace(q).then(r => {
+    if (!r) { setStatus('未收录该城市，试试输入车站名'); return; }
+    if (!state.school || !state.school.station) { setStatus('请先完成 ① 学校'); return; }
+    state.home = { text: q, point: r.point, station: r.station };
+    document.getElementById('mDest').style.display = 'block';
+    setStatus('出发地：' + r.station.name + '（区间 ' + state.school.station.name + ' ↔ ' + r.station.name + '），添加想去的地方');
+    mRender();
+  });
+}
+function mAddTrip() {
+  const q = document.getElementById('mTripInput').value.trim();
+  if (!q) return;
+  resolvePlace(q).then(r => {
+    if (!r) { setStatus('未收录 "' + q + '"'); return; }
+    state.trips.push({ id: ++state._tid, text: q, point: r.point, station: r.station, round: false });
+    document.getElementById('mTripInput').value = '';
+    document.getElementById('mClearBtn').style.display = '';
+    mRender();
+    setStatus('已添加：' + q + '（' + state.trips.length + ' 个目的地）');
+  });
+}
+function mRemoveTrip(id) { state.trips = state.trips.filter(t => t.id !== id); mRender(); setStatus('已删除'); }
+function mClear() {
+  if (!confirm('确定清空全部目的地吗？')) return;
+  state.trips = [];
+  document.getElementById('mClearBtn').style.display = 'none';
+  document.getElementById('mResult').style.display = 'none';
+  mRender();
+  setStatus('已清空全部目的地');
+}
+/* 渲染移动列表 + 区间线 + 次数 */
+function mRender() {
+  const S = state.school && state.school.station;
+  const H = state.home && state.home.station;
+  const list = document.getElementById('mList');
+  const startRow = '<div class="m-dest start"><span class="m-ring start">起</span><span class="m-name">' + esc(H ? H.name : '出发地') + '</span><span class="m-st">起点 · 出发地</span></div>';
+  if (!state.trips.length) { list.innerHTML = startRow + '<div class="m-empty">还没有目的地，在上方输入添加 👆</div>'; }
+  else {
+    list.innerHTML = startRow + state.trips.map((t, i) => {
+      const j = S && H ? mJudge(S, H, t.station) : -1;
+      const boxCls = j === 2 ? 'ok' : j === 1 ? 'edge' : j === 0 ? 'bad' : '';
+      const ring = j === 2 ? 'ok' : j === 1 ? 'edge' : j === 0 ? 'bad' : '';
+      const st = j === 2 ? '区间内' : j === 1 ? '可能被查' : j === 0 ? '超区间' : '';
+      return '<div class="m-dest ' + boxCls + '" draggable="true">' +
+        '<span class="m-handle" data-i="' + i + '">≡</span>' +
+        '<span class="m-ring ' + ring + '"></span>' +
+        '<span class="m-name">' + esc(t.text) + '</span>' +
+        (st ? '<span class="m-st">' + st + '</span>' : '') +
+        '<button class="m-x" onclick="mRemoveTrip(' + t.id + ')">✕</button></div>';
+    }).join('');
+  }
+  // 区间线
+  const ptsEl = document.getElementById('mIvPts');
+  let pts = '';
+  if (S && H) {
+    pts = state.trips.map(t => {
+      const j = mJudge(S, H, t.station);
+      const { t: tt } = corridor(S, H, t.station);
+      const left = Math.min(90, Math.max(10, (tt + 0.05) / 1.1 * 100));
+      return '<span class="m-iv-pt ' + (j === 2 ? 'ok' : j === 1 ? 'edge' : 'bad') + '" style="left:' + left + '%"></span>';
+    }).join('');
+  }
+  ptsEl.innerHTML = pts;
+  document.getElementById('mIvS').textContent = S ? S.name : '学校';
+  document.getElementById('mIvH').textContent = H ? H.name : '出发地';
+}
+/* 一键规划 */
+function mPlan() {
+  if (!state.trips.length) { setStatus('先添加想去的地方'); return; }
+  const S = state.school && state.school.station, H = state.home && state.home.station;
+  if (!S || !H) { setStatus('请先完成 ①学校 ②出发地'); return; }
+  // 按离出发地由近到远
+  state.trips.sort((a, b) => dist(H, a.station) - dist(H, b.station));
+  const okN = state.trips.filter(t => mJudge(S, H, t.station) === 2).length;
+  const edgeN = state.trips.filter(t => mJudge(S, H, t.station) === 1).length;
+  const badN = state.trips.filter(t => mJudge(S, H, t.station) === 0).length;
+  document.getElementById('mUsedNum').textContent = (okN + edgeN) > 0 ? 1 : 0;
+  document.getElementById('mRemain').textContent = 4 - ((okN + edgeN) > 0 ? 1 : 0);
+  let chips = '<span class="m-chip green">区间内 ' + okN + '/' + state.trips.length + '</span>';
+  if (edgeN) chips += '<span class="m-chip orange">可能被查 ' + edgeN + '</span>';
+  if (badN) chips += '<span class="m-chip red">超区间 ' + badN + '（另购全价）</span>';
+  if (okN + edgeN > 0) chips += '<span class="m-chip green">整条联程 1 次（5 天内）</span>';
+  else chips += '<span class="m-chip gray">全部需全价</span>';
+  document.getElementById('mChips').innerHTML = chips;
+  document.getElementById('mResult').style.display = 'block';
+  mRender();
+  // 推荐弹窗
+  const best = mSmartBest(S, H, state.trips);
+  const suggest = best && best.st.name !== H.name ? best.st : null;
+  const body = document.getElementById('mModalBody');
+  const applyBtn = document.getElementById('mApplyBtn');
+  if (suggest) {
+    const H2 = { lat: suggest.lat, lon: suggest.lon };
+    const j2 = state.trips.map(t => mJudge(S, H2, t.station));
+    const g2 = j2.filter(x => x === 2).length, e2 = j2.filter(x => x === 1).length, b2 = j2.filter(x => x === 0).length;
+    body.innerHTML = '当前区间（' + esc(S.name) + ' ↔ ' + esc(H.name) + '）太小，多数目的地<b>超出区间（红）</b>。<br><br>' +
+      '把<b>区间</b>改为：<b>' + esc(S.name) + '</b>（你的学校）→ <span class="m-best">' + suggest.name + ' · ' + suggest.city + '</span><br>' +
+      '→ ' + state.trips.length + ' 个目的地：<b style="color:#22c55e">' + g2 + ' 绿</b> / <b style="color:#f59e0b">' + e2 + ' 橙</b> / <b style="color:#ef4444">' + b2 + ' 红</b>' +
+      '<div class="modal-note">采用后，颜色按 学校 ' + esc(S.name) + ' ↔ ' + suggest.name + ' 判定，你的出发地（' + esc(H.name) + '）保持不变。请按此在铁路学生优惠资质核验中修改真实家庭地址。红的=不能去。</div>';
+    applyBtn.style.display = '';
+  } else {
+    body.innerHTML = '当前区间已是最优：<b>' + esc(S.name) + '</b> ↔ <b>' + esc(H.name) + '</b> → 区间内 ' + okN + '/' + state.trips.length + ' 站。';
+    applyBtn.style.display = 'none';
+  }
+  document.getElementById('mModal').style.display = 'flex';
+  setStatus('已按离出发地由近到远排序：出发地 ' + H.name + ' → ' + state.trips.map(t => t.text).join(' → '));
+}
+function mApply() {
+  const s = state;
+  // 从弹窗按钮读取推荐? 采用时直接重算一次并改"家"(区间端点)
+  const S = state.school && state.school.station, H = state.home && state.home.station;
+  const best = mSmartBest(S, H, state.trips);
+  if (!best || best.st.name === H.name) { closeMModal(); return; }
+  state.home = { text: best.st.name + ' · ' + best.st.city, point: { lat: best.st.lat, lon: best.st.lon }, station: best.st };
+  if (document.getElementById('mDepartInput')) document.getElementById('mDepartInput').value = best.st.name + ' · ' + best.st.city;
+  closeMModal();
+  mPlanSoft();
+  setStatus('区间端点改为 ' + best.st.name + '（学校 ' + S.name + ' ↔ ' + best.st.name + '），颜色已按新区间判定；出发地保持 ' + H.name);
+}
+function mPlanSoft() {
+  const S = state.school && state.school.station, H = state.home && state.home.station;
+  state.trips.sort((a, b) => dist(H, a.station) - dist(H, b.station));
+  mRender();
+  const okN = state.trips.filter(t => mJudge(S, H, t.station) === 2).length;
+  const edgeN = state.trips.filter(t => mJudge(S, H, t.station) === 1).length;
+  const badN = state.trips.filter(t => mJudge(S, H, t.station) === 0).length;
+  document.getElementById('mUsedNum').textContent = (okN + edgeN) > 0 ? 1 : 0;
+  document.getElementById('mRemain').textContent = 4 - ((okN + edgeN) > 0 ? 1 : 0);
+  let chips = '<span class="m-chip green">区间内 ' + okN + '/' + state.trips.length + '</span>';
+  if (edgeN) chips += '<span class="m-chip orange">可能被查 ' + edgeN + '</span>';
+  if (badN) chips += '<span class="m-chip red">超区间 ' + badN + '（另购全价）</span>';
+  if (okN + edgeN > 0) chips += '<span class="m-chip green">整条联程 1 次（5 天内）</span>';
+  else chips += '<span class="m-chip gray">全部需全价</span>';
+  document.getElementById('mChips').innerHTML = chips;
+  document.getElementById('mResult').style.display = 'block';
+}
+function closeMModal() { document.getElementById('mModal').style.display = 'none'; }
+/* 底部 Tab 切换 */
+function mTab(page) {
+  document.body.setAttribute('data-tab', page);
+  document.querySelectorAll('.tabbar .tb').forEach(b => b.classList.toggle('on', b.dataset.tab === page));
+  if (page === 'map') {
+    const w = document.getElementById('mapWrap');
+    w.style.display = 'block';
+    document.getElementById('mMapPanel').style.display = 'block';
+    if (window.L && map) setTimeout(() => map.invalidateSize(), 60);
+    fitAll();
+  }
+  if (page === 'plan' && window.innerWidth >= 769) {
+    const el = document.getElementById('app');
+    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+  if (page === 'rules' && window.innerWidth >= 769) {
+    const el = document.getElementById('rulesPage');
+    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+}
+/* 移动列表拖动: 拖到顶部=设为新出发地; 其余=目的地换序 */
+document.addEventListener('pointerdown', ev => {
+  const h = ev.target.closest && ev.target.closest('.m-handle');
+  if (!h || ev.pointerType === 'mouse') return;
+  const row = h.closest('.m-dest');
+  const list = h.closest('#mList');
+  if (!row || !list || row.classList.contains('start')) return;
+  ev.preventDefault();
+  const rows = [...list.querySelectorAll('.m-dest')];
+  mDrag = { from: rows.indexOf(row), row, t: 0 };
+  row.classList.add('dragging');
+});
+document.addEventListener('pointermove', ev => {
+  if (!mDrag) return;
+  const now = Date.now();
+  if (now - mDrag.t < 40) return;
+  mDrag.t = now;
+  const list = mDrag.row.closest('#mList');
+  const rows = [...list.querySelectorAll('.m-dest')];
+  rows.forEach(r => r.classList.remove('drag-over'));
+  let hit = null;
+  for (const r of rows) {
+    const b = r.getBoundingClientRect();
+    if (ev.clientY >= b.top && ev.clientY <= b.bottom) { hit = r; break; }
+  }
+  if (hit && hit !== mDrag.row) { mDrag.target = hit; hit.classList.add('drag-over'); }
+});
+document.addEventListener('pointerup', ev => {
+  if (!mDrag) return;
+  const { from, target, row } = mDrag;
+  mDrag = null;
+  row.classList.remove('dragging');
+  const list = row.closest('#mList');
+  if (list) list.querySelectorAll('.drag-over').forEach(r => r.classList.remove('drag-over'));
+  const rows = [...list.querySelectorAll('.m-dest')];
+  const tIdx = target ? rows.indexOf(target) : -1;
+  if (tIdx === 0 && from > 0) {
+    // 拖到起点行 → 该目的地成为新出发地
+    const [it] = state.trips.splice(from - 1, 1);
+    const old = state.home && state.home.station;
+    state.home = { text: it.station.name + ' · ' + it.station.city, point: { lat: it.station.lat, lon: it.station.lon }, station: it.station };
+    if (old) state.trips.push({ id: ++state._tid, text: old.name, point: { lat: old.lat, lon: old.lon }, station: old, round: false });
+    const di = document.getElementById('mDepartInput');
+    if (di) di.value = state.home.text;
+    document.getElementById('mResult').style.display = 'none';
+    mRender();
+    setStatus('出发地改为 ' + state.home.text + '（原出发地 ' + old.name + ' 已加入目的地）');
+    return;
+  }
+  if (tIdx > 0 && from !== tIdx) {
+    const [it] = state.trips.splice(from - 1, 1);
+    state.trips.splice(tIdx - 1, 0, it);
+    mRender();
+    setStatus('已调整顺序');
+  }
+});
 init();
 </script>
 </body>

@@ -1,0 +1,293 @@
+/* 学生票区间规划器 · 小程序版（按简化原型重构）
+ * 计算使用 utils/logic.js 真实车站库与几何函数
+ * 流程: ①学校 → ②出发地(区间端点+起点) → ③目的地 → 🚀一键规划 → 弹窗推荐改区间 → 框体着色+区间线+消耗次数 */
+const logic = require('../../utils/logic.js');
+const { state, dist, corridor, STATIONS, cleanCity } = logic;
+
+/* ---------- 离线解析 ---------- */
+function resolvePlace(q) {
+  q = String(q || '').trim();
+  if (!q) return Promise.resolve(null);
+  const qn = cleanCity(q);
+  const hits = STATIONS.filter(s => s[0] === qn || s[1] === qn || s[1].includes(qn) || qn.includes(s[1]));
+  if (!hits.length) return Promise.resolve(null);
+  const h = hits.find(s => s[4]) || hits[0];
+  return Promise.resolve({ point: { lat: h[2], lon: h[3] }, station: { name: h[0], city: h[1], lat: h[2], lon: h[3] } });
+}
+
+/* 判定: 2=区间内(绿) 1=可能被查(橙) 0=超区间(红) */
+function judge(S, H, D) {
+  if (!S || !H || !D) return 0;
+  const L = dist(S, H);
+  if (L < 15) return dist(S, D) <= 50 ? 2 : 0;
+  const { t, p } = corridor(S, H, D);
+  const inCore = t >= -0.05 && t <= 1.05 && p <= Math.max(60, 0.32 * L);
+  if (inCore) return 2;
+  const inEdge = t >= -0.5 && t <= 1.5 && p <= Math.max(90, 0.45 * L);
+  return inEdge ? 1 : 0;
+}
+/* 排序: 按离出发地由近到远(越走越远, 天然不折返) */
+function sortByDepart(trips) {
+  const dep = state.depart;
+  return trips.slice().sort((a, b) => dist(dep, a.station) - dist(dep, b.station));
+}
+/* 最优区间端点: 枚举全部车站, 覆盖优先 → 超区间少 → 距当前端点近 */
+function smartBest(S, H, trips) {
+  let best = null;
+  const curCover = trips.filter(t => judge(S, H, t.station) === 2).length;
+  for (const s of STATIONS) {
+    if (s[0] === S.name) continue;
+    const H2 = { lat: s[2], lon: s[3] };
+    const cover = trips.filter(t => judge(S, H2, t.station) === 2).length;
+    if (cover < curCover) continue;
+    const bad = trips.filter(t => judge(S, H2, t.station) === 0).length;
+    const km = dist({ lat: s[2], lon: s[3] }, { lat: H.lat, lon: H.lon });
+    if (!best || cover > best.cover || (cover === best.cover && (bad < best.bad || (bad === best.bad && km < best.km)))) {
+      best = { st: { name: s[0], city: s[1], lat: s[2], lon: s[3] }, cover, bad };
+    }
+  }
+  return best;
+}
+
+Page({
+  data: {
+    schoolInput: '', departInput: '', tripInput: '',
+    showDepart: false, showDest: false,
+    startName: '出发地', ivS: '学校', ivH: '出发地', ivDots: [],
+    rows: [], tdIndex: -1, tripCount: 0,
+    planned: false, used: '–', budget: 4, remain: '–', okN: 0, edgeN: 0, badN: 0,
+    status: '',
+    modal: { show: false, suggest: null, g2: 0, e2: 0, b2: 0 },
+    dbg: { on: false, badges: [], showLegend: false,
+      list: [
+        { n: 1, name: '品牌头' }, { n: 2, name: '状态条' }, { n: 3, name: '学校卡片' },
+        { n: 4, name: '出发地卡片' }, { n: 5, name: '区间线' }, { n: 6, name: '目的地列表' },
+        { n: 7, name: '起点行(出发地)' }, { n: 8, name: '结果(消耗次数)' }, { n: 9, name: '一键规划按钮' },
+        { n: 10, name: '区间建议弹窗' },
+      ] },
+  },
+  onLoad() {
+    this.renderAll();
+    this.setStatus('填写 ① 学校 开始');
+  },
+  onShareAppMessage() { return { title: '学生票区间规划器：区间怎么算、怎么改最省次数' }; },
+
+  setStatus(m) { this.setData({ status: String(m || '') }); },
+
+  /* 输入 */
+  onSchoolInput(e) { this.setData({ schoolInput: e.detail.value }); },
+  onDepartInput(e) { this.setData({ departInput: e.detail.value }); },
+  onTripInput(e) { this.setData({ tripInput: e.detail.value }); },
+
+  /* 步骤1 学校 → 步骤2 出发地 */
+  async nextSchool() {
+    const q = this.data.schoolInput.trim();
+    if (!q) { this.setStatus('请先输入学校城市'); return; }
+    const r = await resolvePlace(q);
+    if (!r) { this.setStatus('未收录该城市（内置 ' + STATIONS.length + ' 站），试试输入车站名'); return; }
+    state.school = r.station;
+    this.setData({ schoolInput: q, ivS: state.school.name, showDepart: true });
+    this.setStatus('学校：' + state.school.name + ' · ' + state.school.city + '，填写出发地');
+  },
+  /* 步骤2 出发地 → 步骤3 目的地 */
+  async nextDepart() {
+    const q = this.data.departInput.trim();
+    if (!q) { this.setStatus('请先输入出发地'); return; }
+    const r = await resolvePlace(q);
+    if (!r) { this.setStatus('未收录该城市，试试输入车站名'); return; }
+    if (!state.school) { this.setStatus('请先完成 ① 学校'); return; }
+    state.depart = r.station;
+    if (!state.home) state.home = state.depart; // 区间端点初始=出发地; 采用推荐后单独变
+    this.setData({
+      departInput: q, startName: state.depart.name, ivH: state.home.name,
+      showDest: true, planned: false,
+    });
+    this.renderAll();
+    this.setStatus('出发地：' + state.depart.name + '（区间 ' + state.school.name + ' ↔ ' + state.home.name + '），添加想去的地方');
+  },
+
+  /* 目的地 */
+  async addTrip() {
+    const q = this.data.tripInput.trim();
+    if (!q) return;
+    const r = await resolvePlace(q);
+    if (!r) { this.setStatus('未收录 "' + q + '"'); return; }
+    const wasPlanned = this.data.planned;
+    state.trips.push({ id: ++state._tid, text: q, point: r.point, station: r.station });
+    this.setData({ tripInput: '', planned: false }); // 添加后全部卡片回灰, 需再次一键规划
+    this.renderAll();
+    this.setStatus('已添加：' + q + (wasPlanned ? '（改动后请再次【一键规划】以重新判色）' : ''));
+  },
+  removeTrip(e) {
+    state.trips = state.trips.filter(t => t.id !== e.currentTarget.dataset.id);
+    this.setData({ planned: false });
+    this.renderAll();
+    this.setStatus('已删除（改动后请重新【一键规划】）');
+  },
+  /* 一键清空目的地（二次确认） */
+  clearAll() {
+    wx.showModal({
+      title: '清空全部目的地',
+      content: '确定清空全部目的地吗？清空后需重新输入。',
+      confirmText: '清空', cancelText: '取消',
+      confirmColor: '#dc2626',
+      success: res => {
+        if (!res.confirm) return;
+        state.trips = [];
+        this.setData({ planned: false, tripInput: '' });
+        this.renderAll();
+        this.setStatus('已清空全部目的地');
+      },
+    });
+  },
+
+  /* 触屏拖拽（按住 ≡ 拖动） */
+  tdStart(e) {
+    const i = +e.currentTarget.dataset.i;
+    this._td = { from: i, to: i, t: 0 };
+    this.setData({ tdIndex: i });
+  },
+  tdMove(e) {
+    if (!this._td) return;
+    const now = Date.now();
+    if (now - this._td.t < 40) return;
+    this._td.t = now;
+    const y = e.touches[0].clientY;
+    const self = this;
+    this.createSelectorQuery().selectAll('.dest').boundingClientRect(rects => {
+      if (!self._td || !rects.length) return;
+      let to = self._td.to;
+      for (let i = 0; i < rects.length; i++) {
+        if (y >= rects[i].top && y <= rects[i].bottom) { to = i; break; }
+      }
+      if (to !== self._td.to) { self._td.to = to; self.setData({ tdIndex: to }); }
+    }).exec();
+  },
+  tdEnd() {
+    if (!this._td) return;
+    const { from, to } = this._td; // from=目的地索引(trips) ; to=测得行号(0=起点行, 其余=trips[to-1])
+    this._td = null;
+    this.setData({ tdIndex: -1 });
+    if (to === 0) {
+      // 拖到"起点(出发地)" → 该目的地变成新的出发地
+      const [it] = state.trips.splice(from, 1);
+      const old = state.depart;
+      state.depart = it.station;
+      if (old) state.trips.push({ id: ++state._tid, text: old.name, point: { lat: old.lat, lon: old.lon }, station: old });
+      this.setData({
+        departInput: state.depart.name + (state.depart.city ? ' · ' + state.depart.city : ''),
+        startName: state.depart.name, planned: false,
+      });
+      this.renderAll();
+      this.setStatus('出发地改为 ' + state.depart.name + '（原出发地 ' + old.name + ' 已加入目的地，请重新规划）');
+      return;
+    }
+    const tTo = to - 1;
+    if (from === tTo) return;
+    const [it] = state.trips.splice(from, 1);
+    state.trips.splice(tTo, 0, it);
+    this.setData({ planned: false });
+    this.renderAll();
+    this.setStatus('已调整顺序（改动后请重新【一键规划】）');
+  },
+
+  /* 一键规划: 顺路排序 + 框体着色 + 弹窗推荐 */
+  onPlan() {
+    if (!state.trips.length) { this.setStatus('先添加想去的地方'); return; }
+    const S = state.school, H = state.home;
+    if (!S || !H) { this.setStatus('请先完成 ①学校 ②出发地'); return; }
+    state.trips = sortByDepart(state.trips);
+    // 先标记已规划, 再渲染, 保证框体/区间线着色
+    this.setData({ planned: true });
+    this.renderAll();
+    // 推荐区间端点
+    const best = smartBest(S, H, state.trips);
+    const suggest = best && best.st.name !== H.name ? best.st : null;
+    let modal = { show: true, suggest: null, g2: 0, e2: 0, b2: 0 };
+    if (suggest) {
+      const H2 = { lat: suggest.lat, lon: suggest.lon };
+      const j2 = state.trips.map(t => judge(S, H2, t.station));
+      modal = { show: true, suggest,
+        g2: j2.filter(x => x === 2).length, e2: j2.filter(x => x === 1).length, b2: j2.filter(x => x === 0).length };
+    }
+    this.setData({ modal });
+    this.setStatus('已按离出发地由近到远排序：出发地 ' + state.depart.name + ' → ' + state.trips.map(t => t.text).join(' → '));
+  },
+  /* 采用推荐区间: 只改区间端点, 出发地不动 */
+  applySuggestion() {
+    const s = this.data.modal.suggest;
+    if (!s) return;
+    state.home = { name: s.name, city: s.city, lat: s.lat, lon: s.lon };
+    this.setData({ ivH: state.home.name, planned: true });
+    this.renderAll();
+    this.closeModal();
+    this.setStatus('区间端点改为 ' + state.home.name + '（学校 ' + state.school.name + ' ↔ ' + state.home.name + '），颜色已按新区间判定；出发地保持 ' + state.depart.name);
+  },
+  closeModal() { this.setData({ 'modal.show': false }); },
+  noop() { },
+
+  /* ---------- 渲染 ---------- */
+  renderAll() {
+    const S = state.school, H = state.home;
+    const planned = this.data.planned;
+    // 区间线圆点
+    const ivDots = state.trips.map(t => {
+      if (!t.station || !planned || !S || !H) return null;
+      const j = judge(S, H, t.station);
+      const { t: tt } = corridor(S, H, t.station);
+      const left = Math.min(90, Math.max(10, (tt + 0.05) / 1.1 * 100));
+      return { left: +left.toFixed(1), cls: j === 2 ? 'ok' : j === 1 ? 'edge' : 'bad', name: t.text };
+    }).filter(Boolean);
+    // 列表
+    const rows = state.trips.map((t, i) => {
+      const j = planned && S && H ? judge(S, H, t.station) : -1;
+      return {
+        key: 't' + t.id, id: t.id, text: t.text,
+        boxCls: j === 2 ? 'ok' : j === 1 ? 'edge' : j === 0 ? 'bad' : '',
+        ring: j === 2 ? 'ok' : j === 1 ? 'edge' : j === 0 ? 'bad' : 'none',
+        status: j === 2 ? '区间内' : j === 1 ? '可能被查' : j === 0 ? '超区间' : '',
+        anim: false,
+      };
+    });
+    // 消耗次数
+    const okN = S && H ? state.trips.filter(t => judge(S, H, t.station) === 2).length : 0;
+    const edgeN = S && H ? state.trips.filter(t => judge(S, H, t.station) === 1).length : 0;
+    const badN = S && H ? state.trips.filter(t => judge(S, H, t.station) === 0).length : 0;
+    const used = (okN + edgeN) > 0 ? 1 : 0;
+    this.setData({
+      ivS: S ? S.name : '学校', ivH: H ? H.name : '出发地', ivDots,
+      startName: state.depart ? state.depart.name : '出发地',
+      rows, tripCount: state.trips.length,
+      okN, edgeN, badN, used, remain: state.budget - used,
+    });
+  },
+
+  /* ---------- 调试编号层 ---------- */
+  toggleDbg() {
+    const on = !this.data.dbg.on;
+    this.setData({ 'dbg.on': on, 'dbg.showLegend': false });
+    if (on) this.dbgMeasure();
+  },
+  toggleDbgLegend() { this.setData({ 'dbg.showLegend': !this.data.dbg.showLegend }); },
+  dbgMeasure() {
+    if (!this.data.dbg.on) return;
+    const sels = ['.brand-bar', '.status', '.step1', '.step2', '.iv-line.top', '.dest-list', '.dest.start', '.result', '.plan-btn', '.dialog'];
+    const q = this.createSelectorQuery();
+    sels.forEach(s => q.select(s).boundingClientRect());
+    const self = this;
+    q.exec(res => {
+      if (!self.data.dbg.on) return;
+      const badges = [];
+      (res || []).forEach((r, i) => {
+        if (r && r.width > 0 && r.height > 0) badges.push({ n: i + 1, x: Math.round(r.left + r.width), y: Math.round(r.top) });
+      });
+      self.setData({ 'dbg.badges': badges });
+    });
+  },
+  onPageScroll() {
+    if (this.data.dbg.on) {
+      const now = Date.now();
+      if (now - (this._dbgT || 0) > 200) { this._dbgT = now; this.dbgMeasure(); }
+    }
+  },
+});
