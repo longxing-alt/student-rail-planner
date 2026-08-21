@@ -371,17 +371,6 @@ footer b{color:var(--text)}
 }
 @media (max-width:420px){ .ver{display:none} }
 
-/* ===== 底部 Tab 栏（规划/规则/地图） ===== */
-.tabbar{position:fixed;top:auto;left:0;right:0;bottom:0;height:auto;z-index:150;display:flex;background:rgba(255,255,255,.95);backdrop-filter:blur(10px);border-top:1px solid var(--line);max-width:1080px;margin:0 auto;padding:6px 8px calc(6px + env(safe-area-inset-bottom))}
-.tabbar .tb{flex:1;background:none;border:none;font-family:inherit;font-size:12px;color:var(--muted);padding:8px 4px;border-radius:10px;cursor:pointer;font-weight:600}
-.tabbar .tb:hover{background:#f1f1f2;color:var(--text)}
-.tabbar .tb.on{color:#0f766e;background:rgba(13,148,136,.08)}
-.rules-page{padding:0 20px 90px;max-width:720px;margin:0 auto;display:none;grid-template-columns:1fr 1fr;gap:14px}
-.rules-page .sec-head{grid-column:1/-1}
-.rules-page .dd-rule{white-space:normal}
-body[data-tab="rules"] .wrap #app,body[data-tab="rules"] .wrap #optimize{display:none}
-body[data-tab="rules"] #rulesPage{display:grid!important}
-
 /* ===== 移动端视图（小程序同款） ===== */
 .m-root{display:none;flex-direction:column;gap:10px;padding:0 0 80px}
 .m-brand{display:flex;align-items:center;gap:9px;margin-bottom:10px}
@@ -445,14 +434,8 @@ body[data-tab="rules"] #rulesPage{display:grid!important}
   .wrap .hide-phone,.wrap #app,.wrap #optimize{display:none}
   .tabbar{display:flex!important}
   .m-root{display:flex!important}
-  body[data-tab="map"] .m-panel{display:none!important}
-  body[data-tab="map"] #mMapPanel{display:block!important}
-  body[data-tab="rules"] .m-panel{display:none!important}
 }
 /* 桌面端点击 Tab: 回到对应区块 */
-body[data-tab="plan"] .wrap #app{display:block}
-body[data-tab="map"] #mapWrap{display:block!important}
-body[data-tab="map"] .m-panel,body[data-tab="map"] #mMapPanel{display:block}
 </style>
 </head>
 <body>
@@ -668,33 +651,6 @@ body[data-tab="map"] .m-panel,body[data-tab="map"] #mMapPanel{display:block}
     </div>
   </div>
 
-  <!-- ================= 规则页（📖规则 Tab） ================= -->
-  <div class="rules-page" id="rulesPage">
-    <div class="sec-head" style="margin:18px 0 12px">
-      <div class="kicker">Rules</div>
-      <div class="sec-title">计算规则</div>
-      <div class="sec-sub">本工具计算规则 · 12306 官方规则对照（2026-08-14 核实）</div>
-    </div>
-    <div class="dd-col">
-      <div>📐 计算规则（本工具）</div>
-      <div class="dd-rule"><span class="dd-tag">直达</span><b>1 次</b><em>目的地在区间走廊带内</em></div>
-      <div class="dd-rule"><span class="dd-tag">中转</span><b>1 次</b><em>换乘站与终点都在区间内、绕行 ≤ 1.5×</em></div>
-      <div class="dd-rule"><span class="dd-tag">联程</span><b>1 次</b><em>5 天内多段只扣 1 次（串联路线模式）</em></div>
-      <div class="dd-rule"><span class="dd-tag">往返</span><b>2 次</b><em>单程 1 次</em></div>
-      <div class="dd-rule"><span class="dd-tag">全价</span><b>0 次</b><em>终点超出区间，12306 不发售学生票</em></div>
-      <div class="dd-rule"><span class="dd-tag">优化</span><b>最省</b><em>枚举 367 站找最省次数的"家"</em></div>
-    </div>
-    <div class="dd-col">
-      <div>📋 官方规则对照（2026-08-14 核实）</div>
-      <div class="dd-rule official"><span class="dd-tag">次数</span><b>4 次/学年</b><em>10.1–次年 9.30，退票全部退返</em></div>
-      <div class="dd-rule official"><span class="dd-tag">区间修改</span><b>家庭端不限</b><em>线上改、无需盖章；学校端须与学信网一致</em></div>
-      <div class="dd-rule official"><span class="dd-tag">同城通用</span><b>同城站通用</b><em>按城市填区间；可不满、不可超出</em></div>
-      <div class="dd-rule official"><span class="dd-tag">中转</span><b>5 天/1 次</b><em>120h 联程只扣 1 次；换乘站须在区间内；折返不合并</em></div>
-      <div class="dd-rule official"><span class="dd-tag">绕行</span><b>≤150%</b><em>近径路/不故意绕远（实测阈值）</em></div>
-      <div class="dd-rule official"><span class="dd-tag">票价</span><b>5 折/75 折</b><em>普速 5 折；动车执行价 75 折（≥4 折），含一等座/卧铺</em></div>
-    </div>
-  </div>
-
   <!-- ================= 移动端视图（小程序同款，≤768px 显示） ================= -->
   <div class="m-root" id="mRoot">
   <!-- 品牌头（小程序同款） -->
@@ -728,15 +684,8 @@ body[data-tab="map"] .m-panel,body[data-tab="map"] #mMapPanel{display:block}
       </div>
     </div>
   </div>
-  <!-- 地图面板 -->
-  <div class="m-panel" id="mMapPanel" style="display:none"></div>
 </div>
 
-<nav class="tabbar" id="tabBar">
-    <button class="tb" data-tab="plan" onclick="mTab('plan')">🏠 规划</button>
-    <button class="tb" data-tab="rules" onclick="mTab('rules')">📖 规则</button>
-    <button class="tb" data-tab="map" onclick="mTab('map')">🗺️ 地图</button>
-  </nav>
 
   <!-- 移动端区间建议弹窗 -->
   <div class="modal-mask" id="mModal" style="display:none" onclick="if(event.target===this)closeMModal()">
@@ -2602,12 +2551,10 @@ async function init() {
   renderWizard();
   let gd = false;
   try { gd = sessionStorage.getItem('spr_guide_done') === '1'; } catch (e) { }
-  if (!gd) startGuide();
+  if (!gd && window.innerWidth > 768) startGuide();
   renderAll();
   fitAll();
   setStatus('✅ 演示已加载：武汉 ↔ 长沙（岳阳在区间内 / 重庆超区间），说明见"规划结果"卡片顶部。');
-  // 桌面端默认展开地图; 手机端收起(走底部"地图"Tab)
-  if (window.innerWidth > 768) setTimeout(toggleMap, 300);
 }
 
 /* ============================================================
@@ -2789,26 +2736,6 @@ function mPlanSoft() {
   document.getElementById('mResult').style.display = 'block';
 }
 function closeMModal() { document.getElementById('mModal').style.display = 'none'; }
-/* 底部 Tab 切换 */
-function mTab(page) {
-  document.body.setAttribute('data-tab', page);
-  document.querySelectorAll('.tabbar .tb').forEach(b => b.classList.toggle('on', b.dataset.tab === page));
-  if (page === 'map') {
-    const w = document.getElementById('mapWrap');
-    w.style.display = 'block';
-    document.getElementById('mMapPanel').style.display = 'block';
-    ensureMap().then(() => { if (map) setTimeout(() => map.invalidateSize(), 60); });
-    fitAll();
-  }
-  if (page === 'plan' && window.innerWidth >= 769) {
-    const el = document.getElementById('app');
-    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  }
-  if (page === 'rules' && window.innerWidth >= 769) {
-    const el = document.getElementById('rulesPage');
-    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  }
-}
 /* 移动列表拖动: 拖到顶部=设为新出发地; 其余=目的地换序 */
 document.addEventListener('pointerdown', ev => {
   const h = ev.target.closest && ev.target.closest('.m-handle');

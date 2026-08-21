@@ -89,13 +89,10 @@ const flow = async () => {
   A('弹窗已关闭', $('mModal').style.display === 'none');
   A('再次渲染含新端点', $('mIvH').textContent === homeAfter);
 
-  G('移动端: Tab 切换');
-  w.eval('mTab("rules")');
-  A('规则 tab: body data-tab=rules', w.document.body.getAttribute('data-tab') === 'rules');
-  w.eval('mTab("map")');
-  A('地图 tab: body data-tab=map + mapWrap 显示', w.document.body.getAttribute('data-tab') === 'map' && $('mapWrap').style.display === 'block');
-  w.eval('mTab("plan")');
-  A('规划 tab 恢复', w.document.body.getAttribute('data-tab') === 'plan');
+  G('移动端: 无底部Tab栏(照抄小程序单页)');
+  A('无 tabBar 元素', !w.document.getElementById('tabBar'));
+  A('无规则页/地图面板', !w.document.getElementById('rulesPage') && !w.document.getElementById('mMapPanel'));
+  A('地图默认收起', $('mapWrap').style.display === 'none');
 
   G('引导可填写(spotlight 不拦截)');
   const spotlightRule = [...w.document.styleSheets].some(sh => {
