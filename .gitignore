@@ -4,3 +4,7 @@ node_modules/
 
 # 软著登记材料（含个人身份信息，勿提交）
 soft-copyright/
+
+# 全量区间大文件(gzip已足够, 原文件不入库)
+verify-data/all-intervals.csv
+verify-data/all-intervals.json

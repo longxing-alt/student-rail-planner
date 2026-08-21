@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>所有区间内 · 车站查询</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:#fafafa;color:#18181b;font-family:-apple-system,'PingFang SC','Microsoft YaHei',sans-serif;font-size:14px;padding:16px;max-width:760px;margin:0 auto}
+  h1{font-size:19px}
+  .sub{color:#71717a;font-size:12px;line-height:1.8;margin:8px 0 14px}
+  .bar{display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;margin-bottom:14px}
+  .f label{display:block;font-size:11px;color:#71717a;margin-bottom:3px}
+  input{border:1px solid #d6d3d1;border-radius:8px;padding:8px 10px;font-size:14px;width:150px}
+  button{border:none;border-radius:8px;padding:9px 16px;font-size:13px;font-weight:600;cursor:pointer;background:linear-gradient(135deg,#06b6d4,#10b981);color:#fff}
+  .meta{font-size:12px;color:#71717a;margin-bottom:8px}
+  .stat{display:flex;gap:10px;margin-bottom:10px}
+  .st{background:#fff;border:1px solid #e7e5e4;border-radius:10px;padding:8px 12px;font-size:12px}
+  .st b{font-size:16px}
+  .cols{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .card{background:#fff;border:1px solid #e7e5e4;border-radius:12px;padding:12px}
+  .card h3{font-size:13px;margin-bottom:8px}
+  .tag{display:inline-block;border-radius:99px;padding:2px 9px;font-size:11px;font-weight:600;margin:2px 3px 2px 0;background:#f4f4f5;color:#52525b}
+  .tag.ok{color:#16a34a;background:rgba(22,163,74,.1)}
+  .tag.edge{color:#d97706;background:rgba(245,158,11,.1)}
+  #status{color:#71717a;font-size:12px;margin-top:8px}
+  .load{color:#0d9488;font-weight:600}
+</style>
+</head>
+<body>
+<h1>🏔️ 所有区间内 · 车站查询</h1>
+<div class="sub">
+  覆盖全部 <b>134,322 个</b> 学校↔出发地区间 × 367 站，数据由当前算法预计算（gzip 418KB）。<br>
+  输入任一组 学校 / 出发地 → 立刻列出该区间「可出票」与「可能被查」的全部车站；区间外的站未列出（数量=367-两者-同城-两端）。<br>
+  <b>用真实出票校验时</b>：在 verify-table.html 里按站记录实测，用于校准带宽参数（这里只查询,不改算）。
+</div>
+<div class="bar">
+  <div class="f"><label>学校</label><input id="S" placeholder="武汉" value="武汉"></div>
+  <div class="f"><label>出发地(区间端点)</label><input id="H" placeholder="长沙" value="长沙"></div>
+  <button onclick="query()">查询区间内全部车站</button>
+</div>
+<div class="meta" id="meta"></div>
+<div class="stat" id="stat"></div>
+<div class="cols" id="cols"></div>
+<div id="status"></div>
+
+<script>
+let data = null;
+async function load(){
+  const st=document.getElementById('status');
+  st.innerHTML='<span class="load">正在加载全量区间数据(418KB)…</span>';
+  const r=await fetch('verify-data/all-intervals.json.gz');
+  const buf=await r.arrayBuffer();
+  const ds=new DecompressionStream('gzip');
+  const stream=new Blob([buf]).stream().pipeThrough(ds);
+  const tx=await new Response(stream).text();
+  data=JSON.parse(tx);
+  st.textContent='已加载全部 '+data.length+' 个区间 ✓';
+}
+function norm(x){return String(x||'').trim().replace(/[市省]/g,'')}
+function query(){
+  if(!data){load().then(query);return;}
+  const S=norm(document.getElementById('S').value), H=norm(document.getElementById('H').value);
+  const meta=document.getElementById('meta'), stat=document.getElementById('stat'), cols=document.getElementById('cols');
+  // 匹配: 站名或城市 模糊
+  const find=(q)=>data.filter(([k])=>{const [a,b]=k.split('|');return a===q||b===q||a.includes(q)||b.includes(q)}).map(([k,y,z])=>k);
+  if(!S||!H){meta.textContent='请填写 学校 与 出发地';return;}
+  let hit=null, distKey=null;
+  for(const [k,ok,edge] of data){ const [a,b]=k.split('|'); if((a===S||a.endsWith(S)||S.endsWith(a))&&(b===H||b.endsWith(H)||H.endsWith(b))){hit=[ok,edge];distKey=k;break;} }
+  meta.textContent='区间 '+distKey+'（无匹配则尝试输入车站名/城市名）';
+  if(!hit){meta.textContent='未找到 '+(S+' ↔ '+H)+'，试试输入车站名（如 郑州东 / 长沙南）';stat.innerHTML='';cols.innerHTML='';return;}
+  const ok=hit[0]||[], edge=hit[1]||[];
+  stat.innerHTML='<span class="st">区间内(可出) <b style="color:#16a34a">'+ok.length+'</b></span>'+
+    '<span class="st">可能被查 <b style="color:#d97706">'+edge.length+'</b></span>'+
+    '<span class="st">合计收录 <b>'+ok.length+'</b></span>';
+  cols.innerHTML='<div class="card"><h3 style="color:#16a34a">✅ 可出票（区间内）</h3>'+
+    (ok.length?ok.map(x=>'<span class="tag ok">'+x+'</span>').join(''):'<div style="color:#a1a1aa">无</div>')+'</div>'+
+    '<div class="card"><h3 style="color:#d97706">⚠️ 可能被查（边缘）</h3>'+
+    (edge.length?edge.map(x=>'<span class="tag edge">'+x+'</span>').join(''):'<div style="color:#a1a1aa">无</div>')+'</div>';
+}
+load();
+</script>
+</body>
+</html>

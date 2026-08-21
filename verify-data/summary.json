@@ -1,0 +1,13 @@
+{
+  "pairs": 134322,
+  "stations": 367,
+  "inIntervalTotal": 12008518,
+  "edgeTotal": 8800370,
+  "avgInPerPair": 89.4,
+  "maxIn": 349,
+  "maxInPair": "黑河|临沧",
+  "seconds": 5.2,
+  "csvSizeKB": 44504,
+  "jsonSizeKB": 29831,
+  "gzSizeKB": 418
+}
