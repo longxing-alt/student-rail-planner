@@ -463,15 +463,16 @@ async function main() {
   await w.eval('renderOpt()');
   const optRows = () => [...w.document.querySelectorAll('#optList .opt-row')];
   const r0 = optRows()[0];
-  A('最优方案置顶(第一行含⭐)', r0.textContent.includes('⭐'));
-  A('第一行是最优候选', r0.querySelector('b').textContent.includes('⭐'));
+  const sb = w.eval('(()=>{const b=smartBest();return b ? b.s[0] : ""})()');
+  A('最优方案置顶(⭐=' + (sb || '当前已最优') + ')', sb === '' || (r0.textContent.includes('⭐') && r0.textContent.includes(sb)));
+  A('第一行是最优候选', sb === '' || r0.querySelector('b').textContent.includes('⭐'));
   A('候选行写明具体路线(学校到…到新家)', r0.textContent.includes('石家庄') && r0.textContent.includes('到'));
   A('路线带学生票/全价标记', r0.textContent.includes('学生票') || r0.textContent.includes('全价'));
   A('当前区间行也写具体路线', $('optCurrent').textContent.includes('到') && $('optCurrent').textContent.includes('学生票'));
   await w.eval('setOptMode("near")');
-  A('离家最近视图下最优仍置顶', optRows()[0].textContent.includes('⭐'));
+  A('离家最近视图下最优仍置顶', sb === '' || optRows()[0].textContent.includes('⭐'));
   await w.eval('setOptMode("save")');
-  A('切回最省次数视图恢复', optRows()[0].textContent.includes('⭐'));
+  A('切回最省次数视图恢复', sb === '' || optRows()[0].textContent.includes('⭐'));
 
   G('T27. "A到B"语法 + 改学校清演示行程 + 显示用"到"');
   // 用户场景: 学校郑州 家信阳, 输入"武汉到郑州"

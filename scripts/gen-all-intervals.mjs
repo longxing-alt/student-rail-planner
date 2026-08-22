@@ -15,8 +15,10 @@ function judge(S, H, D) {
   const L = dist(S, H);
   if (L < 15) return dist(S, D) <= 50 ? 2 : (dist(S, D) <= 120 ? 1 : 0);
   const { t, p } = corridor(S, H, D);
-  if (t >= -0.05 && t <= 1.05 && p <= Math.max(60, 0.32 * L)) return 2;
-  if (t >= -0.5 && t <= 1.5 && p <= Math.max(90, 0.45 * L)) return 1;
+  const core = (t > 1.0 || t < 0.0) ? 45 : Math.min(450, Math.max(60, 0.55 * L));
+  const edge = (t > 1.0 || t < 0.0) ? 60 : Math.min(520, Math.max(90, 0.75 * L));
+  if (t >= -0.05 && t <= 1.05 && p <= core) return 2;
+  if (t >= -0.5 && t <= 1.5 && p <= edge) return 1;
   return 0;
 }
 

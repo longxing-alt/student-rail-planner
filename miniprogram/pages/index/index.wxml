@@ -96,8 +96,12 @@
       <view class="dialog-body">
         <block wx:if="{{modal.suggest}}">
           <view class="m-line">当前区间（{{ivS}} ↔ {{ivH}}）太小，多数目的地超出区间（红）。</view>
-          <view class="m-line">把<b>区间</b>改为：<b>{{ivS}}</b>（你的学校）→ <text class="m-best">{{modal.suggest.name}}</text></view>
+          <view class="m-line">推荐把区间改为：<b>{{ivS}}</b> ↔ <text class="m-best">{{modal.suggest.name}} · {{modal.suggest.city}}</text><br/>（原出发地 <b>{{startName}}</b> 保持不变）</view>
+          <view class="m-line warn" wx:if="{{modal.isDest}}">⚠️ 推荐端点是你的目的地——若它<b>不是</b>你的真实家庭地址，把区间拉到这里会绕路/难核验；就近替代：<b>{{modal.altern}}</b></view>
           <view class="m-line">→ {{tripCount}} 个目的地：<text class="g2">{{modal.g2}} 绿</text> / <text class="e2">{{modal.e2}} 橙</text> / <text class="b2">{{modal.b2}} 红</text></view>
+          <view class="m-line dests" wx:if="{{modal.dests.length}}">
+            <view class="m-dest-line" wx:for="{{modal.dests}}" wx:key="text"><text class="m-dot {{item.cls}}"></text>{{item.text}} = <text class="{{item.cls}}">{{item.c}}</text></view>
+          </view>
           <view class="m-note">采用后，颜色按 学校 {{ivS}} ↔ {{modal.suggest.name}} 判定，你的出发地（{{startName}}）保持不变。请在<b>铁路学生优惠资质核验</b>中把真实家庭地址改为 {{modal.suggest.city}}（学校端不动）。红的=不能去。</view>
         </block>
         <block wx:else>

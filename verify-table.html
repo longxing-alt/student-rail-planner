@@ -242,12 +242,12 @@ function judge(S,H,D,k1,k2){
   const inEdge=t>=-0.5&&t<=1.5&&p<=Math.max(90,0.45*L)*Math.max(1,k2/0.45);
   return inEdge?1:0;
 }
-/* 每站评估: 状态+置信度+依据 */
+/* 每站评估: 状态+置信度+依据 (端点内宽带, 越出端点收紧) */
 function assess(S,H,D,k1,k2){
   const L=dist(S,H);
   const {t,p}=corr(S,H,D);
-  const coreBand=Math.max(60,0.32*L)*(k1/0.32);
-  const edgeBand=Math.max(90,0.45*L)*(k2/0.45);
+  const coreBand=(t>1.0||t<0.0)?45:Math.max(60,0.32*L)*(k1/0.32);
+  const edgeBand=(t>1.0||t<0.0)?60:Math.max(90,0.45*L)*(k2/0.45);
   const dS=dist(S,D), dH=dist(H,D);
   let cls, conf;
   if(t>=-0.05&&t<=1.05&&p<=coreBand){ cls=2; const m=(coreBand-p)/coreBand; conf=Math.round(40+60*Math.max(0,Math.min(1,m))); }

@@ -206,11 +206,21 @@ function inIntervalBelt(S, H, P, tLo, tHi, band) {
   const { t, p } = corridor(S, H, P);
   return t >= tLo && t <= tHi && p <= band;
 }
+/* 端点内(t∈[0,1])允许宽带; 越出端点(t>1或t<0)仅允许贴线(实测: 越过端点偏离即拦截, 如 武汉↔广州→深圳) */
+function coreLimit(L, t) { return (t > 1.0 || t < 0.0) ? 45 : Math.min(450, Math.max(60, 0.55 * L)); }
+function edgeLimit(L, t) { return (t > 1.0 || t < 0.0) ? 60 : Math.min(520, Math.max(90, 0.75 * L)); }
+/* 带 t 判定的走廊带(带宽依 t 是否越出端点变化) */
+function ptArea(S, H, P, tLo, tHi, limitFn) {
+  const L = dist(S, H);
+  if (L < 15) return true;
+  const { t, p } = corridor(S, H, P);
+  return t >= tLo && t <= tHi && p <= limitFn(L, t);
+}
 function directCovered(S, H, D) {
   const L = dist(S, H);
   if (L < 15) return dist(S, D) <= 50;
   const { t, p } = corridor(S, H, D);
-  return t >= -0.12 && t <= 1.12 && p <= Math.max(45, 0.18 * L);
+  return t >= -0.12 && t <= 1.12 && p <= coreLimit(L, t);
 }
 
 /* 行程判定 (O=出发地, D=目的地): 起点与终点都必须在区间内
@@ -218,14 +228,14 @@ function directCovered(S, H, D) {
 function planTrip(S, H, O, D) {
   const direct = dist(O, D);
   const L = dist(S, H);
-  // 核心带: 出发地与目的地都须在区间走廊带内
-  const Oin = inIntervalBelt(S, H, O, -0.05, 1.05, Math.max(60, 0.32 * L));
-  const Din = inIntervalBelt(S, H, D, -0.05, 1.05, Math.max(60, 0.32 * L));
-  // 边缘延伸带: 超出核心带但距端点不超过 ~0.45×区间长
-  // 实测: 济南以北最远可买到沈阳(≈800km/区间1830km), 天津(≈270km)可买; 更远(哈尔滨)拦截
-  const endExt = Math.max(250, 0.45 * L);
-  const Oedge = !Oin && inIntervalBelt(S, H, O, -0.45 - 0.05, 1.05 + 0.45, Math.max(90, 0.45 * L));
-  const Dedge = !Din && inIntervalBelt(S, H, D, -0.45 - 0.05, 1.05 + 0.45, Math.max(90, 0.45 * L));
+  // 退化/同城区间(学校与端点几乎同点): 只允许近距离直达, 禁止经中转买任意远地
+  if (L < 15 && direct > 150) return { ok: 0, mode: 'full', direct };
+  // 核心带: 端点内宽带支持大型沿线城市; 越出端点仅贴线(实测: 武汉↔广州→深圳 80km偏离 拦截)
+  const Oin = ptArea(S, H, O, -0.05, 1.05, coreLimit);
+  const Din = ptArea(S, H, D, -0.05, 1.05, coreLimit);
+  // 边缘延伸带: 超出核心带但距端点不超过 ~0.45×区间长(越端点时同样收紧到贴线)
+  const Oedge = !Oin && ptArea(S, H, O, -0.5, 1.5, edgeLimit);
+  const Dedge = !Din && ptArea(S, H, D, -0.5, 1.5, edgeLimit);
   if (!Oin && !Oedge) return { ok: 0, mode: 'full', direct };
   if (!Din && !Dedge) return { ok: 0, mode: 'full', direct };
   const edge = (!Oin || !Din);
@@ -245,10 +255,10 @@ function transferPlan(S, H, O, D) {
   const limit = state.ratio * direct;
   const same = (a, b) => (a.name && a.name === b.name) ||
     (Math.abs(a.lat - b.lat) < 0.005 && Math.abs(a.lon - b.lon) < 0.005);
-  // 硬约束①: 终点 D 必须在区间走廊带内(允许同城端少量延伸)
+  // 硬约束①: 终点 D 必须在区间走廊带内(允许同城端少量延伸; 越端点收紧)
   if (L >= 15) {
     const { t, p } = corridor(S, H, D);
-    if (!(t >= -0.15 && t <= 1.15 && p <= Math.max(60, 0.32 * L))) return null;
+    if (!(t >= -0.15 && t <= 1.15 && p <= coreLimit(L, t))) return null;
   }
   let best = null;
   for (const st of HUBS) {
@@ -258,7 +268,7 @@ function transferPlan(S, H, O, D) {
     if (via > limit) continue;
     if (L >= 15) {
       const { t, p } = corridor(S, H, T);
-      if (!(t >= -0.35 && t <= 1.35 && p <= Math.max(70, 0.32 * L))) continue;
+      if (!(t >= -0.35 && t <= 1.35 && p <= ((t > 1.0 || t < 0.0) ? 70 : Math.max(70, 0.32 * L)))) continue;
     }
     if (!best || via < best.via) best = { station: T, via, direct };
   }

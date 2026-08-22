@@ -8,3 +8,7 @@ soft-copyright/
 # 全量区间大文件(gzip已足够, 原文件不入库)
 verify-data/all-intervals.csv
 verify-data/all-intervals.json
+verify-data/low-confidence.csv
+verify-data/low-confidence-top150.md
+verify-data/real-data.json
+verify-data/rules-notes.md

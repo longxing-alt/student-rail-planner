@@ -59,7 +59,7 @@ A('t=1.13 边界外 → 非直达', directCovered(S1, H1, { lat: 31.13, lon: 115
 A('t=-0.10 边界内 → 直达', directCovered(S1, H1, { lat: 29.9, lon: 109.5 }) === true);
 A('t=-0.15 边界外 → 非直达', directCovered(S1, H1, { lat: 29.85, lon: 109.25 }) === false);
 A('t=0.5 p=32km → 直达', directCovered(S1, H1, { lat: 30.5, lon: 114 }) === true);
-A('t=0.5 p=161km → 非直达', directCovered(S1, H1, { lat: 32, lon: 112.5 }) === false);
+A('t=0.5 p=161km → 直达(中部带 0.55L≈271km; 实测校准: 柳州→广州 0.46L=397km 可出)', directCovered(S1, H1, { lat: 32, lon: 112.5 }) === true);
 // 真实数据
 const 长沙南 = o('长沙南'), 岳阳东 = o('岳阳东');
 A('岳阳东(沿线) → 直达', directCovered(武汉, 长沙南, 岳阳东) === true);
@@ -95,7 +95,8 @@ A('西安=全价', P(武汉, 长沙南, o('西安北')).mode === 'full');
 A('岳阳=直达', P(武汉, 长沙南, 岳阳东).mode === 'direct');
 A('D==S → 直达', P(武汉, 长沙南, 武汉).mode === 'direct');
 A('S==H 近D → 直达', P(武汉, 武汉, o('汉口')).mode === 'direct');
-A('S==H 远D → 中转(经某枢纽)', (() => { const p = P(武汉, 武汉, 北京南); return p.mode === 'transfer' && p.ok === 1; })());
+A('S==H 远D → 拦截(退化区间不卖远地, 实测口径)', (() => { const p = P(武汉, 武汉, 北京南); return p.ok === 0 && p.mode === 'full'; })());
+A('S==H 远于150km(长沙≈285km) → 拦截', (() => { const p = P(武汉, 武汉, o('长沙南')); return p.ok === 0 && p.mode === 'full'; })());
 A('所有结果数值有限(无NaN)', (() => {
   const pts = [北京南, 广州南, 拉萨, 岳阳东, o('重庆北'), o('西安北'), o('哈尔滨西')];
   return pts.every(d => { const p = P(武汉, 长沙南, d); return [p.direct, p.via].every(v => v == null || isFinite(v)); });
@@ -141,7 +142,7 @@ state.trips = [
 r = evalWith(贵阳北);
 A('8行程=13次/覆盖7(广州全价, 西安在走廊内直达)', r.used === 13 && r.covered === 7 && r.fail === 1);
 A('广州(终点超区间)=全价', r.perTrip[1].plan.mode === 'full');
-A('武汉经北京南中转(学校端枢纽)', r.perTrip[6].plan.mode === 'transfer' && r.perTrip[6].plan.station.name === '北京南');
+A('无北京南北上绕行中转(2026-08 端点外收紧: 南向区间不北上绕行)', !r.perTrip.some(t => t.plan.mode === 'transfer' && t.plan.station && t.plan.station.name === '北京南'));
 A('北京(0km)直达', r.perTrip[0].plan.mode === 'direct' && r.perTrip[0].plan.direct === 0);
 A('西安(走廊内)=直达1次', r.perTrip[3].plan.mode === 'direct' && r.perTrip[3].used === 1);
 
@@ -203,7 +204,7 @@ G('L. 行程出发地（区间 南宁东↔济南西）');
 const { planTrip } = new Function(code[1] + '\nreturn {planTrip};')();
 const LS = o('南宁东'), LH = o('济南西');
 let lp = planTrip(LS, LH, o('天津'), o('济南西'));
-A('L1 天津→济南: 边缘延伸带(实测可买) → edge', lp.mode === 'edge' && lp.ok === 1);
+A('L1 天津→济南: 越端点且偏离>60km → 拦截(2026-08 端点外收紧规则; 边界待复验)', lp.mode === 'full');
 lp = planTrip(LS, LH, o('武汉'), o('济南西'));
 A('L2 武汉→济南: 区间内 → 可出票', lp.ok === 1);
 lp = planTrip(LS, LH, o('郑州东'), o('长沙南'));
@@ -213,7 +214,7 @@ A('L4 济南→南宁: 反向行程合法', lp.ok === 1);
 lp = planTrip(LS, LH, o('天津'), o('上海虹桥'));
 A('L5 天津→上海: 终点远离区间 → 全价', lp.mode === 'full', lp.mode);
 A('L7 哈尔滨→济南: 超出延伸带 → 全价', planTrip(LS, LH, o('哈尔滨西'), o('济南西')).mode === 'full');
-A('L8 沈阳→济南: 边缘最远可买', planTrip(LS, LH, o('沈阳'), o('济南西')).mode === 'edge');
+A('L8 沈阳→济南: 越端点远端 → 拦截(端点外收紧)', planTrip(LS, LH, o('沈阳'), o('济南西')).mode === 'full');
 lp = planTrip(LS, LH, LS, o('武汉'));
 const lq = planOneWay(LS, LH, o('武汉'));
 A('L6 O=S 时 planTrip 与 planOneWay 等价', lp.mode === lq.mode && lp.ok === lq.ok);

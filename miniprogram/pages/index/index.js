@@ -15,16 +15,23 @@ function resolvePlace(q) {
   return Promise.resolve({ point: { lat: h[2], lon: h[3] }, station: { name: h[0], city: h[1], lat: h[2], lon: h[3] } });
 }
 
-/* 判定: 2=区间内(绿) 1=可能被查(橙) 0=超区间(红) */
-function judge(S, H, D) {
-  if (!S || !H || !D) return 0;
+/* 单点走廊带判定: 2=区间内(绿) 1=可能被查(橙) 0=超区间(红); 端点内宽带, 越出端点收紧 */
+function beltOf(S, H, P) {
+  if (!S || !H || !P) return 0;
   const L = dist(S, H);
-  if (L < 15) return dist(S, D) <= 50 ? 2 : 0;
-  const { t, p } = corridor(S, H, D);
-  const inCore = t >= -0.05 && t <= 1.05 && p <= Math.max(60, 0.32 * L);
-  if (inCore) return 2;
-  const inEdge = t >= -0.5 && t <= 1.5 && p <= Math.max(90, 0.45 * L);
-  return inEdge ? 1 : 0;
+  if (L < 15) return dist(S, P) <= 50 ? 2 : 0;
+  const { t, p } = corridor(S, H, P);
+  const core = (t > 1.0 || t < 0.0) ? 45 : Math.min(450, Math.max(60, 0.55 * L));
+  const edge = (t > 1.0 || t < 0.0) ? 60 : Math.min(520, Math.max(90, 0.75 * L));
+  if (t >= -0.05 && t <= 1.05 && p <= core) return 2;
+  if (t >= -0.5 && t <= 1.5 && p <= edge) return 1;
+  return 0;
+}
+/* 行程判定 = 真正出发地(柳州/出发地) → 目的地, 两端都须在区间内(实测: 柳州→深圳, 柳州不在区间→拦截) */
+function judge(S, H, D) {
+  const O = state.depart || S;
+  const a = beltOf(S, H, O), b = beltOf(S, H, D);
+  return Math.min(a, b); // 两端取较严
 }
 /* 排序: 按离出发地由近到远(越走越远, 天然不折返) */
 function sortByDepart(trips) {
@@ -203,13 +210,38 @@ Page({
     // 推荐区间端点
     const best = smartBest(S, H, state.trips);
     const suggest = best && best.st.name !== H.name ? best.st : null;
-    let modal = { show: true, suggest: null, g2: 0, e2: 0, b2: 0 };
+    let modal = { show: true, suggest: null, g2: 0, e2: 0, b2: 0, isDest: false, altern: '', dests: [] };
     if (suggest) {
       const H2 = { lat: suggest.lat, lon: suggest.lon };
       const j2 = state.trips.map(t => judge(S, H2, t.station));
       modal = { show: true, suggest,
         g2: j2.filter(x => x === 2).length, e2: j2.filter(x => x === 1).length, b2: j2.filter(x => x === 0).length };
+      // 推荐端点恰为目的地 → 可能绕路, 给出就近替代
+      modal.isDest = state.trips.some(t => t.station && (t.station.name === suggest.name || t.station.city === suggest.city));
+      const curCover = state.trips.filter(t => judge(S, H, t.station) === 2).length;
+      const destNames = state.trips.map(t => t.station && t.station.name);
+      const destCities = state.trips.map(t => t.station && t.station.city);
+      let alt = null, aKm = 0, aCover = 0;
+      for (const ss of STATIONS) {
+        if (ss[0] === S.name || ss[0] === suggest.name) continue;
+        const H3 = { lat: ss[2], lon: ss[3] };
+        const cov = state.trips.filter(t => judge(S, H3, t.station) === 2).length;
+        if (cov < curCover) continue;
+        if (destNames.includes(ss[0]) || destCities.includes(ss[1])) continue;
+        const km = dist({ lat: ss[2], lon: ss[3] }, { lat: H.lat, lon: H.lon });
+        if (!alt || cov > aCover || (cov === aCover && km < aKm)) { alt = ss; aKm = km; aCover = cov; }
+      }
+      if (alt) modal.altern = alt[0] + ' · ' + alt[1] + '（覆盖 ' + aCover + '，出发地不动）';
     }
+    // 每个目的地的当前判定(颜色), 指明哪里不行
+    modal.dests = state.trips.map(t => {
+      const j = judge(S, H, t.station);
+      return {
+        text: t.text,
+        c: j === 2 ? '区间内·可买' : j === 1 ? '可能被查' : '超区间·不能买',
+        cls: j === 2 ? 'g2' : j === 1 ? 'e2' : 'b2',
+      };
+    });
     this.setData({ modal });
     this.setStatus('已按离出发地由近到远排序：出发地 ' + state.depart.name + ' → ' + state.trips.map(t => t.text).join(' → '));
   },
