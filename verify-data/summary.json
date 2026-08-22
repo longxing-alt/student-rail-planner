@@ -1,13 +1,13 @@
 {
   "pairs": 134322,
   "stations": 367,
-  "inIntervalTotal": 12008518,
-  "edgeTotal": 8800370,
-  "avgInPerPair": 89.4,
-  "maxIn": 349,
-  "maxInPair": "黑河|临沧",
-  "seconds": 5.2,
-  "csvSizeKB": 44504,
-  "jsonSizeKB": 29831,
-  "gzSizeKB": 418
+  "inIntervalTotal": 9973186,
+  "edgeTotal": 2127296,
+  "avgInPerPair": 74.25,
+  "maxIn": 231,
+  "maxInPair": "黑河|三亚",
+  "seconds": 4.7,
+  "csvSizeKB": 22078,
+  "jsonSizeKB": 11285,
+  "gzSizeKB": 233
 }
