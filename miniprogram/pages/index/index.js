@@ -23,6 +23,52 @@ function judge(S, H, D) {
   const a = beltOf(S, H, O), b = beltOf(S, H, D);
   return Math.min(a, b); // 两端取较严
 }
+/* 自动最优联程排序: 使最多路段落在区间内(联程段覆盖), 平局取总里程短 */
+function bestRoute(S, H, trips) {
+  const arr = trips.slice();
+  if (arr.length <= 1) return arr;
+  const sts = arr.map(t => t.station);
+  const evalOrder = ord => {
+    let ok = 0, km = 0, prev = H;
+    for (const i of ord) {
+      const q = sts[i];
+      if (logic.beltV2(S, H, prev) === 2 && logic.beltV2(S, H, q) === 2) ok++;
+      km += dist(prev, q); prev = q;
+    }
+    km += dist(prev, H);
+    return { ok, km };
+  };
+  const n = arr.length;
+  let bestOrd = null, bestScore = null;
+  if (n <= 9) {
+    const perm = [], used = new Array(n).fill(0);
+    (function dfs() {
+      if (perm.length === n) {
+        const sc = evalOrder(perm);
+        if (!bestScore || sc.ok > bestScore.ok || (sc.ok === bestScore.ok && sc.km < bestScore.km)) { bestScore = sc; bestOrd = perm.slice(); }
+        return;
+      }
+      for (let i = 0; i < n; i++) if (!used[i]) { used[i] = 1; perm.push(i); dfs(); used[i] = 0; perm.pop(); }
+    })();
+  } else {
+    let cur = H, ord = [], left = sts.map((_, i) => i);
+    while (left.length) {
+      let bi = 0, bd = Infinity;
+      for (let k = 0; k < left.length; k++) { const d = dist(cur, sts[left[k]]); if (d < bd) { bd = d; bi = k; } }
+      ord.push(left[bi]); cur = sts[left[bi]]; left.splice(bi, 1);
+    }
+    let improved = true;
+    while (improved) {
+      improved = false;
+      for (let i = 0; i < n - 1; i++) {
+        const a = ord.slice(), tmp = a[i]; a[i] = a[i + 1]; a[i + 1] = tmp;
+        if (evalOrder(a).ok > evalOrder(ord).ok) { ord = a; improved = true; }
+      }
+    }
+    bestOrd = ord;
+  }
+  return bestOrd.map(i => arr[i]);
+}
 /* 排序: 按离出发地由近到远(越走越远, 天然不折返) */
 function sortByDepart(trips) {
   const dep = state.depart;
@@ -201,7 +247,7 @@ Page({
     if (!state.trips.length) { this.setStatus('先添加想去的地方'); return; }
     const S = state.school, H = state.home;
     if (!S || !H) { this.setStatus('请先完成 ①学校 ②出发地'); return; }
-    state.trips = sortByDepart(state.trips); // 联程顺序=自动按离出发地由近到远
+    state.trips = bestRoute(S, H, state.trips); // 自动最优联程排序: 最多段落在区间内
     // 先标记已规划, 再渲染, 保证框体/区间线着色
     this.setData({ planned: true });
     this.renderAll();
