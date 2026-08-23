@@ -76,7 +76,21 @@ input[type=range]{width:100%;accent-color:var(--accent);margin-top:10px}
 .bridge{font-size:12px;color:var(--warn);background:var(--warn-soft);border:1px solid var(--warn-line);border-radius:10px;padding:7px 10px;margin-top:6px;line-height:1.55}
 .bridge b{color:#b45309}
 .hidden{display:none!important}
-@media(max-width:520px){ body{padding:18px 12px 50px} .card{padding:16px} h1{font-size:19px} }
+@media(max-width:520px){
+  body{padding:18px 12px 50px}
+  .card{padding:16px}
+  h1{font-size:19px}
+  input[type=text]{font-size:16px}                    /* 防iOS聚焦缩放 */
+  .btn{padding:14px 18px;font-size:15.5px}            /* 大触控目标 */
+  .ghost{min-height:40px}
+  #tripInput{width:100%!important;margin:0 0 8px!important}
+  #stepTrips .ghost{width:100%}
+  .trip{padding:12px 11px}
+  .dep-line{flex-wrap:wrap;line-height:1.5}
+  .chip{font-size:11px;padding:2px 8px}
+  .rec{font-size:13px}
+  summary{padding:10px 0}
+}
 </style>
 </head>
 <body>
