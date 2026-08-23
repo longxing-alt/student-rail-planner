@@ -254,6 +254,13 @@ input[type=range]{width:100%;accent-color:var(--blue)}
 .param-row input[type=number]:focus{border-color:var(--blue);box-shadow:0 0 0 3px rgba(13,148,136,.14);outline:none}
 .param-hint{font-size:11.5px;color:var(--muted);line-height:1.5}
 .opt-row.best{border:1.5px solid var(--blue)!important;background:var(--blue-soft)!important;box-shadow:0 4px 14px -8px rgba(13,148,136,.35)}
+/* 嵌入模式(朋友网站 iframe/embed=1): 简洁干净, 突出区间规划主题 */
+body.embed nav,body.embed footer{display:none!important}
+body.embed .workspace{margin-top:0;border-radius:14px}
+body.embed .nav-cta,body.embed #embedOnly{display:none}
+#embedFullBtn{display:none}
+body.embed #embedFullBtn{display:inline-flex;align-items:center;gap:6px;position:fixed;right:14px;bottom:14px;z-index:90;font-size:12.5px;color:var(--muted);background:rgba(255,255,255,.92);border:1px solid var(--line);border-radius:99px;padding:6px 12px;cursor:pointer;box-shadow:var(--shadow-sm);font-family:inherit}
+body.embed #embedFullBtn:hover{color:var(--blue);border-color:var(--blue)}
 .trip-row[draggable="true"]{cursor:grab}
 .trip-row.drag-over{border-color:var(--blue);background:#f0fdfa;box-shadow:0 0 0 2px rgba(13,148,136,.2)}
 .drag-handle{color:#d4d4d8;cursor:grab;font-size:14px;user-select:none;flex:none;padding:0 2px;-webkit-user-select:none;touch-action:none}
@@ -728,6 +735,7 @@ footer b{color:var(--text)}
   <div>学生优惠 · 区间规划器 —— 帮助你把每学年有限的优惠次数花在刀刃上</div>
   <div style="margin-top:6px">车站数据 · 规划结果仅供估算参考 · UI 风格致敬 skills.dev</div>
 </footer>
+<button id="embedFullBtn" onclick="location.href=location.pathname" title="退出嵌入精简模式">⛶ 完整版</button>
 
 <!-- 应用区间大弹窗（可下滑看详情） -->
 <div class="modal-mask" id="applyModal" style="display:none" onclick="if(event.target===this)closeApplyModal()">
@@ -2726,6 +2734,11 @@ function bindEvents() {
   document.getElementById('homeInput').addEventListener('keydown', e => { if (e.key === 'Enter') searchPlace('home'); });
 }
 async function init() {
+  // 嵌入模式: iframe 被第三方网站包裹 或 ?embed=1 → 隐藏导航/页脚, 极简主题
+  let isEmbed = false;
+  try { isEmbed = window.self !== window.top; } catch (e) { isEmbed = true; }
+  if (new URLSearchParams(location.search).get('embed') === '1') isEmbed = true;
+  if (isEmbed) document.body.classList.add('embed');
   bindEvents();
   initTouchDrag();
   document.getElementById('mapToggleBtn').textContent = '🗺️ 查看地图'; // 地图默认收起
