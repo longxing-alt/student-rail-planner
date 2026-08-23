@@ -325,7 +325,7 @@ async function main() {
   await w.eval('setHomeFromStation("济南西")');
   $('schoolInput').value = '崇左南';
   await w.eval('searchPlace("school")');
-  $('tripInput').value = '天津→济南';
+  $('tripInput').value = '哈尔滨→济南'; // v2: 哈在 崇左↔济南 空间带外仍超区间(触发试买)
   await w.eval('addTrip()');
   await wait(400);
   A('无案例区节点', !w.document.getElementById('casesInner'));

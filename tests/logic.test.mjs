@@ -77,7 +77,7 @@ A('石家庄在走廊外(t=-1.17)不可作中转', transferPlan(武汉, 长沙�
 A('郑州东在走廊外不可作中转', (() => { const t = transferPlan(武汉, 长沙南, o('西安北')); return t === null || t.station.name !== '郑州东'; })());
 A('非枢纽站不作中转(信阳东被排除 → 全价)', transferPlan(武汉, 长沙南, o('信阳东')) === null);
 A('T==D(终点即枢纽)跳过自身', (() => { const t = transferPlan(武汉, 长沙南, 长沙南); return t === null; })());
-A('S==H 时 T==S 被跳过但仍能找到其他枢纽', transferPlan(武汉, 武汉, 北京南) !== null);
+A('S==H 退化区间: 远D(北京≈1060km)禁止中转', transferPlan(武汉, 武汉, 北京南) === null);
 A('终点走廊内(株洲西)才可考虑中转', transferPlan(武汉, 长沙南, o('株洲西')) !== null);
 // 终点走廊外(拉萨) → 任何 ratio 都不可中转(硬约束)
 const 拉萨 = o('拉萨');

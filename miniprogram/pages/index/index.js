@@ -15,18 +15,8 @@ function resolvePlace(q) {
   return Promise.resolve({ point: { lat: h[2], lon: h[3] }, station: { name: h[0], city: h[1], lat: h[2], lon: h[3] } });
 }
 
-/* 单点走廊带判定: 2=区间内(绿) 1=可能被查(橙) 0=超区间(红); 端点内宽带, 越出端点收紧 */
-function beltOf(S, H, P) {
-  if (!S || !H || !P) return 0;
-  const L = dist(S, H);
-  if (L < 15) return dist(S, P) <= 50 ? 2 : 0;
-  const { t, p } = corridor(S, H, P);
-  const core = (t > 1.0 || t < 0.0) ? 45 : Math.min(450, Math.max(60, 0.55 * L));
-  const edge = (t > 1.0 || t < 0.0) ? 60 : Math.min(520, Math.max(90, 0.75 * L));
-  if (t >= -0.05 && t <= 1.05 && p <= core) return 2;
-  if (t >= -0.5 && t <= 1.5 && p <= edge) return 1;
-  return 0;
-}
+/* 单点判定(实测校准v2): 2=区间内(绿) 0=超区间(红) — 空间带+通道网+同城, 见 logic.beltV2 */
+function beltOf(S, H, P) { return logic.beltV2(S, H, P); }
 /* 行程判定 = 真正出发地(柳州/出发地) → 目的地, 两端都须在区间内(实测: 柳州→深圳, 柳州不在区间→拦截) */
 function judge(S, H, D) {
   const O = state.depart || S;
@@ -44,7 +34,8 @@ function smartBest(S, H, trips) {
   const curCover = trips.filter(t => judge(S, H, t.station) === 2).length;
   for (const s of STATIONS) {
     if (s[0] === S.name) continue;
-    const H2 = { lat: s[2], lon: s[3] };
+    if (!logic.railAdj().nodes.has(s[1])) continue; // 推荐只考虑通道网内端点(图外支线/海岛可手动填写)
+    const H2 = { name: s[0], city: s[1], lat: s[2], lon: s[3] };
     const cover = trips.filter(t => judge(S, H2, t.station) === 2).length;
     if (cover < curCover) continue;
     const bad = trips.filter(t => judge(S, H2, t.station) === 0).length;
@@ -212,7 +203,7 @@ Page({
     const suggest = best && best.st.name !== H.name ? best.st : null;
     let modal = { show: true, suggest: null, g2: 0, e2: 0, b2: 0, isDest: false, altern: '', dests: [] };
     if (suggest) {
-      const H2 = { lat: suggest.lat, lon: suggest.lon };
+      const H2 = { name: suggest.name, city: suggest.city, lat: suggest.lat, lon: suggest.lon };
       const j2 = state.trips.map(t => judge(S, H2, t.station));
       modal = { show: true, suggest,
         g2: j2.filter(x => x === 2).length, e2: j2.filter(x => x === 1).length, b2: j2.filter(x => x === 0).length };
@@ -224,7 +215,7 @@ Page({
       let alt = null, aKm = 0, aCover = 0;
       for (const ss of STATIONS) {
         if (ss[0] === S.name || ss[0] === suggest.name) continue;
-        const H3 = { lat: ss[2], lon: ss[3] };
+        const H3 = { name: ss[0], city: ss[1], lat: ss[2], lon: ss[3] };
         const cov = state.trips.filter(t => judge(S, H3, t.station) === 2).length;
         if (cov < curCover) continue;
         if (destNames.includes(ss[0]) || destCities.includes(ss[1])) continue;
