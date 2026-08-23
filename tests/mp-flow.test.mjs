@@ -92,8 +92,8 @@ const flow = async () => {
   console.log('== 场景2: 一键规划 ==');
   p.onPlan.call(p); await sync();
   check('规划标记', p.data.planned === true);
-  check('消耗 1 次', p.data.used === 1 && p.data.remain === 3);
-  check('判定: 1绿5红(当前小区间)', p.data.okN === 1 && p.data.badN === 5);
+  check('联程未全段可出 → 消耗 0 次', p.data.used === 0 && p.data.remain === 4);
+  check('判定: 1绿6红(联程7段·当前小区间)', p.data.okN === 1 && p.data.badN === 6);
   check('框体已着色', p.data.rows.some(r => r.boxCls === 'bad') && p.data.rows.some(r => r.boxCls === 'ok'));
   check('弹窗推荐弹出', p.data.modal.show === true && p.data.modal.suggest && p.data.modal.suggest.name === '贵阳');
   console.log('  推荐:', p.data.modal.suggest.name, '| 预览:', p.data.modal.g2 + '绿/' + p.data.modal.e2 + '橙/' + p.data.modal.b2 + '红', '| 顺序:', p.data.rows.map(r => r.text).join('→')); // 注: cap带宽(0.55L≤450km)后推荐由南宁东→崇左南
@@ -104,7 +104,7 @@ const flow = async () => {
   check('区间端点变为贵阳', logic.state.home && logic.state.home.name === '贵阳');
   check('出发地保持不变', logic.state.depart.name === departBefore);
   check('弹窗关闭', p.data.modal.show === false);
-  check('颜色按新区间: 4绿0橙2红(v2)', p.data.okN === 4 && p.data.edgeN === 0 && p.data.badN === 2);
+  check('颜色按新区间: 3绿0橙4红(联程7段)', p.data.okN === 3 && p.data.edgeN === 0 && p.data.badN === 4);
   check('区间线右端更新', p.data.ivH === '贵阳');
 
   console.log('== 场景4: 规划后可添加(卡片回灰) + 清空 ==');

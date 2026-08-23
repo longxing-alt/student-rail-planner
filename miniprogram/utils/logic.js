@@ -538,13 +538,26 @@ function nearestStation(pt, maxKm) {
   return best;
 }
 function stToObj(s) { return s ? { name: s[0], city: s[1], lat: s[2], lon: s[3], hub: !!s[4] } : null; }
+/* 联程路线判定(实测v2): 起点→…→终点 逐段两端均须在区间内(beltV2); 锚点站同样判定 */
+function chainV2(S, H, stList, rStart, rEnd) {
+  if (!S || !H) return null;
+  const start = rStart || S, end = rEnd || H;
+  const pts = [start, ...(stList || []), end];
+  const segs = [];
+  for (let i = 0; i < pts.length - 1; i++) {
+    const A = pts[i], B = pts[i + 1];
+    segs.push({ a: A, b: B, km: dist(A, B), inInt: beltV2(S, H, A) === 2 && beltV2(S, H, B) === 2 });
+  }
+  const okN = segs.filter(sg => sg.inInt).length;
+  return { segs, okN, total: segs.reduce((s, x) => s + x.km, 0), okAll: okN === segs.length };
+}
 // ==== PURE LOGIC END ====
 
 /* ---- 小程序版导出（供 pages 与测试使用） ---- */
 module.exports = {
   STATIONS, HUBS, state,
   hav, dist, corridor, inIntervalBelt, directCovered,
-  bandOK, chanOK, beltV2, railAdj, nearOK,
+  bandOK, chanOK, beltV2, railAdj, nearOK, chainV2,
   planTrip, transferPlan, planOneWay, evalWith, evalAll,
   chainEval, chainEndPoint, chainMidStations, chainEvalCurrent, planGroups, foldBackBadStation,
   cleanCity, stationOf, nearestStation, stToObj,
