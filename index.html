@@ -253,6 +253,7 @@ input[type=range]{width:100%;accent-color:var(--blue)}
 .param-row input[type=number]{width:70px;padding:5px 8px;border:1px solid #d6d3d1;border-radius:9px;font-size:13px;background:#fff;color:var(--text)}
 .param-row input[type=number]:focus{border-color:var(--blue);box-shadow:0 0 0 3px rgba(13,148,136,.14);outline:none}
 .param-hint{font-size:11.5px;color:var(--muted);line-height:1.5}
+.opt-row.best{border:1.5px solid var(--blue)!important;background:var(--blue-soft)!important;box-shadow:0 4px 14px -8px rgba(13,148,136,.35)}
 .trip-row[draggable="true"]{cursor:grab}
 .trip-row.drag-over{border-color:var(--blue);background:#f0fdfa;box-shadow:0 0 0 2px rgba(13,148,136,.2)}
 .drag-handle{color:#d4d4d8;cursor:grab;font-size:14px;user-select:none;flex:none;padding:0 2px;-webkit-user-select:none;touch-action:none}
@@ -969,7 +970,7 @@ const BLK2 = [
 ];
 const RAIL_LINES = [
   ['哈尔滨', '长春', '沈阳', '北京'],                         // 京哈
-  ['北京', '石家庄', '郑州', '信阳', '武汉', '岳阳', '长沙', '衡阳', '广州'], // 京广
+  ['北京', '石家庄', '太原', '郑州', '信阳', '武汉', '岳阳', '长沙', '衡阳', '广州'], // 京广(+石太/郑太)
   ['北京', '天津', '济南', '徐州', '蚌埠', '南京', '上海'],     // 京沪
   ['连云港', '徐州', '郑州', '西安', '兰州'],                  // 陇海
   ['兰州', '乌鲁木齐'],                                      // 兰新
@@ -983,7 +984,7 @@ const RAIL_LINES = [
   ['成都', '昆明'],                                          // 成昆
   ['昆明', '大理'],                                          // 大丽(近似)
   ['南宁', '北海'], ['南宁', '防城港'],                          // 邕北+钦防
-  ['南宁', '广州'],                                          // 南广
+  ['南宁', '梧州', '广州'],                                     // 南广(+梧州)
   ['广州', '茂名'],                                          // 江湛(止于茂名; 雷州-海南链不入图)
   ['广州', '深圳'],                                          // 广深
   ['杭州', '宁波', '温州', '福州', '厦门', '深圳'],            // 杭深(沿海)
@@ -1722,7 +1723,7 @@ function renderOpt() {
   if (mode === 'save') {
     // 最省次数: 覆盖优先(区间内段数多), 再按次数少 → 支持拉远家扩大区间
     list = list.filter(c => c.covered >= 1);
-    list.sort((a, b) => (b.covered - a.covered) || (a.used - b.used) ||
+    list.sort((a, b) => (b.covered - a.covered) || (a.fail - b.fail) || (a.used - b.used) ||
       ((b.sameCity ? 1 : 0) - (a.sameCity ? 1 : 0)) || (kmOf(a) - kmOf(b)));
   } else if (mode === 'full') {
     list = list.filter(c => state.trips.length > 0 && c.covered === state.trips.length);
@@ -1761,7 +1762,7 @@ function renderOpt() {
       : diff > 0 ? '<span class="chip chip-red">多 ' + diff + ' 次</span>' : '<span class="chip">相同</span>';
     const isBest = c.st[0] === smartName;
     return '<div class="opt-row ' + (isBest ? 'best' : '') + '">' +
-      '<div class="opt-main"><b>' + (isBest ? '⭐ ' : '') + esc(c.st[0]) + ' · ' + esc(c.st[1]) + '</b>' +
+      '<div class="opt-main"><b style="' + (isBest ? 'font-weight:800;color:var(--blue);font-size:13.5px' : '') + '">' + (isBest ? '⭐ ' : '') + esc(c.st[0]) + ' · ' + esc(c.st[1]) + '</b>' +
       '<div class="sub">' + (c.sameCity ? '<span style="color:#6ee7b7">与家庭同城，可直接作为区间端点</span> · ' : '') +
       '距家 ' + (isFinite(c.kmHome) ? Math.round(c.kmHome) : '—') + ' km</div>' +
       '<div class="opt-route">' + (state.chainMode
@@ -2763,13 +2764,24 @@ function mSmartBest(S, H, trips) {
   const curCover = trips.filter(t => mJudge(S, H, t.station) === 2).length;
   for (const s of STATIONS) {
     if (s[0] === S.name) continue;
+    if (!railAdj().nodes.has(s[1])) continue; // 推荐只考虑通道网内端点(图外支线/海岛可手动填写)
     const H2 = { name: s[0], city: s[1], lat: s[2], lon: s[3] };
-    const cover = trips.filter(t => mJudge(S, H2, t.station) === 2).length;
+    const coveredTrips = trips.filter(t => mJudge(S, H2, t.station) === 2);
+    const cover = coveredTrips.length;
     if (cover < curCover) continue;
     const bad = trips.filter(t => mJudge(S, H2, t.station) === 0).length;
+    // 平局质量: 被覆盖行程的最大垂直偏离比 p/L 最小(更居中) → 再按距当前家近
+    const Lh = dist(S, H2);
+    let pMax = 0;
+    for (const t of coveredTrips) {
+      if (!t.station) continue;
+      const { p } = corridor(S, H2, t.station);
+      pMax = Math.max(pMax, p / (Lh || 1));
+    }
     const km = dist({ lat: s[2], lon: s[3] }, { lat: H.lat, lon: H.lon });
-    if (!best || cover > best.cover || (cover === best.cover && (bad < best.bad || (bad === best.bad && km < best.km)))) {
-      best = { st: { name: s[0], city: s[1], lat: s[2], lon: s[3] }, cover, bad };
+    if (!best || cover > best.cover || (cover === best.cover && (bad < best.bad ||
+      (bad === best.bad && (pMax < best.pMax || (pMax === best.pMax && km < best.km)))))) {
+      best = { st: { name: s[0], city: s[1], lat: s[2], lon: s[3] }, cover, bad, pMax };
     }
   }
   return best;

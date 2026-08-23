@@ -36,12 +36,22 @@ function smartBest(S, H, trips) {
     if (s[0] === S.name) continue;
     if (!logic.railAdj().nodes.has(s[1])) continue; // 推荐只考虑通道网内端点(图外支线/海岛可手动填写)
     const H2 = { name: s[0], city: s[1], lat: s[2], lon: s[3] };
-    const cover = trips.filter(t => judge(S, H2, t.station) === 2).length;
+    const coveredTrips = trips.filter(t => judge(S, H2, t.station) === 2);
+    const cover = coveredTrips.length;
     if (cover < curCover) continue;
     const bad = trips.filter(t => judge(S, H2, t.station) === 0).length;
+    // 平局质量: 被覆盖行程的最大垂直偏离比 p/L 最小(更居中) → 再按距当前家近
+    const Lh = dist(S, H2);
+    let pMax = 0;
+    for (const t of coveredTrips) {
+      if (!t.station) continue;
+      const { p } = corridor(S, H2, t.station);
+      pMax = Math.max(pMax, p / (Lh || 1));
+    }
     const km = dist({ lat: s[2], lon: s[3] }, { lat: H.lat, lon: H.lon });
-    if (!best || cover > best.cover || (cover === best.cover && (bad < best.bad || (bad === best.bad && km < best.km)))) {
-      best = { st: { name: s[0], city: s[1], lat: s[2], lon: s[3] }, cover, bad };
+    if (!best || cover > best.cover || (cover === best.cover && (bad < best.bad ||
+      (bad === best.bad && (pMax < best.pMax || (pMax === best.pMax && km < best.km)))))) {
+      best = { st: { name: s[0], city: s[1], lat: s[2], lon: s[3] }, cover, bad, pMax };
     }
   }
   return best;
