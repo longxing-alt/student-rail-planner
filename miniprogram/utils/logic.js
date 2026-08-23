@@ -163,6 +163,7 @@ const STATIONS = [
 const HUBS = STATIONS.filter(s => s[4]);
 const state = {
   ratio: 1.5,
+  ratioMax: 2.5, // 绕行比上限(实测校准最优; 网页端可调, 用户值优先)
   budget: 4,
   school: null, home: null,
   trips: [],
@@ -302,7 +303,7 @@ function chanOK(S, H, P) {
   const L = dist(S, H);
   const dS = railDist(S.city), dH = railDist(H.city);
   if (dS[P.city] == null || dH[P.city] == null) return false;
-  return (dS[P.city] + dH[P.city]) <= RATIO_MAX * L + 1e-6;
+  return (dS[P.city] + dH[P.city]) <= (state.ratioMax || RATIO_MAX) * L + 1e-6;
 }
 /* 区间级例外 */
 function isBlack(S, H, P) {
