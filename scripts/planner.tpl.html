@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>学生票区间规划</title>
+<style>
+:root{
+  --bg:#faf9f6; --paper:#ffffff; --ink:#1c1917; --mut:#78716c; --mut2:#a8a29e;
+  --accent:#4f46e5; --accent-soft:rgba(79,70,229,.07); --accent-line:rgba(79,70,229,.22);
+  --ok:#15803d; --ok-soft:rgba(22,163,74,.07); --ok-line:rgba(22,163,74,.25);
+  --no:#dc2626; --no-soft:rgba(220,38,38,.05); --no-line:rgba(220,38,38,.22);
+  --warn:#d97706; --warn-soft:rgba(245,158,11,.08); --warn-line:rgba(245,158,11,.3);
+  --line:#e7e5e4; --r:18px;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--ink);font:14px/1.65 -apple-system,'Segoe UI','PingFang SC','Microsoft YaHei',sans-serif;padding:26px 16px 60px}
+.wrap{max-width:640px;margin:0 auto}
+h1{font-size:22px;font-weight:800;letter-spacing:-.02em;display:flex;align-items:center;gap:10px}
+h1 .dot{width:10px;height:10px;border-radius:99px;background:var(--accent)}
+.sub{color:var(--mut);font-size:12.5px;margin:6px 0 22px}
+
+.card{background:var(--paper);border:1px solid var(--line);border-radius:var(--r);padding:20px;margin-bottom:14px}
+.step-no{display:inline-flex;align-items:center;justify-content:center;min-width:24px;height:24px;border-radius:99px;background:var(--accent);color:#fff;font-size:12.5px;font-weight:700;margin-right:10px}
+.step:not(.on){display:none}
+.step h2{font-size:15px;font-weight:700;margin-bottom:12px;display:flex;align-items:center}
+input[type=text]{width:100%;padding:12px 14px;font-size:15px;border:1.5px solid var(--line);border-radius:12px;outline:none;transition:border-color .15s;background:#fff;color:var(--ink)}
+input[type=text]:focus{border-color:var(--accent)}
+input[type=text]::placeholder{color:var(--mut2)}
+.inline{display:flex;gap:10px}
+.inline input{flex:1}
+.arrow{display:flex;align-items:center;color:var(--mut2);font-size:16px;padding:0 2px}
+
+button{font:inherit;cursor:pointer}
+.btn{background:var(--accent);color:#fff;border:none;border-radius:12px;padding:12px 22px;font-size:14.5px;font-weight:700;transition:filter .15s,transform .05s;width:100%;margin-top:14px}
+.btn:hover{filter:brightness(1.07)}
+.btn:active{transform:scale(.99)}
+.ghost{background:#fff;border:1px solid var(--line);color:var(--ink);padding:7px 14px;border-radius:10px;font-size:12.5px;font-weight:600}
+.ghost:hover{border-color:#d6d3d1;background:#fafaf9}
+.err{color:var(--no);font-size:12.5px;margin-top:8px}
+
+.trip{display:flex;align-items:center;gap:10px;padding:11px 12px;border:1px solid var(--line);border-radius:13px;margin-bottom:8px;background:#fff;transition:border-color .15s}
+.trip .t{flex:1;font-size:14px;font-weight:600}
+.trip .route{font-size:11.5px;color:var(--mut)}
+.trip .del{background:none;border:none;color:var(--mut2);font-size:15px;cursor:pointer;padding:2px 6px;border-radius:8px}
+.trip .del:hover{color:var(--no);background:var(--no-soft)}
+.chip{font-size:11.5px;font-weight:700;border-radius:99px;padding:3px 10px;border:1px solid;white-space:nowrap}
+.chip.ok{color:var(--ok);background:var(--ok-soft);border-color:var(--ok-line)}
+.chip.no{color:var(--no);background:var(--no-soft);border-color:var(--no-line)}
+.chip.warn{color:var(--warn);background:var(--warn-soft);border-color:var(--warn-line)}
+.chip.mut{color:var(--mut);background:#fafaf9;border-color:var(--line)}
+.chip.use{color:var(--accent);background:var(--accent-soft);border-color:var(--accent-line)}
+.trip.done-ok{border-color:var(--ok-line);background:var(--ok-soft)}
+.trip.done-no{border-color:var(--no-line);background:var(--no-soft)}
+
+.sum{font-size:17px;font-weight:800;margin-bottom:6px}
+.sum b{color:var(--accent)}
+.note{font-size:12.5px;color:var(--mut);margin-bottom:14px}
+.rec{border:1.5px solid var(--accent-line);background:var(--accent-soft);border-radius:14px;padding:13px 14px;font-size:13.5px;margin-bottom:8px;line-height:1.7}
+.rec b{color:var(--accent)}
+.rec .mini{font-size:12px;margin-top:4px;color:var(--mut)}
+details{margin-top:10px}
+summary{list-style:none;cursor:pointer;font-size:12.5px;color:var(--mut);font-weight:600;padding:8px 0;user-select:none}
+summary::before{content:'▸ ';display:inline-block;transition:transform .15s}
+details[open] summary::before{transform:rotate(90deg)}
+summary:hover{color:var(--ink)}
+.mini-row{display:flex;align-items:center;gap:10px;padding:9px 12px;border:1px solid var(--line);border-radius:12px;margin-bottom:6px;font-size:13px}
+.mini-row .n{flex:1;font-weight:700}
+.mini-row .d{color:var(--mut);font-size:11.5px}
+input[type=range]{width:100%;accent-color:var(--accent);margin-top:10px}
+.param-line{display:flex;align-items:center;gap:12px;font-size:12.5px;color:var(--mut);margin-top:6px}
+.bridge{font-size:12px;color:var(--warn);background:var(--warn-soft);border:1px solid var(--warn-line);border-radius:10px;padding:7px 10px;margin-top:6px;line-height:1.55}
+.bridge b{color:#b45309}
+.hidden{display:none!important}
+@media(max-width:520px){ body{padding:18px 12px 50px} .card{padding:16px} h1{font-size:19px} }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1><span class="dot"></span>学生票 · 区间规划</h1>
+  <div class="sub">输入学校与出发地，看想去的地方能不能用学生票买、扣几次、区间怎么改。</div>
+
+  <div class="card step on" id="stepSchool">
+    <h2><span class="step-no">1</span>学校在哪</h2>
+    <input type="text" id="schoolInput" placeholder="例如：北京 / 武汉 / 成都东" autocomplete="off">
+    <button class="btn" onclick="nextSchool()">下一步</button>
+  </div>
+
+  <div class="card step" id="stepHome">
+    <h2><span class="step-no">2</span>出发地（家的车站）</h2>
+    <input type="text" id="homeInput" placeholder="例如：石家庄 / 南宁 / 福州" autocomplete="off">
+    <button class="btn" onclick="nextHome()">下一步</button>
+  </div>
+
+  <div class="card step" id="stepTrips">
+    <h2><span class="step-no">3</span>想去哪</h2>
+    <div class="inline">
+      <input type="text" id="tripInput" placeholder="目的地，如：桂林 / 广州" autocomplete="off">
+      <span class="arrow">→</span>
+      <input type="text" id="tripFrom" placeholder="出发地(留空=学校)" autocomplete="off" style="max-width:150px">
+    </div>
+    <button class="ghost" onclick="addTrip()" style="width:auto;margin-top:10px">＋ 添加目的地</button>
+    <div id="tripErr" class="err"></div>
+    <div id="tripList" style="margin-top:14px"></div>
+    <button class="btn" onclick="onPlan()">🚀 一键规划</button>
+  </div>
+
+  <div id="result"></div>
+</div>
+
+<script>
+/*__PURE_LOGIC__*/
+
+/* ============ 极简界面逻辑 ============ */
+const $ = id => document.getElementById(id);
+function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+function showStep(name){
+  document.querySelectorAll('.step').forEach(el=>el.classList.remove('on'));
+  $('step'+name).classList.add('on');
+  if(name==='Home'||name==='Trips'||name==='Result'){window.scrollTo({top:0,behavior:'smooth'});} // 步骤卡片在当前视口内, 免滚动
+}
+function resolvePlace(q){
+  q=String(q||'').trim();
+  const qn=cleanCity(q);
+  const hits=STATIONS.filter(s=>s[0]===qn||s[1]===qn||s[1].includes(qn)||qn.includes(s[1]));
+  if(!hits.length)return null;
+  const h=hits.find(s=>s[4])||hits[0];
+  return {point:{lat:h[2],lon:h[3]},station:{name:h[0],city:h[1],lat:h[2],lon:h[3]}};
+}
+function nextSchool(){
+  const r=resolvePlace($('schoolInput').value);
+  if(!r){setErr('stepSchool','未收录该站，试试输入 城市名 或 车站名');return;}
+  state.school={text:$('schoolInput').value.trim(),point:r.point,station:r.station};
+  $('schoolInput').value=r.station.name;
+  showStep('Home');
+}
+function nextHome(){
+  const r=resolvePlace($('homeInput').value);
+  if(!r){setErr('stepHome','未收录该站');return;}
+  state.home={text:$('homeInput').value.trim(),point:r.point,station:r.station};
+  state.depart=state.home.station;
+  $('homeInput').value=r.station.name;
+  showStep('Trips');
+}
+function setErr(step,t){const e=document.querySelector('#'+step+' .err');if(e)e.textContent=t;}
+function addTrip(){
+  const q=$('tripInput').value.trim();
+  if(!q)return;
+  const fromQ=$('tripFrom').value.trim();
+  const r=resolvePlace(q);
+  if(!r){$('tripErr').textContent='未收录「'+q+'」';return;}
+  $('tripErr').textContent='';
+  const from=fromQ?resolvePlace(fromQ):null;
+  state.trips.push({id:++state._tid,text:q,point:r.point,station:r.station,from:from?from.station:null,round:false});
+  $('tripInput').value='';$('tripFrom').value='';
+  renderTrips();
+}
+function renderTrips(){
+  const el=$('tripList');
+  if(!state.trips.length){el.innerHTML='<div style="color:var(--mut2);font-size:12.5px;padding:4px 2px">还没有目的地</div>';return;}
+  el.innerHTML=state.trips.map((t,i)=>{
+    const fromName=t.from?t.from.name:(state.school&&state.school.station?state.school.station.name:'学校');
+    const jt=planned&&state.school&&state.home?beltV2(state.school.station,state.home.station,t.from||state.school.station)===2&&beltV2(state.school.station,state.home.station,t.station)===2:null;
+    const cls=jt===true?'trip done-ok':'';
+    const noCls=jt===false?'trip done-no':'';
+    return '<div class="trip '+cls+noCls+'"><div class="t"><div>'+esc(t.text)+'</div>'+
+      '<div class="route">'+esc(fromName)+' → '+esc(t.station.name)+'</div></div>'+
+      (jt===true?'<span class="chip ok">✓ 可出</span>':jt===false?'<span class="chip no">✕ 全价</span>':'')+
+      '<button class="del" onclick="rm('+t.id+')">×</button></div>';
+  }).join('')+
+    '<label style="display:inline-flex;align-items:center;gap:7px;font-size:12.5px;color:var(--mut);margin-top:4px"><input type="checkbox" id="roundAll" onchange="setRound(this.checked)">全部往返 ×2</label>';
+}
+function rm(id){state.trips=state.trips.filter(t=>t.id!==id);planned=false;renderTrips();renderResult();}
+function setRound(v){state.trips.forEach(t=>t.round=v);}
+let planned=false;
+function smartBestLocal(){
+  // 覆盖优先 → 全价少 → 被覆盖行程 p/L 最小 → 距当前家近
+  const S=state.school.station,H=state.home.station;
+  const curCover=state.trips.filter(t=>judge2(S,H,t)===2).length;
+  let best=null;
+  for(const s of STATIONS){
+    if(s[0]===S.name)continue;
+    if(!railAdj().nodes.has(s[1]))continue;
+    const H2={name:s[0],city:s[1],lat:s[2],lon:s[3]};
+    const cover=state.trips.filter(t=>judge2(S,H2,t)===2).length;
+    if(cover<curCover)continue;
+    const bad=state.trips.filter(t=>judge2(S,H2,t)===0).length;
+    const Lh=dist(S,H2);
+    let pMax=0;
+    for(const t of state.trips){if(judge2(S,H2,t)===2){const{p}=corridor(S,H2,t.station);pMax=Math.max(pMax,p/(Lh||1));}}
+    const km=dist({lat:s[2],lon:s[3]},{lat:H.lat,lon:H.lon});
+    if(!best||cover>best.cover||(cover===best.cover&&(bad<best.bad||(bad===best.bad&&(pMax<best.pMax||(pMax===best.pMax&&km<best.km))))))
+      best={st:{name:s[0],city:s[1],lat:s[2],lon:s[3]},cover,bad,pMax};
+  }
+  return best;
+}
+function judge2(S,H,t){return Math.min(beltV2(S,H,t.from||S),beltV2(S,H,t.station));}
+function onPlan(){
+  if(!state.school||!state.home){$('tripErr').textContent='请先完成 学校 与 出发地';return;}
+  planned=true;renderTrips();renderResult();
+}
+function renderResult(){
+  const el=$('result');
+  if(!planned||!state.school||!state.home||!state.trips.length){el.innerHTML='';return;}
+  const S=state.school.station,H=state.home.station;
+  const rows=state.trips.map(t=>{
+    const j=judge2(S,H,t);
+    return {text:t.text,from:t.from||S,name:t.station.name,j,used:t.round?(j===2?2:0):(j===2?1:0)};
+  });
+  const okN=rows.filter(r=>r.j===2).length;
+  const badN=rows.filter(r=>r.j===0).length;
+  const used=rows.reduce((s,r)=>s+r.used,0);
+  const remain=Math.max(0,state.budget-used);
+  const sup=smartBestLocal();
+  let html='<div class="card" id="resCard"><div class="sum">'+
+    (badN===0?'全部可出 🎉':'<b>'+okN+'/'+rows.length+'</b> 个可出 · '+badN+' 个全价')+
+    '</div><div class="note">区间 '+esc(S.name)+' ⇄ '+esc(H.name)+' · 消耗 <b>'+used+'</b>/'+state.budget+' 次 · 剩余 <b>'+remain+'</b> 次</div>';
+  html+=rows.map(r=>{
+    const chip=r.j===2?'<span class="chip ok">✓ 区间内</span>':r.j===1?'<span class="chip warn">⚠ 边缘</span>':'<span class="chip no">✕ 全价</span>';
+    return '<div class="trip '+(r.j===2?'done-ok':r.j===0?'done-no':'')+'"><div class="t"><div>'+esc(r.text)+'</div>'+
+      '<div class="route">'+esc(r.from.name)+' → '+esc(r.name)+'</div></div>'+chip+
+      '<span class="chip use">'+r.used+' 次</span>'+'</div>'+
+      (r.j===0?'<div class="bridge">⚡ 搭桥法（实测有效）：先购「区间内 → '+esc(r.from.name)+'」合法票，再买「'+esc(r.from.name)+' → '+esc(r.name)+'」，最后退掉第一张。</div>':'');
+  }).join('');
+  if(sup&&sup.st&&sup.cover>0){
+    html+='<div class="rec">💡 把<b>家</b>改成 <b>'+esc(sup.st.name)+' · '+esc(sup.st.city)+'</b> → 可出 <b>'+sup.cover+'/'+rows.length+'</b> 个'+
+      (sup.cover<rows.length?'（最高覆盖）':'')+'<div class="mini">覆盖优先 · p/L='+sup.pMax.toFixed(2)+'（越居中越稳）</div></div>'+
+      '<button class="btn" style="margin-top:8px" onclick="adopt(\''+sup.st.name+'\')">采用推荐区间</button>';
+  }
+  html+='<details><summary>更多家端点（区间优化）</summary>'+optRows()+'</details>';
+  html+='<details><summary>参数：绕远倍数（通道判定上限）</summary>'+paramHTML()+'</details>';
+  html+='</div>';
+  el.innerHTML=html;
+}
+function optRows(){
+  const S=state.school.station,H=state.home.station;
+  const rows=[];
+  for(const s of STATIONS){
+    if(s[0]===S.name)continue;
+    if(!railAdj().nodes.has(s[1]))continue;
+    const H2={name:s[0],city:s[1],lat:s[2],lon:s[3]};
+    const cover=state.trips.filter(t=>judge2(S,H2,t)===2).length;
+    if(cover===0)continue;
+    rows.push({s,cover});
+  }
+  rows.sort((a,b)=>b.cover-a.cover);
+  return rows.slice(0,8).map((r,i)=>'<div class="mini-row" style="border-color:'+(i===0&&supBest? 'var(--accent-line)':'var(--line)')+'"><div class="n">'+esc(r.s[0])+' · '+esc(r.s[1])+'</div><div class="d">覆盖 '+r.cover+'/'+state.trips.length+'</div>'+
+    '<button class="ghost" onclick="adopt(\''+r.s[0]+'\')">采用</button></div>').join('');
+}
+let supBest=false;
+function adopt(name){
+  const r=resolvePlace(name);
+  if(!r)return;
+  state.home={text:r.station.name,point:r.point,station:r.station};
+  state.depart=state.home.station;
+  onPlan();
+}
+function paramHTML(){
+  const v=state.ratioMax;
+  return '<div style="font-size:12.5px;color:var(--mut)">当前 '+v+'（默认 2.5 · 用户值 localStorage 优先）</div>'+
+    '<input type="range" id="ratioRange" min="1" max="6" step="0.1" value="'+v+'" oninput="setRatio(this.value)">'+
+    '<div class="param-line"><span>1（严格）</span><span style="flex:1;text-align:center">更小=更严 · 2.5=实测最优</span><span>6（宽松）</span></div>'+
+    '<button class="ghost" onclick="resetRatio()">↺ 重置 2.5</button>';
+}
+function setRatio(v){
+  state.ratioMax=Math.min(20,Math.max(1,+v||2.5));
+  try{localStorage.setItem('srp_ratioMax',state.ratioMax);}catch(e){}
+  _nearCache=null;
+  if(planned)onPlan();else if(planned===false){}
+  const r=$('resCard');if(r)renderResult();
+}
+function resetRatio(){
+  try{localStorage.removeItem('srp_ratioMax');}catch(e){}
+  state.ratioMax=2.5;_nearCache=null;
+  if($('resCard'))renderResult();
+}
+(function(){
+  try{
+    const raw=localStorage.getItem('srp_ratioMax');
+    state.ratioMax=(raw&&isFinite(+raw)&&+raw>=1&&+raw<=20)?+raw:2.5;
+  }catch(e){state.ratioMax=2.5;}
+  state.budget=4;
+  setInterval(()=>{},0);
+})();
+</script>
+</body>
+</html>
