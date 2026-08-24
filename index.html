@@ -1373,9 +1373,27 @@ function chainV2(S, H, stList, rStart, rEnd, fast) {
   const segs = [];
   for (let i = 0; i < pts.length - 1; i++) {
     const A = pts[i], B = pts[i + 1];
-    segs.push({ a: A, b: B, km: dist(A, B), inInt: beltV2(S, H, A, fast) === 2 && beltV2(S, H, B, fast) === 2 });
+    const seg = { a: A, b: B, km: dist(A, B), inInt: false, hub: null };
+    if (beltV2(S, H, A, fast) === 2 && beltV2(S, H, B, fast) === 2) {
+      seg.inInt = true; // 直达: 两端均区间内
+    } else if (beltV2(S, H, A, fast) === 2) {
+      // 中转可出(17点实测): 发站在区间内 + 唯一中转站T∈空间带(bandOK; 图外襄阳/武昌同城亦可用)
+      // 首段 发站→T 两端在区间内; T→终到 段放行(含例外区/超带远站); 计次=全程1次(实测武汉→拉萨经郑州)
+      let bestT = null, bestVia = Infinity;
+      for (const sc of STATIONS) {
+        if (sc[4] !== 1) continue; // 12306 中转站=枢纽级
+        const T = { name: sc[0], city: sc[1], lat: sc[2], lon: sc[3] };
+        if (T.name === A.name || T.name === B.name || T.name === H.name || T.name === S.name) continue;
+        if (!bandOK(S, H, T)) continue;
+        const via = dist(A, T) + dist(T, B);
+        if (via < bestVia) { bestVia = via; bestT = T.name; }
+      }
+      if (bestT) seg.hub = bestT;
+    }
+    seg.ok = seg.inInt || seg.hub != null;
+    segs.push(seg);
   }
-  const okN = segs.filter(sg => sg.inInt).length;
+  const okN = segs.filter(sg => sg.ok).length;
   return { segs, okN, total: segs.reduce((s, x) => s + x.km, 0), okAll: okN === segs.length };
 }
 // ==== PURE LOGIC END ====

@@ -284,10 +284,12 @@ Page({
       }
       if (alt) modal.altern = alt[0] + ' · ' + alt[1] + '（覆盖 ' + aCover + '，出发地不动）';
     }
-    // 每段当前判定(颜色), 指明哪里不行
+    // 每段当前判定(颜色), 指明哪里不行(直达/中转可出/超区间)
     modal.dests = state.trips.map((t, i) => {
-      const ok = cc0 ? cc0.segs[i].inInt : false;
-      return { text: t.text, c: ok ? '区间内·可买' : '超区间·不能买', cls: ok ? 'g2' : 'b2' };
+      const sg = cc0 ? cc0.segs[i] : null;
+      const ok = !!(sg && (sg.inInt || sg.hub));
+      const c = sg && sg.inInt ? '区间内·可买' : sg && sg.hub ? '中转可出·经' + sg.hub : '超区间·不能买';
+      return { text: t.text, c, cls: ok ? 'g2' : 'b2' };
     });
     this.setData({ modal });
     const segTxt = cc0 ? cc0.segs.map(sg => (sg.inInt ? '✓' : '✗') + sg.b.name).join(' → ') : '';
@@ -313,23 +315,25 @@ Page({
     // 联程路线段判定
     let cc = null;
     if (planned && S && H && state.trips.length) cc = logic.chainV2(S, H, state.trips.map(t => t.station), H, H);
-    const segOf = i => (cc && cc.segs[i]) ? cc.segs[i].inInt : false;
+    const segOf = i => (cc && cc.segs[i]) ? cc.segs[i] : null;
+    const segOk = i => { const sg = segOf(i); return !!(sg && (sg.inInt || sg.hub)); };
+    const segTxt = i => { const sg = segOf(i); return sg ? (sg.inInt ? '区间内' : sg.hub ? '中转·经' + sg.hub : '区间外') : ''; };
     // 区间线圆点
     const ivDots = state.trips.map((t, i) => {
       if (!t.station || !planned || !S || !H) return null;
-      const ok = segOf(i);
+      const ok = segOk(i);
       const { t: tt } = corridor(S, H, t.station);
       const left = Math.min(90, Math.max(10, (tt + 0.05) / 1.1 * 100));
       return { left: +left.toFixed(1), cls: ok ? 'ok' : 'bad', name: t.text };
     }).filter(Boolean);
     // 列表
     const rows = state.trips.map((t, i) => {
-      const j = planned && S && H ? (segOf(i) ? 2 : 0) : -1;
+      const j = planned && S && H ? (segOk(i) ? 2 : 0) : -1;
       return {
         key: 't' + t.id, id: t.id, text: t.text,
         boxCls: j === 2 ? 'ok' : j === 0 ? 'bad' : '',
         ring: j === 2 ? 'ok' : j === 0 ? 'bad' : 'none',
-        status: j === 2 ? '区间内' : j === 0 ? '区间外' : '',
+        status: j === 2 ? segTxt(i) : '',
         anim: false,
       };
     });

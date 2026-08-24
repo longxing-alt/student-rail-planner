@@ -11,7 +11,7 @@ const data = JSON.parse(fs.readFileSync(path.join(root, 'verify-data/real-data.j
 let okN = 0, failN = 0, skipN = 0;
 for (const e of data) {
   const sc = e.school, hc = e.home, oc = e.origin || sc, dc = e.dest;
-  if (!dc || dc.includes('/') || dc.includes('·') || !e.real) { skipN++; continue; }
+  if (e.transfer || !dc || dc.includes('/') || dc.includes('·') || !e.real) { skipN++; continue; } // 中转样本走chainV2
   const S = st(sc), H = st(hc), O = st(oc), D = st(dc);
   if (!S || !H || !O || !D) { skipN++; console.log('  跳过(缺站):', sc, hc, oc, dc); continue; }
   const r = L.planTrip(S, H, O, D);

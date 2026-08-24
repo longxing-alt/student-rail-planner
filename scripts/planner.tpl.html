@@ -263,8 +263,10 @@ function renderResult(){
   const remain=Math.max(0,state.budget-used);
   const sup=chainBestLocal();
   const curCover=cc.okN;
+  const hubN=cc.segs.filter(sg=>sg.hub).length;
   let html='<div class="card" id="resCard"><div class="sum">'+
-    (cc.okAll?'✅ 联程全程可出 🎉':'<b>'+okN+'/'+N+'</b> 段在区间内 · '+(N-okN)+' 段需另购')+
+    (cc.okAll?'✅ 联程全程可出 🎉':'<b>'+okN+'/'+N+'</b> 段可出 · '+(N-okN)+' 段需另购')+
+    (hubN?(' · 中转 '+hubN+' 段'):'')+
     '</div><div class="note">出发地 '+esc(H.name)+' · 区间 '+esc(S.name)+' ⇄ '+esc(H.name)+' · '+
     (cc.okAll?'全程联程 <b>'+used+'</b> 次 · 剩余 <b>'+remain+'</b> 次':'按 分段/搭桥 另计')+'</div>';
   // 路线串联图: 站点chips + 段箭头着色
@@ -272,15 +274,15 @@ function renderResult(){
   const pts=[H,...state.trips.map(t=>t.station),H];
   for(let i=0;i<pts.length;i++){
     if(i>0){html+='<span style="color:'+(cc.segs[i-1].inInt?'var(--ok)':'var(--no)')+';font-weight:800">'+(cc.segs[i-1].inInt?'→':'⇢')+'</span>';}
-    const badAdj=(i>0&&!cc.segs[i-1].inInt)||(i<pts.length-1&&!cc.segs[i].inInt);
+    const badAdj=(i>0&&!cc.segs[i-1].ok)||(i<pts.length-1&&!cc.segs[i].ok);
     html+='<span class="chip '+(badAdj?'no':'ok')+'">'+esc(pts[i].name)+'</span>';
   }
   html+='</div>';
   if(!cc.okAll){
     html+='<div style="margin-bottom:8px">'+cc.segs.map((sg,i)=>
       '<div style="font-size:12px;color:var(--mut);padding:3px 0">'+(i+1)+'. '+esc(sg.a.name)+' → '+esc(sg.b.name)+' '+
-      (sg.inInt?'<span class="chip ok">区间内</span>':'<span class="chip no">区间外</span>')+'</div>').join('')+'</div>';
-    html+='<div class="bridge">⚠ '+(N-okN)+' 段区间外：可<b>分段购买</b>（区间内段学生票+区间外段全价）；或先购「区间内 → '+esc(H.name)+'」合法票再购后续段（搭桥法，实测有效），最后退掉第一张。</div>';
+      (sg.inInt?'<span class="chip ok">✓ 区间内</span>':sg.hub?'<span class="chip ok">⇄ 中转·经'+esc(sg.hub)+'</span>':'<span class="chip no">✕ 区间外</span>')+'</div>').join('')+'</div>';
+    html+='<div class="bridge">⚠ '+(N-okN)+' 段不可出：可<b>分段购买</b>（区间内/中转段学生票+其余全价）；或先购「区间内 → '+esc(H.name)+'」合法票再购后续段（搭桥法，实测有效），最后退掉第一张。</div>';
   }
   if(sup&&sup.st){
     html+=(sup.cover>curCover)

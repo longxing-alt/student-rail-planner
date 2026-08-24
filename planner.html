@@ -374,6 +374,7 @@ const RAIL_LINES = [
   ['广州', '深圳'],                                          // 广深
   ['杭州', '宁波', '温州', '福州', '厦门', '深圳'],            // 杭深(沿海)
   ['北京', '南昌', '深圳'],                                  // 京九(近似)
+  ['武汉', '黄石'],                                          // 武黄城际
   ['济南', '青岛'], ['青岛', '烟台'],                         // 胶济+青荣
   ['蚌埠', '合肥'],                                          // 合蚌
   ['沈阳', '丹东'], ['沈阳', '大连'],                         // 沈丹+哈大
@@ -493,7 +494,7 @@ function beltV2(S, H, P, fast) {
   if (isBlack(S, H, P)) return 0;
   if (dist(S, P) <= 50 || dist(H, P) <= 50) return 2; // 端点近邻/同城
   if (bandOK(S, H, P) && chanOK(S, H, P)) return 2;
-  return (fast || nearOK(S, H).has(P.name)) ? 2 : 0;
+  return (!fast && nearOK(S, H).has(P.name)) ? 2 : 0;
 }
 
 /* 端点内(t∈[0,1])允许宽带; 越出端点(t>1或t<0)仅允许贴线(实测: 越过端点偏离即拦截, 如 武汉↔广州→深圳) */
@@ -693,9 +694,27 @@ function chainV2(S, H, stList, rStart, rEnd, fast) {
   const segs = [];
   for (let i = 0; i < pts.length - 1; i++) {
     const A = pts[i], B = pts[i + 1];
-    segs.push({ a: A, b: B, km: dist(A, B), inInt: beltV2(S, H, A, fast) === 2 && beltV2(S, H, B, fast) === 2 });
+    const seg = { a: A, b: B, km: dist(A, B), inInt: false, hub: null };
+    if (beltV2(S, H, A, fast) === 2 && beltV2(S, H, B, fast) === 2) {
+      seg.inInt = true; // 直达: 两端均区间内
+    } else if (beltV2(S, H, A, fast) === 2) {
+      // 中转可出(17点实测): 发站在区间内 + 唯一中转站T∈空间带(bandOK; 图外襄阳/武昌同城亦可用)
+      // 首段 发站→T 两端在区间内; T→终到 段放行(含例外区/超带远站); 计次=全程1次(实测武汉→拉萨经郑州)
+      let bestT = null, bestVia = Infinity;
+      for (const sc of STATIONS) {
+        if (sc[4] !== 1) continue; // 12306 中转站=枢纽级
+        const T = { name: sc[0], city: sc[1], lat: sc[2], lon: sc[3] };
+        if (T.name === A.name || T.name === B.name || T.name === H.name || T.name === S.name) continue;
+        if (!bandOK(S, H, T)) continue;
+        const via = dist(A, T) + dist(T, B);
+        if (via < bestVia) { bestVia = via; bestT = T.name; }
+      }
+      if (bestT) seg.hub = bestT;
+    }
+    seg.ok = seg.inInt || seg.hub != null;
+    segs.push(seg);
   }
-  const okN = segs.filter(sg => sg.inInt).length;
+  const okN = segs.filter(sg => sg.ok).length;
   return { segs, okN, total: segs.reduce((s, x) => s + x.km, 0), okAll: okN === segs.length };
 }
 
@@ -831,8 +850,10 @@ function renderResult(){
   const remain=Math.max(0,state.budget-used);
   const sup=chainBestLocal();
   const curCover=cc.okN;
+  const hubN=cc.segs.filter(sg=>sg.hub).length;
   let html='<div class="card" id="resCard"><div class="sum">'+
-    (cc.okAll?'✅ 联程全程可出 🎉':'<b>'+okN+'/'+N+'</b> 段在区间内 · '+(N-okN)+' 段需另购')+
+    (cc.okAll?'✅ 联程全程可出 🎉':'<b>'+okN+'/'+N+'</b> 段可出 · '+(N-okN)+' 段需另购')+
+    (hubN?(' · 中转 '+hubN+' 段'):'')+
     '</div><div class="note">出发地 '+esc(H.name)+' · 区间 '+esc(S.name)+' ⇄ '+esc(H.name)+' · '+
     (cc.okAll?'全程联程 <b>'+used+'</b> 次 · 剩余 <b>'+remain+'</b> 次':'按 分段/搭桥 另计')+'</div>';
   // 路线串联图: 站点chips + 段箭头着色
@@ -840,15 +861,15 @@ function renderResult(){
   const pts=[H,...state.trips.map(t=>t.station),H];
   for(let i=0;i<pts.length;i++){
     if(i>0){html+='<span style="color:'+(cc.segs[i-1].inInt?'var(--ok)':'var(--no)')+';font-weight:800">'+(cc.segs[i-1].inInt?'→':'⇢')+'</span>';}
-    const badAdj=(i>0&&!cc.segs[i-1].inInt)||(i<pts.length-1&&!cc.segs[i].inInt);
+    const badAdj=(i>0&&!cc.segs[i-1].ok)||(i<pts.length-1&&!cc.segs[i].ok);
     html+='<span class="chip '+(badAdj?'no':'ok')+'">'+esc(pts[i].name)+'</span>';
   }
   html+='</div>';
   if(!cc.okAll){
     html+='<div style="margin-bottom:8px">'+cc.segs.map((sg,i)=>
       '<div style="font-size:12px;color:var(--mut);padding:3px 0">'+(i+1)+'. '+esc(sg.a.name)+' → '+esc(sg.b.name)+' '+
-      (sg.inInt?'<span class="chip ok">区间内</span>':'<span class="chip no">区间外</span>')+'</div>').join('')+'</div>';
-    html+='<div class="bridge">⚠ '+(N-okN)+' 段区间外：可<b>分段购买</b>（区间内段学生票+区间外段全价）；或先购「区间内 → '+esc(H.name)+'」合法票再购后续段（搭桥法，实测有效），最后退掉第一张。</div>';
+      (sg.inInt?'<span class="chip ok">✓ 区间内</span>':sg.hub?'<span class="chip ok">⇄ 中转·经'+esc(sg.hub)+'</span>':'<span class="chip no">✕ 区间外</span>')+'</div>').join('')+'</div>';
+    html+='<div class="bridge">⚠ '+(N-okN)+' 段不可出：可<b>分段购买</b>（区间内/中转段学生票+其余全价）；或先购「区间内 → '+esc(H.name)+'」合法票再购后续段（搭桥法，实测有效），最后退掉第一张。</div>';
   }
   if(sup&&sup.st){
     html+=(sup.cover>curCover)
