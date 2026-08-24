@@ -77,14 +77,14 @@ function sortByDepart(trips) {
 /* 最优区间端点(联程): 枚举全部车站, 联程段覆盖(okN)优先 → 平局按 段端点p/L最小 → 距当前端点近 */
 function smartBest(S, H, trips) {
   const sts = trips.map(t => t.station);
-  const curCover = logic.chainV2(S, H, sts, H, H).okN;
+  const curCover = logic.chainV2(S, H, sts, H, H, true).okN;
   let best = null;
   for (const s of STATIONS) {
     if (s[0] === S.name) continue;
     if (!logic.railAdj().nodes.has(s[1])) continue; // 推荐只考虑通道网内端点(图外支线/海岛可手动填写)
     if (H && s[1] === H.city) continue; // 不再推荐当前家同城
     const H2 = { name: s[0], city: s[1], lat: s[2], lon: s[3] };
-    const cc = logic.chainV2(S, H2, sts, H2, H2);
+    const cc = logic.chainV2(S, H2, sts, H2, H2, true);
     const cover = cc ? cc.okN : 0;
     if (cover < curCover) continue;
     const Lh = dist(S, H2);
@@ -253,7 +253,7 @@ Page({
     this.renderAll();
     // 联程路线: 出发地 → 各程 → 出发地, 逐段判定(与规划页一致)
     const sts = state.trips.map(t => t.station);
-    const cc0 = logic.chainV2(S, H, sts, H, H);
+    const cc0 = logic.chainV2(S, H, sts, H, H, true);
     const N = cc0 ? cc0.segs.length : 0;
     // 推荐区间端点(联程段覆盖)
     const best = smartBest(S, H, state.trips);
@@ -261,7 +261,7 @@ Page({
     let modal = { show: true, suggest: null, g2: 0, e2: 0, b2: 0, isDest: false, altern: '', dests: [] };
     if (suggest) {
       const H2 = { name: suggest.name, city: suggest.city, lat: suggest.lat, lon: suggest.lon };
-      const cc2 = logic.chainV2(S, H2, sts, H2, H2);
+      const cc2 = logic.chainV2(S, H2, sts, H2, H2, true);
       const j2 = cc2 ? cc2.segs.map(sg => (sg.inInt ? 2 : 0)) : [];
       modal = { show: true, suggest,
         g2: j2.filter(x => x === 2).length, e2: 0, b2: j2.filter(x => x === 0).length };
@@ -275,7 +275,7 @@ Page({
         if (ss[0] === S.name || ss[0] === suggest.name) continue;
         if (ss[1] === H.city) continue;
         const H3 = { name: ss[0], city: ss[1], lat: ss[2], lon: ss[3] };
-        const cc3 = logic.chainV2(S, H3, sts, H3, H3);
+        const cc3 = logic.chainV2(S, H3, sts, H3, H3, true);
         const cov = cc3 ? cc3.okN : 0;
         if (cov < curCover) continue;
         if (destNames.includes(ss[0]) || destCities.includes(ss[1])) continue;

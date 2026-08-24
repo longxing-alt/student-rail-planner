@@ -314,8 +314,22 @@ function isBlack(S, H, P) {
   }
   return false;
 }
-let _nearCache = null;
-/* 同城/紧邻: 与"区间内站"同城市名或 ≤50km (传播一轮; 长株潭/广佛实证) */
+let _nearCache = null, _near50 = null;
+/* ≤50km 邻接表(全站一次预计算, 避免每次重建 O(N²)) */
+function near50Map() {
+  if (_near50) return _near50;
+  _near50 = {};
+  const pts = STATIONS.map(sj => ({ lat: sj[2], lon: sj[3] }));
+  for (let i = 0; i < STATIONS.length; i++) {
+    const list = _near50[STATIONS[i][0]] = [];
+    for (let j = 0; j < STATIONS.length; j++) {
+      if (i === j) continue;
+      if (dist(pts[i], pts[j]) <= 50) list.push(STATIONS[j][0]);
+    }
+  }
+  return _near50;
+}
+/* 同城/紧邻: 与"区间内站"同城市名或 ≤50km (BFS传播; 长株潭/广佛实证) */
 function nearOK(S, H) {
   const key = (S && S.name) + '|' + (H && H.name);
   if (_nearCache && _nearCache.key === key) return _nearCache.set;
@@ -326,27 +340,30 @@ function nearOK(S, H) {
     const P = { name: s[0], city: s[1], lat: s[2], lon: s[3] };
     if (bandOK(S, H, P) && chanOK(S, H, P)) set.add(P.name);
   }
+  const n50 = near50Map();
+  const q = [...set];
+  while (q.length) {
+    const cur = q.pop();
+    for (const nb of (n50[cur] || [])) if (!set.has(nb)) { set.add(nb); q.push(nb); }
+  }
   let added = true;
   while (added) {
     added = false;
     for (const s of STATIONS) {
       if (set.has(s[0])) continue;
-      if ((byCity[s[1]] || []).some(x => set.has(x[0]))) { set.add(s[0]); added = true; continue; }
-      for (const t of STATIONS) {
-        if (set.has(t[0]) && dist({ lat: s[2], lon: s[3] }, { lat: t[2], lon: t[3] }) <= 50) { set.add(s[0]); added = true; break; }
-      }
+      if ((byCity[s[1]] || []).some(x => set.has(x[0]))) { set.add(s[0]); added = true; }
     }
   }
   _nearCache = { key, set };
   return set;
 }
 /* 单点入区间判定(实测v2): 2=区间内(绿) 0=超区间(红) */
-function beltV2(S, H, P) {
+function beltV2(S, H, P, fast) {
   if (!S || !H || !P) return 0;
   if (isBlack(S, H, P)) return 0;
   if (dist(S, P) <= 50 || dist(H, P) <= 50) return 2; // 端点近邻/同城
   if (bandOK(S, H, P) && chanOK(S, H, P)) return 2;
-  return nearOK(S, H).has(P.name) ? 2 : 0;
+  return (!fast && nearOK(S, H).has(P.name)) ? 2 : 0;
 }
 
 /* 端点内(t∈[0,1])允许宽带; 越出端点(t>1或t<0)仅允许贴线(实测: 越过端点偏离即拦截, 如 武汉↔广州→深圳) */
@@ -539,14 +556,14 @@ function nearestStation(pt, maxKm) {
 }
 function stToObj(s) { return s ? { name: s[0], city: s[1], lat: s[2], lon: s[3], hub: !!s[4] } : null; }
 /* 联程路线判定(实测v2): 起点→…→终点 逐段两端均须在区间内(beltV2); 锚点站同样判定 */
-function chainV2(S, H, stList, rStart, rEnd) {
+function chainV2(S, H, stList, rStart, rEnd, fast) {
   if (!S || !H) return null;
   const start = rStart || S, end = rEnd || H;
   const pts = [start, ...(stList || []), end];
   const segs = [];
   for (let i = 0; i < pts.length - 1; i++) {
     const A = pts[i], B = pts[i + 1];
-    segs.push({ a: A, b: B, km: dist(A, B), inInt: beltV2(S, H, A) === 2 && beltV2(S, H, B) === 2 });
+    segs.push({ a: A, b: B, km: dist(A, B), inInt: beltV2(S, H, A, fast) === 2 && beltV2(S, H, B, fast) === 2 });
   }
   const okN = segs.filter(sg => sg.inInt).length;
   return { segs, okN, total: segs.reduce((s, x) => s + x.km, 0), okAll: okN === segs.length };

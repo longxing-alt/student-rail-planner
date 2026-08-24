@@ -92,7 +92,7 @@
   <!-- 区间建议弹窗 -->
   <view class="mask" wx:if="{{modal.show}}" bindtap="closeModal">
     <view class="dialog" catchtap="noop">
-      <view class="dialog-title">🎯 区间优化建议</view>
+      <view class="dialog-title">🎯 区间优化建议<text class="dialog-close" catchtap="closeModal">✕</text></view>
       <view class="dialog-body">
         <block wx:if="{{modal.suggest}}">
           <view class="m-line">当前区间（{{ivS}} ↔ {{ivH}}）太小，多数目的地超出区间（红）。</view>
@@ -114,6 +114,10 @@
         <button hover-class="bh" class="btn primary sm" catchtap="closeModal">知道了</button>
       </view>
     </view>
+  </view>
+
+  <view class="footer">
+    免责声明：判定结果基于实测数据推算，仅供参考，实际以 12306 出票为准；不构成购票或区间修改建议。
   </view>
 
   <!-- 调试编号层（长按品牌头开关） -->

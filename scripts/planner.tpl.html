@@ -90,12 +90,14 @@ input[type=range]{width:100%;accent-color:var(--accent);margin-top:10px}
   .rec{font-size:13px}
   summary{padding:10px 0}
 }
+.disclaimer{margin-top:26px;font-size:11px;color:var(--mut2);line-height:1.7;text-align:center;border-top:1px solid var(--line);padding-top:14px}
+.disclaimer{margin-top:26px;font-size:11px;color:var(--mut2);line-height:1.7;text-align:center;border-top:1px solid var(--line);padding-top:14px}
 </style>
 </head>
 <body>
 <div class="wrap">
   <h1><span class="dot"></span>学生票 · 区间规划</h1>
-  <div class="sub">输入学校与出发地，多程自动串联成一条路线，看能否全程用学生票。</div>
+  <div class="sub">输入学校与出发地，多程自动串联成一条路线，看能否全程用学生票。<span id="statLine" style="color:var(--mut2)"></span></div>
 
   <div class="card step on" id="stepSchool">
     <h2><span class="step-no">1</span>学校在哪</h2>
@@ -122,6 +124,8 @@ input[type=range]{width:100%;accent-color:var(--accent);margin-top:10px}
   </div>
 
   <div id="result"></div>
+  <div class="disclaimer">免责声明：判定结果基于实测出票数据推算，仅供规划参考；实际能否出票以 12306 为准。数据仅存本地浏览器，不上传。MIT License</div>
+  <div class="disclaimer">免责声明：判定结果基于实测出票数据推算，仅供规划参考；实际能否出票以 12306 为准。数据仅存本地浏览器，不上传。MIT License</div>
 </div>
 
 <script>
@@ -244,6 +248,7 @@ function bestRoute(S,H,trips){
 function roundAny(){return state.trips.some(t=>t.round);}
 function onPlan(){
   if(!state.school||!state.home){$('tripErr').textContent='请先完成 学校 与 出发地';return;}
+  statsPlan();
   // 自动按最优联程排序: 使最多段落在区间内
   state.trips=bestRoute(state.school.station,state.home.station,state.trips);
   planned=true;renderTrips();renderResult();
@@ -299,7 +304,7 @@ function chainBestLocal(){
     if(!railAdj().nodes.has(s[1]))continue;
     if(s[1]===H.city)continue; // 不再推荐当前家的同城站
     const H2={name:s[0],city:s[1],lat:s[2],lon:s[3]};
-    const cc=chainV2(S,H2,sts,H2,H2);
+    const cc=chainV2(S,H2,sts,H2,H2,true);
     const cover=cc.okN;
     if(cover<curCover)continue;
     const Lh=dist(S,H2);
@@ -320,7 +325,7 @@ function optRows(){
     if(!railAdj().nodes.has(s[1]))continue;
     if(s[1]===H.city)continue;
     const H2={name:s[0],city:s[1],lat:s[2],lon:s[3]};
-    const cc=chainV2(S,H2,sts,H2,H2);
+    const cc=chainV2(S,H2,sts,H2,H2,true);
     if(!cc||cc.okN===0)continue;
     rows.push({s,cover:cc.okN});
   }
@@ -360,7 +365,15 @@ function resetRatio(){
     state.ratioMax=(raw&&isFinite(+raw)&&+raw>=1&&+raw<=20)?+raw:2.5;
   }catch(e){state.ratioMax=2.5;}
   state.budget=4;
+  statsVisit();
 })();
+/* 访问/规划统计(本地) */
+function statsRead(){try{return JSON.parse(localStorage.getItem('srp_stats'))||{v:0,p:0};}catch(e){return{v:0,p:0};}}
+function statsWrite(s){try{localStorage.setItem('srp_stats',JSON.stringify(s));}catch(e){}}
+function statsVisit(){let s=statsRead();let seen=false;try{seen=sessionStorage.getItem('srp_seen')==='1';}catch(e){}if(!seen){s.v++;statsWrite(s);try{sessionStorage.setItem('srp_seen','1');}catch(e){}}statsShow();}
+function statsPlan(){const s=statsRead();s.p++;statsWrite(s);statsShow();}
+function statsShow(){const el=document.getElementById('statLine');if(!el)return;const s=statsRead();el.textContent=' 👁 访问 '+s.v+' · 🚀 规划 '+s.p;}
+window.addEventListener('error',()=>{});
 </script>
 </body>
 </html>

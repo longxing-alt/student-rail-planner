@@ -179,3 +179,18 @@ page {
 .m-dot.g2{background:#22c55e}
 .m-dot.e2{background:#f59e0b}
 .m-dot.b2{background:#ef4444}
+
+/* 1.0.9: 弹窗关闭 + 免责声明 */
+.dialog-title{position:relative}
+.dialog-close{position:absolute;right:0;top:-2px;font-size:16px;color:#9ca3af;padding:4px 8px;font-weight:600}
+.footer{margin:26px 18px 10px;padding:10px 12px;font-size:10.5px;color:#9ca3af;line-height:1.6;border-top:1px solid #f1f0ef;text-align:center}
+
+/* 1.0.9: 弹窗关闭 + 免责声明 */
+.dialog-title{position:relative}
+.dialog-close{position:absolute;right:0;top:-2px;font-size:16px;color:#9ca3af;padding:4px 8px;font-weight:600}
+.footer{margin:26px 18px 10px;padding:10px 12px;font-size:10.5px;color:#9ca3af;line-height:1.6;border-top:1px solid #f1f0ef;text-align:center}
+
+/* 1.0.9: 弹窗关闭 + 免责声明 */
+.dialog-title{position:relative}
+.dialog-close{position:absolute;right:0;top:-2px;font-size:16px;color:#9ca3af;padding:4px 8px;font-weight:600}
+.footer{margin:26px 18px 10px;padding:10px 12px;font-size:10.5px;color:#9ca3af;line-height:1.6;border-top:1px solid #f1f0ef;text-align:center}
