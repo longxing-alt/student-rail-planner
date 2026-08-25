@@ -65,6 +65,10 @@
           <view class="ring {{item.ring}}"></view>
           <text class="name">{{item.text}}</text>
           <text class="status" wx:if="{{item.status}}">{{item.status}}</text>
+          <view wx:if="{{item.hub}}" class="hub-line">
+            <text class="hub-tag">最终中转可选：</text>
+            <text wx:for="{{item.hubs}}" wx:key="n" wx:for-item="hb" class="hub-chip {{hb.cur?'on':''}}" data-i="{{index}}" data-j="{{hb.idx}}" catchtap="setHubTap">{{hb.m}}{{hb.n}}</text>
+          </view>
           <text class="x" data-id="{{item.id}}" catchtap="removeTrip">✕</text>
         </view>
       </view>

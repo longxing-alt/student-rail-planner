@@ -258,6 +258,7 @@ Page({
 
   /* 一键规划: 顺路排序 + 框体着色 + 弹窗推荐 */
   onPlan() {
+    this.hubOverride = {}; // 新规划重置中转选择
     if (!state.trips.length) { this.setStatus('先添加想去的地方'); return; }
     const S = state.school, H = state.home;
     if (!S || !H) { this.setStatus('请先完成 ①学校 ②出发地'); return; }
@@ -314,6 +315,7 @@ Page({
     const s = this.data.modal.suggest;
     if (!s) return;
     state.home = { name: s.name, city: s.city, lat: s.lat, lon: s.lon };
+    this.hubOverride = {};
     this.setData({ ivH: state.home.name, planned: true });
     this.renderAll();
     this.closeModal();
@@ -335,6 +337,17 @@ Page({
       S: S ? S.name : '学校', H: H ? H.name : '家', cands,
     } });
   },
+  setHubTap(e) {
+    const i = Number(e.currentTarget.dataset.i);
+    const j = Number(e.currentTarget.dataset.j);
+    const sg = this._cc && this._cc.segs[i];
+    if (!sg || !sg.hub) return;
+    const hubs = hubsOf(state.school, state.home, sg.a || state.depart || state.home);
+    const c = hubs[j]; if (!c) return;
+    this.hubOverride = this.hubOverride || {};
+    this.hubOverride[i] = c.name;   // 该段最终中转=所选站
+    this.renderAll();
+  },
   tfmPick(j) {
     const tfm = this.data.tfm;
     if (!tfm || !tfm.cands[j]) return;
@@ -355,6 +368,7 @@ Page({
     const segOf = i => (cc && cc.segs[i]) ? cc.segs[i] : null;
     const segOk = i => { const sg = segOf(i); return !!(sg && (sg.inInt || sg.hub)); };
     const segHub = i => { const sg = segOf(i); return !!(sg && sg.hub); };
+    if (cc) cc.segs.forEach((sg2, i2) => { if (this.hubOverride && this.hubOverride[i2]) { sg2.hub = this.hubOverride[i2]; sg2.ok = sg2.inInt || !!sg2.hub; } });
     const segTxt = i => { const sg = segOf(i); return sg ? (sg.inInt ? '区间内' : sg.hub ? '⇄ 可中转哪里出票·推荐' + sg.hub : '区间外·需购成人票') : ''; };
     this._cc = cc;
     // 区间线圆点
@@ -366,14 +380,19 @@ Page({
       return { left: +left.toFixed(1), cls: ok ? (hub ? 'edge' : 'ok') : 'bad', name: t.text };
     }).filter(Boolean);
     // 列表
+    const NUMS = ['①', '②', '③', '④', '⑤', '⑥', '⑦', '⑧'];
     const rows = state.trips.map((t, i) => {
       const ok = segOk(i), hub = segHub(i);
       const j = planned && S && H ? (ok ? (hub ? 1 : 2) : 0) : -1;
+      const sg = segOf(i);
+      const hubs = hubsOf(S, H, sg && sg.a ? sg.a : (state.depart || H));
+      const hubChips = hubs.map((hc, k) => ({ m: NUMS[k] || (k+1) + '.', n: hc.name, cur: hc.name === (sg && sg.hub), idx: k }));
       return {
         key: 't' + t.id, id: t.id, text: t.text,
         boxCls: j === 2 ? 'ok' : j === 1 ? 'edge' : j === 0 ? 'bad' : '',
         ring: j === 2 ? 'ok' : j === 1 ? 'edge' : j === 0 ? 'bad' : 'none',
         status: j >= 1 ? segTxt(i) : '',
+        hub: hub ? sg.hub : '', hubs: hub ? hubChips : [],
         anim: false,
       };
     });
