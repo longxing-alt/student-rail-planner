@@ -277,6 +277,7 @@ Page({
     const best = smartBest(S, H, state.trips);
     const suggest = best && best.st.name !== H.name ? best.st : null;
     let modal = { show: true, suggest: null, g2: 0, e2: 0, b2: 0, isDest: false, altern: '', dests: [] };
+    this.setData({ 'modalFlag': '' });
     if (suggest) {
       const H2 = { name: suggest.name, city: suggest.city, lat: suggest.lat, lon: suggest.lon };
       const cc2 = logic.chainV2(S, H2, sts, H2, H2, true);
@@ -390,13 +391,15 @@ Page({
       const sg = segOf(i);
       const hubs = (planned && S && H) ? hubsOf(S, H, sg && sg.a ? sg.a : (state.depart || H)) : [];
       const hubChips = hubs.map((hc, k) => ({ m: NUMS[k] || (k+1) + '.', n: hc.name, cur: hc.name === (sg && sg.hub), idx: k }));
+      const hubPrefix = sg && sg.inInt ? '也可中转(备选)：' : '最终中转可选：';
       const plannedNow = planned && S && H;
       return {
         key: 't' + t.id, id: t.id, iIdx: i, text: t.text,
         boxCls: j === 2 ? 'ok' : j === 1 ? 'edge' : j === 0 ? 'bad' : '',
         ring: plannedNow && j >= 0 ? (j === 2 ? 'ok' : j === 1 ? 'edge' : 'bad') : '', // 规划前不显示圆点(与网页添加列表一致)
         status: plannedNow && j >= 1 ? segTxt(i) : '',
-        hub: plannedNow && hub ? sg.hub : '', hubs: plannedNow && hub ? hubChips : [],
+        hub: plannedNow && hub ? sg.hub : '', hubs: plannedNow && hubChips.length ? hubChips : [],
+        hubPrefix: plannedNow ? hubPrefix : '',
         anim: false,
       };
     });

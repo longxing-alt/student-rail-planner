@@ -897,6 +897,7 @@ function bestRoute(S,H,trips){
 function roundAny(){return state.trips.some(t=>t.round);}
 function onPlan(){
   if(!state.school||!state.home){$('tripErr').textContent='请先完成 学校 与 出发地';return;}
+  hubOverride={}; // 新规划重置中转选择
   if($('tripInput').value.trim()) addTrip(); // 忘记点添加? 自动补入
   if(!state.trips.length){$('tripErr').textContent='还没有目的地';return;}
   statsPlan();
@@ -909,6 +910,7 @@ function renderResult(){
   if(!planned||!state.school||!state.home||!state.trips.length){el.innerHTML='';return;}
   const S=state.school.station,H=state.home.station;
   const cc=routeChain(S,H);
+  cc.segs.forEach((sg,i)=>{ if(hubOverride[i]) sg.hub=hubOverride[i]; sg.ok=sg.inInt||sg.hub!=null; });
   const N=cc.segs.length,okN=cc.okN;
   const used=cc.okAll?(roundAny()?2:1):0;
   const remain=Math.max(0,state.budget-used);
@@ -918,7 +920,9 @@ function renderResult(){
   const dirN=cc.segs.filter(sg=>sg.inInt).length;
   const hubList=cc.segs.map((sg,i)=>sg.hub?('第'+(i+1)+'程 经'+sg.hub):null).filter(Boolean).join('、');
   tfmHubs=cc.segs.map(sg=>sg.hub?hubsInBand(S,H):[]);
-  let html='<div class="card" id="resCard"><div class="sum">'+
+  let html='<div class="card" id="resCard">'+
+    (adoptNote?'<div class="rec" style="margin-bottom:10px">'+adoptNote+'</div>':'')+
+    '<div class="sum">'+
     (cc.okAll?'联程全程可出':'<b>'+okN+'/'+N+'</b> 段可出 · '+(N-okN)+' 段需另购')+
     (hubN?(' · 中转 '+hubN+' 段（'+esc(hubList)+'）'):'')+
     '<div style="font-size:11.5px;color:var(--mut);font-weight:500;margin-top:2px">其中 直达 '+dirN+' 段 · 数优先直达，实在没有才用中转</div>'+
@@ -941,9 +945,13 @@ function renderResult(){
   if(!cc.okAll){
     html+='<div style="margin-bottom:8px">'+cc.segs.map((sg,i)=>{
       const lbl=(roundAny()&&i===cc.segs.length-1)?'回程':'第'+(i+1)+'程';
+      const cands=tfmHubs[i]||[];
+      const NUMS2=['①','②','③','④','⑤','⑥','⑦','⑧'];
+      const hubLine=(cands.length)?'<div style="margin-top:6px;font-size:11px;color:var(--mut)">'+(sg.inInt?'也可中转(备选)：':'最终中转可选：')+
+        cands.map((c,j)=>'<span class="hub-badge" style="margin:3px 4px 0 0;'+(c.name===sg.hub?'background:var(--warn-soft);border-color:#d97706':'')+'" onclick="setHub('+i+','+j+')">'+NUMS2[j]+esc(c.name)+'</span>').join('')+'</div>':'';
       return '<div style="display:flex;align-items:flex-start;gap:10px;padding:9px 11px;border:1px solid var(--line);border-radius:12px;margin-bottom:7px;background:#fff">'+
       '<div style="flex:1;font-size:12.5px;color:var(--mut)"><b style="color:var(--ink)">'+lbl+' '+esc(sg.a.name)+' → '+esc(sg.b.name)+'</b>'+
-      (sg.inInt?'<span class="chip ok" style="margin-left:8px">✓ 区间内·直达</span>':sg.hub?'<span class="chip ok" style="margin-left:8px">✓ 可出·中转</span>':'<span class="chip no" style="margin-left:8px">✕ 区间外·需购成人票</span>')+'</div>'+
+      (sg.inInt?'<span class="chip ok" style="margin-left:8px">✓ 区间内·直达</span>':sg.hub?'<span class="chip ok" style="margin-left:8px">✓ 可出·中转</span>':'<span class="chip no" style="margin-left:8px">✕ 区间外·需购成人票</span>')+hubLine+'</div>'+
       (sg.inInt?'':sg.hub?'<span class="hub-badge" onclick="openTfm('+i+')">⇄ 可中转哪里出票·推荐'+esc(sg.hub)+'</span>':'')+
       '</div>';
     }).join('')+'</div>';
@@ -966,6 +974,7 @@ function renderResult(){
   html+='<details><summary>参数：绕远倍数（通道判定上限）</summary>'+paramHTML()+'</details>';
   html+='</div>';
   el.innerHTML=html;
+  adoptNote='';
 }
 function chainBestLocal(){
   const S=state.school.station,H=state.home.station;
@@ -1008,6 +1017,13 @@ function optRows(){
     '<button class="ghost" onclick="adopt(\''+r.s[0]+'\')">采用</button></div>').join('');
 }
 let tfmSeg = null, tfmIdx = -1, tfmStep = 1;
+let hubOverride = {};
+function setHub(i,j){
+  const cands=tfmHubs[i]||[];
+  const c=cands[j]; if(!c)return;
+  hubOverride[i]=c.name;   // 该段最终中转=所选站
+  renderResult();
+}
 function openTfm(i){
   const S=state.school.station,H=state.home.station;
   const cc=routeChain(S,H);
@@ -1052,8 +1068,10 @@ function adopt(name){
   state.home={text:r.station.name,point:r.point,station:r.station};
   // 出发地(state.depart)保持不变 — 只改区间端点(家)
   locateDepartLine();
+  adoptNote='已按推荐改 <b>家</b> 为 '+esc(r.station.name)+'；出发地（'+esc((state.depart||state.home.station).name)+'）不变，已按新区间 '+esc(state.school.station.name)+' ⇄ '+esc(r.station.name)+' 重新判定。';
   onPlan();
 }
+let adoptNote='';
 function locateDepartLine(){
   const d=state.depart||(state.home&&state.home.station);
   $('depLine').innerHTML='出发地：<b>'+esc(d?d.name:'——')+'</b><span>（固定不变；推荐只改"家"端点）</span>';
