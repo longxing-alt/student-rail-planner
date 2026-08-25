@@ -2,6 +2,7 @@
  * 计算使用 utils/logic.js 真实车站库与几何函数
  * 流程: ①学校 → ②出发地(区间端点+起点) → ③目的地 → 🚀一键规划 → 弹窗推荐改区间 → 框体着色+区间线+消耗次数 */
 const logic = require('../../utils/logic.js');
+function logOp(msg){ console.log('[操作] ' + (msg||"")); }
 const { state, dist, corridor, STATIONS, cleanCity } = logic;
 
 /* ---------- 离线解析 ---------- */
@@ -88,17 +89,28 @@ function hubsOf(S, H, dep) {
   out.sort((a, b) => a.km - b.km);
   return out.slice(0, 8);
 }
+
+/* 联程路由(与网页 routeChainAt 一致): 出发地=起点; 单程不回程; 全程往返才回程 */
+function mpChain(S, H, trips, fast) {
+  const dep = state.depart || H;
+  const hasRound = Array.isArray(trips) && trips.length && trips[0] && typeof trips[0]==='object' && 'round' in trips[0] ? trips.some(t=>t.round) : false;
+  const arr = (Array.isArray(trips) && trips.length && trips[0] && trips[0].station) ? trips.map(t=>t.station) : trips;
+  if (hasRound) return logic.chainV2(S, H, arr, dep, dep, fast);
+  if (!arr || !arr.length) return logic.chainV2(S, H, [], dep, dep, fast);
+  return logic.chainV2(S, H, arr.slice(0,-1), dep, arr[arr.length-1], fast);
+}
+
 /* 最优区间端点(联程): 枚举全部车站, 联程段覆盖(okN)优先 → 平局按 段端点p/L最小 → 距当前端点近 */
 function smartBest(S, H, trips) {
   const sts = trips.map(t => t.station);
-  const curCover = logic.chainV2(S, H, sts, H, H, true).okN;
+  const curCover = mpChain(S, H, trips, true).okN;
   let best = null;
   for (const s of STATIONS) {
     if (s[0] === S.name) continue;
     if (!logic.railAdj().nodes.has(s[1])) continue; // 推荐只考虑通道网内端点(图外支线/海岛可手动填写)
     if (H && s[1] === H.city) continue; // 不再推荐当前家同城
     const H2 = { name: s[0], city: s[1], lat: s[2], lon: s[3] };
-    const cc = logic.chainV2(S, H2, sts, H2, H2, true);
+    const cc = mpChain(S, H2, trips, true);
     const cover = cc ? cc.okN : 0;
     if (cover < curCover) continue;
     const Lh = dist(S, H2);
@@ -149,6 +161,8 @@ Page({
 
   /* 步骤1 学校 → 步骤2 出发地 */
   async nextSchool() {
+    logOp("设置学校");
+
     const q = this.data.schoolInput.trim();
     if (!q) { this.setStatus('请先输入学校城市'); return; }
     const r = await resolvePlace(q);
@@ -159,6 +173,7 @@ Page({
   },
   /* 步骤2 出发地 → 步骤3 目的地 */
   async nextDepart() {
+    logOp("设置出发地");
     const q = this.data.departInput.trim();
     if (!q) { this.setStatus('请先输入出发地'); return; }
     const r = await resolvePlace(q);
@@ -176,6 +191,7 @@ Page({
 
   /* 目的地 */
   async addTrip() {
+    logOp("添加目的地");
     const q = this.data.tripInput.trim();
     if (!q) return;
     const r = await resolvePlace(q);
@@ -187,6 +203,7 @@ Page({
     this.setStatus('已添加：' + q + (wasPlanned ? '（改动后请再次【一键规划】以重新判色）' : ''));
   },
   removeTrip(e) {
+    logOp("删除目的地");
     state.trips = state.trips.filter(t => t.id !== e.currentTarget.dataset.id);
     this.setData({ planned: false });
     this.renderAll();
@@ -194,6 +211,7 @@ Page({
   },
   /* 一键清空目的地（二次确认） */
   clearAll() {
+    logOp("清空全部");
     wx.showModal({
       title: '清空全部目的地',
       content: '确定清空全部目的地吗？清空后需重新输入。',
@@ -261,6 +279,7 @@ Page({
 
   /* 一键规划: 顺路排序 + 框体着色 + 弹窗推荐 */
   onPlan() {
+    logOp("一键规划");
     this.hubOverride = {}; // 新规划重置中转选择
     if (!state.trips.length) { this.setStatus('先添加想去的地方'); return; }
     const S = state.school, H = state.home;
@@ -271,7 +290,7 @@ Page({
     this.renderAll();
     // 联程路线: 出发地 → 各程 → 出发地, 逐段判定(与规划页一致)
     const sts = state.trips.map(t => t.station);
-    const cc0 = logic.chainV2(S, H, sts, H, H, true);
+    const cc0 = mpChain(S, H, state.trips, true);
     const N = cc0 ? cc0.segs.length : 0;
     // 推荐区间端点(联程段覆盖)
     const best = smartBest(S, H, state.trips);
@@ -280,7 +299,7 @@ Page({
     this.setData({ 'modalFlag': '' });
     if (suggest) {
       const H2 = { name: suggest.name, city: suggest.city, lat: suggest.lat, lon: suggest.lon };
-      const cc2 = logic.chainV2(S, H2, sts, H2, H2, true);
+      const cc2 = mpChain(S, H2, state.trips, true);
       const j2 = cc2 ? cc2.segs.map(sg => (sg.inInt ? 2 : 0)) : [];
       modal = { show: true, suggest,
         g2: j2.filter(x => x === 2).length, e2: 0, b2: j2.filter(x => x === 0).length };
@@ -316,6 +335,7 @@ Page({
   },
   /* 采用推荐区间: 只改区间端点, 出发地不动 */
   applySuggestion() {
+    logOp("采用推荐区间");
     const s = this.data.modal.suggest;
     if (!s) return;
     state.home = { name: s.name, city: s.city, lat: s.lat, lon: s.lon };
@@ -343,6 +363,7 @@ Page({
     } });
   },
   setHubTap(e) {
+    logOp("选择中转站");
     const i = Number(e.currentTarget.dataset.i);
     const j = Number(e.currentTarget.dataset.j);
     const sg = this._cc && this._cc.segs[i];
@@ -369,7 +390,7 @@ Page({
     const planned = this.data.planned;
     // 联程路线段判定
     let cc = null;
-    if (planned && S && H && state.trips.length) cc = logic.chainV2(S, H, state.trips.map(t => t.station), H, H);
+    if (planned && S && H) cc = mpChain(S, H, state.trips, false);
     const segOf = i => (cc && cc.segs[i]) ? cc.segs[i] : null;
     const segOk = i => { const sg = segOf(i); return !!(sg && (sg.inInt || sg.hub)); };
     const segHub = i => { const sg = segOf(i); return !!(sg && sg.hub); };
