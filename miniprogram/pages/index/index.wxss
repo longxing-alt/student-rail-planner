@@ -201,3 +201,6 @@ page {
 
 .hub-line{flex-basis:100%;padding:6px 2px 2px;font-size:11px;color:#a16207;line-height:1.7}
 .hub-tag{color:#92400e}
+
+.hub-grid{display:flex;flex-wrap:wrap;gap:6px;margin-top:4px}
+.hub-grid .hub-chip{width:calc(50% - 3px);text-align:center;margin:0;box-sizing:border-box}

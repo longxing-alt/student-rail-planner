@@ -360,8 +360,10 @@ function renderResult(){
       const lbl=(roundAny()&&i===cc.segs.length-1)?'回程':'第'+(i+1)+'程';
       const cands=tfmHubs[i]||[];
       const NUMS2=['①','②','③','④','⑤','⑥','⑦','⑧'];
-      const hubLine=(cands.length)?'<div style="margin-top:6px;font-size:11px;color:var(--mut)">'+(sg.inInt?'也可中转(备选)：':'最终中转可选：')+
-        cands.map((c,j)=>'<span class="hub-badge" style="margin:3px 4px 0 0;'+(c.name===sg.hub?'background:var(--warn-soft);border-color:#d97706':'')+'" onclick="setHub('+i+','+j+')">'+NUMS2[j]+esc(c.name)+'</span>').join('')+'</div>':'';
+      const cands4=cands.slice(0,4); // 最多4个, 两行两列
+      const hubLine=(sg.hub&&cands4.length&&!sg.inInt)?'<div style="margin-top:6px;font-size:11px;color:var(--mut)">最终中转可选：'+
+        '<div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;margin-top:4px">'+
+        cands4.map((c,j)=>'<span class="hub-badge" style="margin:0;'+(c.name===sg.hub?'background:var(--warn-soft);border-color:#d97706':'')+'" onclick="setHub('+i+','+j+')">'+NUMS2[j]+esc(c.name)+'</span>').join('')+'</div></div>':'';
       return '<div style="display:flex;align-items:flex-start;gap:10px;padding:9px 11px;border:1px solid var(--line);border-radius:12px;margin-bottom:7px;background:#fff">'+
       '<div style="flex:1;font-size:12.5px;color:var(--mut)"><b style="color:var(--ink)">'+lbl+' '+esc(sg.a.name)+' → '+esc(sg.b.name)+'</b>'+
       (sg.inInt?'<span class="chip ok" style="margin-left:8px">✓ 区间内·直达</span>':sg.hub?'<span class="chip ok" style="margin-left:8px">✓ 可出·中转</span>':'<span class="chip no" style="margin-left:8px">✕ 区间外·需购成人票</span>')+hubLine+'</div>'+

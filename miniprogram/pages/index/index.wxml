@@ -66,8 +66,10 @@
           <text class="name">{{item.text}}</text>
           <text class="status" wx:if="{{item.status}}">{{item.status}}</text>
           <view wx:if="{{item.hubs.length}}" class="hub-line">
-            <text class="hub-tag">{{item.hubPrefix}}</text>
-            <text wx:for="{{item.hubs}}" wx:key="n" wx:for-item="hb" class="hub-chip {{hb.cur?'on':''}}" data-i="{{item.iIdx}}" data-j="{{hb.idx}}" catchtap="setHubTap">{{hb.m}}{{hb.n}}</text>
+            <text class="hub-tag">最终中转可选：</text>
+            <view class="hub-grid">
+              <text wx:for="{{item.hubs}}" wx:key="n" wx:for-item="hb" class="hub-chip {{hb.cur?'on':''}}" data-i="{{item.iIdx}}" data-j="{{hb.idx}}" catchtap="setHubTap">{{hb.m}}{{hb.n}}</text>
+            </view>
           </view>
           <text class="x" data-id="{{item.id}}" catchtap="removeTrip">✕</text>
         </view>

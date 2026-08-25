@@ -389,9 +389,9 @@ Page({
       const ok = segOk(i), hub = segHub(i);
       const j = planned && S && H ? (ok ? (hub ? 1 : 2) : 0) : -1;
       const sg = segOf(i);
-      const hubs = (planned && S && H) ? hubsOf(S, H, sg && sg.a ? sg.a : (state.depart || H)) : [];
+      // 直达可行→不再显示中转; 直达不行→显示最多4个候选(两行两列)
+      const hubs = (planned && S && H && !sg.inInt) ? hubsOf(S, H, sg && sg.a ? sg.a : (state.depart || H)).slice(0, 4) : [];
       const hubChips = hubs.map((hc, k) => ({ m: NUMS[k] || (k+1) + '.', n: hc.name, cur: hc.name === (sg && sg.hub), idx: k }));
-      const hubPrefix = sg && sg.inInt ? '也可中转(备选)：' : '最终中转可选：';
       const plannedNow = planned && S && H;
       return {
         key: 't' + t.id, id: t.id, iIdx: i, text: t.text,
@@ -399,7 +399,6 @@ Page({
         ring: plannedNow && j >= 0 ? (j === 2 ? 'ok' : j === 1 ? 'edge' : 'bad') : 'none', // 规划前圆点透明(不增删节点, 防渲染层错误)
         status: plannedNow && j >= 1 ? segTxt(i) : '',
         hub: plannedNow && hub ? sg.hub : '', hubs: plannedNow && hubChips.length ? hubChips : [],
-        hubPrefix: plannedNow ? hubPrefix : '',
         anim: false,
       };
     });
