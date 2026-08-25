@@ -396,7 +396,7 @@ Page({
       return {
         key: 't' + t.id, id: t.id, iIdx: i, text: t.text,
         boxCls: j === 2 ? 'ok' : j === 1 ? 'edge' : j === 0 ? 'bad' : '',
-        ring: plannedNow && j >= 0 ? (j === 2 ? 'ok' : j === 1 ? 'edge' : 'bad') : '', // 规划前不显示圆点(与网页添加列表一致)
+        ring: plannedNow && j >= 0 ? (j === 2 ? 'ok' : j === 1 ? 'edge' : 'bad') : 'none', // 规划前圆点透明(不增删节点, 防渲染层错误)
         status: plannedNow && j >= 1 ? segTxt(i) : '',
         hub: plannedNow && hub ? sg.hub : '', hubs: plannedNow && hubChips.length ? hubChips : [],
         hubPrefix: plannedNow ? hubPrefix : '',

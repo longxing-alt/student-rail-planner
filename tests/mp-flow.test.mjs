@@ -88,7 +88,7 @@ const flow = async () => {
   }
   check('添加 6 个目的地', p.data.tripCount === 6);
   check('起点行=石家庄', p.data.startName === '石家庄');
-  check('规划前: 行精简(无圆点/状态/中转候选, 与网页添加列表一致)', p.data.rows.every(r => r.ring === '' && r.status === '' && !r.hub && r.hubs.length === 0));
+  check('规划前: 行精简(无圆点/状态/中转候选, 与网页添加列表一致)', p.data.rows.every(r => (r.ring === '' || r.ring === 'none') && r.status === '' && !r.hub && r.hubs.length === 0));
 
   console.log('== 场景2: 一键规划 ==');
   p.onPlan.call(p); await sync();

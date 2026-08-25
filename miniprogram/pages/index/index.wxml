@@ -62,7 +62,7 @@
         <view class="empty-hint" wx:if="{{!rows.length}}">还没有目的地，在上方输入添加 👆</view>
         <view class="dest {{item.boxCls}} {{tdIndex===index?'dragging':''}} {{item.anim?'in':''}}" wx:for="{{rows}}" wx:key="key" bindtap="tfmTap" data-i="{{index}}">
           <text class="handle" data-i="{{index}}" catchtouchstart="tdStart" catchtouchmove="tdMove" catchtouchend="tdEnd">≡</text>
-          <view class="ring {{item.ring}}" wx:if="{{item.ring}}"></view>
+          <view class="ring {{item.ring}}"></view>
           <text class="name">{{item.text}}</text>
           <text class="status" wx:if="{{item.status}}">{{item.status}}</text>
           <view wx:if="{{item.hubs.length}}" class="hub-line">
