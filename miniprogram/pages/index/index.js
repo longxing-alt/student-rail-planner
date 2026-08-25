@@ -74,6 +74,19 @@ function sortByDepart(trips) {
   const dep = state.depart;
   return trips.slice().sort((a, b) => dist(dep, a.station) - dist(dep, b.station));
 }
+/* 区间内可选中转站(空间带, 按推荐从高到低=距发站近) */
+function hubsOf(S, H, dep) {
+  const out = [];
+  for (const sc of STATIONS) {
+    if (sc[4] !== 1) continue;
+    const T = { name: sc[0], city: sc[1], lat: sc[2], lon: sc[3] };
+    if (T.name === S.name || T.name === H.name) continue;
+    if (!logic.bandOK(S, H, T)) continue;
+    out.push({ name: T.name, km: Math.round(dist(dep || S, T)) });
+  }
+  out.sort((a, b) => a.km - b.km);
+  return out.slice(0, 8);
+}
 /* 最优区间端点(联程): 枚举全部车站, 联程段覆盖(okN)优先 → 平局按 段端点p/L最小 → 距当前端点近 */
 function smartBest(S, H, trips) {
   const sts = trips.map(t => t.station);
@@ -107,6 +120,7 @@ Page({
     startName: '出发地', ivS: '学校', ivH: '出发地', ivDots: [],
     rows: [], tdIndex: -1, tripCount: 0,
     planned: false, used: '–', budget: 4, remain: '–', okN: 0, edgeN: 0, badN: 0,
+    tfm: { show: false, step: 1, i: -1, hub: '', a: '', b: '', S: '', H: '', cands: [] },
     status: '',
     modal: { show: false, suggest: null, g2: 0, e2: 0, b2: 0 },
     dbg: { on: false, badges: [], showLegend: false,
@@ -303,26 +317,32 @@ Page({
     this.setData({ ivH: state.home.name, planned: true });
     this.renderAll();
     this.closeModal();
-    this.setStatus('区间端点改为 ' + state.home.name + '（学校 ' + state.school.name + ' ↔ ' + state.home.name + '），颜色已按新区间判定；出发地保持 ' + state.depart.name);
+    this.setStatus('已按推荐改家为 ' + state.home.name + '；出发地（' + (state.depart ? state.depart.name : state.home.name) + '）不变，已按新区间 ' + state.school.name + ' ⇄ ' + state.home.name + ' 重新判定');
   },
   closeModal() { this.setData({ 'modal.show': false }); },
-  /* 中转段点击: 原生弹窗说明(区间不变/中转站/首段学生票/后续放行/全程1次) */
+  /* 中转段点击: 分步向导(与网页端一致) */
   tfmTap(e) {
     const i = Number(e.currentTarget.dataset.i);
     const cc = this._cc;
     const sg = cc && cc.segs[i];
     if (!sg || !sg.hub) return;
     const S = state.school, H = state.home;
-    wx.showModal({
-      title: '⇄ 中转购买说明',
-      content: '优惠区间 ' + (S ? S.name : '学校') + ' ⇄ ' + (H ? H.name : '家') + ' 不变。' + NL
-        + '① 12306 选「中转」，中转站填 ' + sg.hub + '（区间内站）。' + NL
-        + '② 首段 ' + (sg.a ? sg.a.name : '') + ' → ' + sg.hub + ' 按学生票购买（两端都在区间内）。' + NL
-        + '③ 后续段 ' + sg.hub + ' → ' + (sg.b ? sg.b.name : '') + ' 随联程放行。' + NL
-        + '全程计 1 次优惠；实际以 12306 出票为准。',
-      showCancel: false, confirmText: '知道了',
-    });
+    const dep = state.depart || H;
+    const cands = hubsOf(S, H, (sg.a && sg.a.name) ? sg.a : dep);
+    this.setData({ tfm: {
+      show: true, step: 1, i,
+      hub: sg.hub, a: sg.a ? sg.a.name : '', b: sg.b ? sg.b.name : '',
+      S: S ? S.name : '学校', H: H ? H.name : '家', cands,
+    } });
   },
+  tfmPick(j) {
+    const tfm = this.data.tfm;
+    if (!tfm || !tfm.cands[j]) return;
+    this.setData({ 'tfm.hub': tfm.cands[j].name, 'tfm.step': 3 }); // 后续步骤以选中站为例
+  },
+  tfmNext() { const st = Math.min(4, this.data.tfm.step + 1); this.setData({ 'tfm.step': st }); },
+  tfmPrev() { const st = Math.max(1, this.data.tfm.step - 1); this.setData({ 'tfm.step': st }); },
+  closeTfm() { this.setData({ 'tfm.show': false }); },
   noop() { },
 
   /* ---------- 渲染 ---------- */
@@ -335,7 +355,7 @@ Page({
     const segOf = i => (cc && cc.segs[i]) ? cc.segs[i] : null;
     const segOk = i => { const sg = segOf(i); return !!(sg && (sg.inInt || sg.hub)); };
     const segHub = i => { const sg = segOf(i); return !!(sg && sg.hub); };
-    const segTxt = i => { const sg = segOf(i); return sg ? (sg.inInt ? '区间内' : sg.hub ? '中转·经' + sg.hub + '（点此看说明）' : '区间外') : ''; };
+    const segTxt = i => { const sg = segOf(i); return sg ? (sg.inInt ? '区间内' : sg.hub ? '⇄ 可中转哪里出票·推荐' + sg.hub : '区间外·需购成人票') : ''; };
     this._cc = cc;
     // 区间线圆点
     const ivDots = state.trips.map((t, i) => {

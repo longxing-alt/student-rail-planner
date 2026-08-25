@@ -120,6 +120,35 @@
     免责声明：判定结果基于实测数据推算，仅供参考，实际以 12306 出票为准；不构成购票或区间修改建议。
   </view>
 
+  <!-- 中转购买说明(分步向导, 仿网页) -->
+  <view class="mask" wx:if="{{tfm.show}}" bindtap="closeTfm">
+    <view class="dialog" catchtap="noop">
+      <view class="dialog-title">⇄ 中转购买说明<text class="dialog-close" catchtap="closeTfm">✕</text></view>
+      <view class="dialog-body" wx:if="{{tfm.step===1}}">
+        <view class="m-line"><b>区间不用改</b>：保持<b>优惠区间为 {{tfm.S}} ⇄ {{tfm.H}}</b> 不变，只做中转。</view>
+      </view>
+      <view class="dialog-body" wx:if="{{tfm.step===2}}">
+        <view class="m-line">选择在 12306 上<b>可以中转的地点</b>（①推荐 ②次选…，点选后以下步骤以它为例）：</view>
+        <view class="m-line" style="flex-wrap:wrap;gap:6px" wx:for="{{tfm.cands}}" wx:key="name">
+          <text class="hub-chip {{item.name===tfm.hub?'on':''}}" data-j="{{index}}" catchtap="tfmPick">{{index===0?'①':index===1?'②':index===2?'③':index===3?'④':index===4?'⑤':index===5?'⑥':index===6?'⑦':'⑧'}}{{item.name}}</text>
+        </view>
+      </view>
+      <view class="dialog-body" wx:if="{{tfm.step===3}}">
+        <view class="m-line">在 12306 购票时选「<b>中转</b>」，中转站填 <b>{{tfm.hub}}</b>。</view>
+        <view class="m-line">首段 <b>{{tfm.a}} → {{tfm.hub}}</b> 按学生票购买（两端都在区间内）。</view>
+      </view>
+      <view class="dialog-body" wx:if="{{tfm.step===4}}">
+        <view class="m-line">后续段 <b>{{tfm.hub}} → {{tfm.b}}</b> 随联程放行，全程计 1 次优惠。</view>
+        <view class="m-note">实际以 12306 出票为准；若该中转站没有合适后续车，回到上一步换一个站。</view>
+      </view>
+      <view class="dialog-btns">
+        <button hover-class="bh" class="btn ghost sm" wx:if="{{tfm.step>1}}" catchtap="tfmPrev">← 上一步</button>
+        <button hover-class="bh" class="btn primary sm" wx:if="{{tfm.step<4}}" catchtap="tfmNext">下一步</button>
+        <button hover-class="bh" class="btn primary sm" wx:if="{{tfm.step===4}}" catchtap="closeTfm">知道了</button>
+      </view>
+    </view>
+  </view>
+
   <!-- 调试编号层（长按品牌头开关） -->
   <view class="dbg-overlay" wx:if="{{dbg.on}}">
     <view class="dbg-badge" wx:for="{{dbg.badges}}" wx:key="n" style="left:{{item.x}}px;top:{{item.y}}px">{{item.n}}</view>

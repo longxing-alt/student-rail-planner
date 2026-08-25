@@ -194,3 +194,7 @@ page {
 .dialog-title{position:relative}
 .dialog-close{position:absolute;right:0;top:-2px;font-size:16px;color:#9ca3af;padding:4px 8px;font-weight:600}
 .footer{margin:26px 18px 10px;padding:10px 12px;font-size:10.5px;color:#9ca3af;line-height:1.6;border-top:1px solid #f1f0ef;text-align:center}
+
+/* 1.0.12: 中转候选胶囊(仿网页) */
+.hub-chip{display:inline-block;font-size:13px;font-weight:600;color:#d97706;background:rgba(245,158,11,.09);border:1px solid rgba(245,158,11,.35);border-radius:99px;padding:6px 14px;margin:4px 6px 0 0;line-height:1.4}
+.hub-chip.on{background:rgba(245,158,11,.18);border-color:#d97706}
