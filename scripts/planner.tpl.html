@@ -74,6 +74,20 @@ input[type=range]{width:100%;accent-color:var(--accent);margin-top:10px}
 .param-line{display:flex;align-items:center;gap:12px;font-size:12.5px;color:var(--mut);margin-top:6px}
 .bridge{font-size:12px;color:var(--warn);background:var(--warn-soft);border:1px solid var(--warn-line);border-radius:10px;padding:7px 10px;margin-top:6px;line-height:1.55}
 .bridge b{color:#b45309}
+/* 中转角标(橙色小字, 可点): 仅直达不可时显示 */
+.hub-badge{font-size:11.5px;font-weight:700;color:#d97706;background:var(--warn-soft);border:1px solid var(--warn-line);border-radius:99px;padding:4px 11px;cursor:pointer;white-space:nowrap;margin-left:auto;align-self:flex-start}
+.hub-badge:hover{background:var(--warn-soft);border-color:#d97706}
+.tfm{position:fixed;inset:0;background:rgba(28,25,23,.45);z-index:999;display:none;align-items:center;justify-content:center;padding:18px}
+.tfm-card{background:#fff;border-radius:16px;max-width:480px;width:100%;padding:20px;max-height:82vh;overflow:auto;position:relative}
+.tfm-card h3{font-size:15px;font-weight:800;margin-bottom:10px}
+.tfm-close{position:absolute;right:14px;top:12px;background:none;border:none;font-size:18px;color:var(--mut2);cursor:pointer;padding:4px}
+.tfm-step{display:flex;gap:10px;margin:9px 0;font-size:13px;line-height:1.7}
+.tfm-step .n{flex:none;width:20px;height:20px;border-radius:99px;background:var(--accent);color:#fff;font-size:11px;font-weight:800;display:flex;align-items:center;justify-content:center;margin-top:2px}
+.tfm-note{font-size:11.5px;color:var(--mut);line-height:1.7;background:#fafaf9;border:1px solid var(--line);border-radius:10px;padding:9px 11px;margin-top:6px}
+/* 添加行: 输入框与按钮同高同排 */
+.add-row{display:flex;gap:8px;align-items:stretch}
+.add-row input{flex:1;min-width:0}
+.add-row button{width:94px;flex:none;display:flex;align-items:center;justify-content:center}
 .hidden{display:none!important}
 @media(max-width:520px){
   body{padding:18px 12px 50px}
@@ -82,8 +96,8 @@ input[type=range]{width:100%;accent-color:var(--accent);margin-top:10px}
   input[type=text]{font-size:16px}
   .btn{padding:14px 18px;font-size:15.5px}
   .ghost{min-height:40px}
-  #tripInput{width:100%!important;margin:0 0 8px!important}
-  #stepTrips .ghost{width:100%}
+  .add-row{flex-direction:column}
+  .add-row button{width:100%}
   .trip{padding:12px 11px}
   .dep-line{flex-wrap:wrap;line-height:1.5}
   .chip{font-size:11px;padding:2px 8px}
@@ -97,35 +111,53 @@ input[type=range]{width:100%;accent-color:var(--accent);margin-top:10px}
 <body>
 <div class="wrap">
   <h1><span class="dot"></span>学生票 · 区间规划</h1>
-  <div class="sub">输入学校与出发地，多程自动串联成一条路线，看能否全程用学生票。<span id="statLine" style="color:var(--mut2)"></span></div>
+  <div class="sub">输入学校与出发地，多程自动串联成一条路线，看能否全程用学生票。</div>
 
   <div class="card step on" id="stepSchool">
     <h2><span class="step-no">1</span>学校在哪</h2>
-    <input type="text" id="schoolInput" placeholder="例如：北京 / 武汉 / 成都东" autocomplete="off">
+    <input type="text" id="schoolInput" placeholder="例如：北京 / 武汉 / 成都东" autocomplete="off" onkeydown="if(event.key==='Enter')nextSchool()">
     <button class="btn" onclick="nextSchool()">下一步</button>
   </div>
 
   <div class="card step" id="stepHome">
-    <h2><span class="step-no">2</span>出发地（家的车站）</h2>
-    <input type="text" id="homeInput" placeholder="例如：石家庄 / 南宁 / 福州" autocomplete="off">
+    <h2><span class="step-no">2</span>出发地</h2>
+    <input type="text" id="homeInput" placeholder="例如：石家庄 / 南宁 / 福州" autocomplete="off" onkeydown="if(event.key==='Enter')nextHome()">
     <button class="btn" onclick="nextHome()">下一步</button>
   </div>
 
   <div class="card step" id="stepTrips">
     <h2><span class="step-no">3</span>想去哪（按顺序串联成一条路线）</h2>
-    <div class="dep-line" id="depLine">📍 出发地：<b>——</b><span>（路线从这里出发，按下面顺序走完再回这里）</span></div>
-    <input type="text" id="tripInput" placeholder="目的地，如：桂林 / 广州" autocomplete="off" style="width:calc(100% - 96px);margin-right:8px">
-    <button class="ghost" onclick="addTrip()" style="vertical-align:top">＋ 添加</button>
+    <div class="dep-line" id="depLine">出发地：<b>——</b><span>（固定不变；推荐只改"家"端点）</span></div>
+    <div class="add-row">
+      <input type="text" id="tripInput" placeholder="目的地，如：桂林 / 广州" autocomplete="off" onkeydown="if(event.key==='Enter'){addTrip();return false;}">
+      <button class="ghost" onclick="addTrip()">＋ 添加</button>
+    </div>
     <div id="tripErr" class="err"></div>
     <div id="tripList" style="margin-top:14px"></div>
-    <label style="display:inline-flex;align-items:center;gap:7px;font-size:12.5px;color:var(--mut)">
-      <input type="checkbox" onchange="setRound(this.checked)">全程往返 ×2</label>
-    <button class="btn" onclick="onPlan()">🚀 一键规划</button>
+    <div style="display:flex;align-items:center;gap:10px;margin-top:4px">
+      <label style="display:inline-flex;align-items:center;gap:7px;font-size:12.5px;color:var(--mut)">
+        <input type="checkbox" onchange="setRound(this.checked)">全程往返 ×2</label>
+      <span style="flex:1"></span>
+      <button class="ghost" style="padding:5px 12px" onclick="clearAll()">🗑 一键清空</button>
+    </div>
+    <button class="btn" onclick="onPlan()">一键规划</button>
   </div>
 
   <div id="result"></div>
-  <div class="disclaimer">免责声明：判定结果基于实测出票数据推算，仅供规划参考；实际能否出票以 12306 为准。数据仅存本地浏览器，不上传。MIT License</div>
-  <div class="disclaimer">免责声明：判定结果基于实测出票数据推算，仅供规划参考；实际能否出票以 12306 为准。数据仅存本地浏览器，不上传。MIT License</div>
+  <div class="disclaimer">判定结果基于实测出票数据推算，仅供规划参考；实际能否出票以 12306 为准。数据仅存本地浏览器，不上传。</div>
+</div>
+
+<!-- 中转购买说明弹窗 -->
+<div class="tfm" id="tfm" onclick="if(event.target===this)closeTfm()">
+  <div class="tfm-card">
+    <button class="tfm-close" onclick="closeTfm()">✕</button>
+    <h3>⇄ 中转购买说明</h3>
+    <div id="tfmBody"></div>
+    <div style="display:flex;gap:10px;margin-top:14px">
+      <button class="ghost" id="tfmPrev" style="flex:1" onclick="tfmPrev()">← 上一步</button>
+      <button class="btn" id="tfmNext" style="flex:2;margin-top:0" onclick="tfmNext()">下一步</button>
+    </div>
+  </div>
 </div>
 
 <script>
@@ -134,7 +166,13 @@ input[type=range]{width:100%;accent-color:var(--accent);margin-top:10px}
 /* ============ 极简界面逻辑 ============ */
 const $ = id => document.getElementById(id);
 function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
-function showStep(name){document.querySelectorAll('.step').forEach(el=>el.classList.remove('on'));$('step'+name).classList.add('on');}
+function showStep(name){
+  document.querySelectorAll('.step').forEach(el=>el.classList.remove('on'));
+  const el=$('step'+name); if(!el)return;
+  el.classList.add('on');
+  const inp=el.querySelector('input[type=text]');
+  if(inp)setTimeout(()=>{try{inp.focus();}catch(e){}},60); // 自动聚焦到输入框
+}
 function resolvePlace(q){
   q=String(q||'').trim();
   const qn=cleanCity(q);
@@ -148,15 +186,17 @@ function nextSchool(){
   if(!r){setErr('stepSchool','未收录该站，试试输入 城市名 或 车站名');return;}
   state.school={text:$('schoolInput').value.trim(),point:r.point,station:r.station};
   $('schoolInput').value=r.station.name;
+  $('schoolInput').readOnly=true;            // 学校的点固定, 不可再改
+  $('schoolInput').style.color='var(--mut)';
   showStep('Home');
 }
 function nextHome(){
   const r=resolvePlace($('homeInput').value);
   if(!r){setErr('stepHome','未收录该站');return;}
   state.home={text:$('homeInput').value.trim(),point:r.point,station:r.station};
-  state.depart=state.home.station;
+  state.depart=state.home.station; // 出发地=家; 采用推荐只改"家"端点, 出发地固定
   $('homeInput').value=r.station.name;
-  $('depLine').innerHTML='📍 出发地：<b>'+esc(r.station.name)+'</b><span>（路线从这里出发，按下面顺序走完再回这里）</span>';
+  locateDepartLine();
   showStep('Trips');
 }
 function setErr(step,t){const e=document.querySelector('#'+step+' .err');if(e)e.textContent=t;}
@@ -197,9 +237,31 @@ function renderTrips(){
   }).join('');
 }
 function rm(id){state.trips=state.trips.filter(t=>t.id!==id);planned=false;renderTrips();renderResult();}
+function clearAll(){state.trips=[];planned=false;renderTrips();renderResult();$('tripInput').focus();}
 function setRound(v){state.trips.forEach(t=>t.round=v);planned=false;renderTrips();renderResult();}
 let planned=false;
-function routeChain(S,H){return chainV2(S,H,state.trips.map(t=>t.station),H,H);}
+function routeChainAt(S,H2){
+  const sts=state.trips.map(t=>t.station);
+  const dep=state.depart||H2;
+  if(roundAny()) return chainV2(S,H2,sts,dep,dep);           // 全程往返: 出发→各程→回出发
+  if(!sts.length) return chainV2(S,H2,[],dep,dep);
+  return chainV2(S,H2,sts.slice(0,-1),dep,sts[sts.length-1]); // 单程: 出发→各程(终点=最后一程, 不重复)
+}
+function routeChain(S,H){return routeChainAt(S,H);}
+/* 区间内可选中转站(空间带, 仅供弹窗展示候选) */
+let tfmHubs=[];
+function hubsInBand(S,H){
+  const out=[];const Ld=dist(S,H);
+  for(const sc of STATIONS){
+    if(sc[4]!==1)continue;
+    const T={name:sc[0],city:sc[1],lat:sc[2],lon:sc[3]};
+    if(T.name===S.name||T.name===H.name)continue;
+    if(!bandOK(S,H,T))continue;
+    out.push({name:T.name,city:T.city,km:Math.round(dist(S,T))});
+  }
+  out.sort((a,b)=>a.km-b.km);
+  return out.slice(0,8);
+}
 /* 自动最优排序: 使最多路段落在区间内(联程段覆盖), 平局取总里程短 */
 function bestRoute(S,H,trips){
   const arr=trips.slice();
@@ -248,6 +310,8 @@ function bestRoute(S,H,trips){
 function roundAny(){return state.trips.some(t=>t.round);}
 function onPlan(){
   if(!state.school||!state.home){$('tripErr').textContent='请先完成 学校 与 出发地';return;}
+  if($('tripInput').value.trim()) addTrip(); // 忘记点添加? 自动补入
+  if(!state.trips.length){$('tripErr').textContent='还没有目的地';return;}
   statsPlan();
   // 自动按最优联程排序: 使最多段落在区间内
   state.trips=bestRoute(state.school.station,state.home.station,state.trips);
@@ -262,34 +326,54 @@ function renderResult(){
   const used=cc.okAll?(roundAny()?2:1):0;
   const remain=Math.max(0,state.budget-used);
   const sup=chainBestLocal();
-  const curCover=cc.okN;
+  const curCover=cc.okN, curDirN=cc.segs.filter(sg=>sg.inInt).length;
   const hubN=cc.segs.filter(sg=>sg.hub).length;
+  const dirN=cc.segs.filter(sg=>sg.inInt).length;
+  const hubList=cc.segs.map((sg,i)=>sg.hub?('第'+(i+1)+'程 经'+sg.hub):null).filter(Boolean).join('、');
+  tfmHubs=cc.segs.map(sg=>sg.hub?hubsInBand(S,H):[]);
   let html='<div class="card" id="resCard"><div class="sum">'+
-    (cc.okAll?'✅ 联程全程可出 🎉':'<b>'+okN+'/'+N+'</b> 段可出 · '+(N-okN)+' 段需另购')+
-    (hubN?(' · 中转 '+hubN+' 段'):'')+
-    '</div><div class="note">出发地 '+esc(H.name)+' · 区间 '+esc(S.name)+' ⇄ '+esc(H.name)+' · '+
+    (cc.okAll?'联程全程可出':'<b>'+okN+'/'+N+'</b> 段可出 · '+(N-okN)+' 段需另购')+
+    (hubN?(' · 中转 '+hubN+' 段（'+esc(hubList)+'）'):'')+
+    '<div style="font-size:11.5px;color:var(--mut);font-weight:500;margin-top:2px">其中 直达 '+dirN+' 段 · 数优先直达，实在没有才用中转</div>'+
+    '</div><div class="note">出发地 '+esc((state.depart||H).name)+' · 区间 '+esc(S.name)+' ⇄ '+esc(H.name)+' · '+
     (cc.okAll?'全程联程 <b>'+used+'</b> 次 · 剩余 <b>'+remain+'</b> 次':'按 分段/搭桥 另计')+'</div>';
-  // 路线串联图: 站点chips + 段箭头着色
+  // 路线串联图: 站点chips + 段箭头着色 (与 routeChain 同构: 往返才带回程)
   html+='<div style="display:flex;flex-wrap:wrap;align-items:center;gap:0 6px;margin-bottom:12px;font-size:13px">';
-  const pts=[H,...state.trips.map(t=>t.station),H];
+  const depPt=state.depart||H, stsPt=state.trips.map(t=>t.station);
+  const pts=roundAny()?[depPt,...stsPt,depPt]:(stsPt.length?[depPt,...stsPt]:[depPt]);
   for(let i=0;i<pts.length;i++){
-    if(i>0){html+='<span style="color:'+(cc.segs[i-1].inInt?'var(--ok)':'var(--no)')+';font-weight:800">'+(cc.segs[i-1].inInt?'→':'⇢')+'</span>';}
+    if(i>0){
+      const sgA=cc.segs[i-1];
+      html+='<span style="color:'+(sgA.inInt?'var(--ok)':sgA.hub?'var(--warn)':'var(--no)')+';font-weight:800">'+(sgA.inInt?'→':sgA.hub?'⇄':'⇢')+'</span>'+
+        (sgA.hub?'<span style="font-size:10.5px;color:var(--warn);font-weight:600">经'+esc(sgA.hub)+'</span>':'');
+    }
     const badAdj=(i>0&&!cc.segs[i-1].ok)||(i<pts.length-1&&!cc.segs[i].ok);
     html+='<span class="chip '+(badAdj?'no':'ok')+'">'+esc(pts[i].name)+'</span>';
   }
   html+='</div>';
   if(!cc.okAll){
-    html+='<div style="margin-bottom:8px">'+cc.segs.map((sg,i)=>
-      '<div style="font-size:12px;color:var(--mut);padding:3px 0">'+(i+1)+'. '+esc(sg.a.name)+' → '+esc(sg.b.name)+' '+
-      (sg.inInt?'<span class="chip ok">✓ 区间内</span>':sg.hub?'<span class="chip ok">⇄ 中转·经'+esc(sg.hub)+'</span>':'<span class="chip no">✕ 区间外</span>')+'</div>').join('')+'</div>';
+    html+='<div style="margin-bottom:8px">'+cc.segs.map((sg,i)=>{
+      const lbl=(roundAny()&&i===cc.segs.length-1)?'回程':'第'+(i+1)+'程';
+      return '<div style="display:flex;align-items:flex-start;gap:10px;padding:9px 11px;border:1px solid var(--line);border-radius:12px;margin-bottom:7px;background:#fff">'+
+      '<div style="flex:1;font-size:12.5px;color:var(--mut)"><b style="color:var(--ink)">'+lbl+' '+esc(sg.a.name)+' → '+esc(sg.b.name)+'</b>'+
+      (sg.inInt?'<span class="chip ok" style="margin-left:8px">✓ 区间内·直达</span>':sg.hub?'<span class="chip ok" style="margin-left:8px">✓ 可出·中转</span>':'<span class="chip no" style="margin-left:8px">✕ 区间外·需购成人票</span>')+'</div>'+
+      (sg.inInt?'':sg.hub?'<span class="hub-badge" onclick="openTfm('+i+')">⇄ 可中转哪里出票·推荐'+esc(sg.hub)+'</span>':'')+
+      '</div>';
+    }).join('')+'</div>';
     html+='<div class="bridge">⚠ '+(N-okN)+' 段不可出：可<b>分段购买</b>（区间内/中转段学生票+其余全价）；或先购「区间内 → '+esc(H.name)+'」合法票再购后续段（搭桥法，实测有效），最后退掉第一张。</div>';
   }
   if(sup&&sup.st){
-    html+=(sup.cover>curCover)
-      ?'<div class="rec">💡 把<b>家</b>改成 <b>'+esc(sup.st.name)+' · '+esc(sup.st.city)+'</b> → 联程可出 <b>'+sup.cover+'/'+N+'</b> 段'+(sup.cover<N?'（最高）':'')+
+    const betterCover=sup.cover>curCover;
+    const betterDir=!betterCover&&sup.dirN>curDirN;
+    html+=(betterCover
+      ?'<div class="rec">把<b>家</b>改成 <b>'+esc(sup.st.name)+' · '+esc(sup.st.city)+'</b> → 联程可出 <b>'+sup.cover+'/'+N+'</b> 段'+(sup.cover<N?'（最高）':'')+
         '<div class="mini">覆盖优先 · p/L='+sup.pMax.toFixed(2)+'（越居中越稳）</div></div>'+
         '<button class="btn" style="margin-top:8px" onclick="adopt(\''+sup.st.name+'\')">采用推荐区间</button>'
-      :'<div class="rec">💡 当前区间已是最优（联程 '+curCover+'/'+N+' 段），无更好的家端点</div>';
+      :betterDir
+        ?'<div class="rec">把<b>家</b>改成 <b>'+esc(sup.st.name)+' · '+esc(sup.st.city)+'</b> → 该段变为<b>直达</b>，无需中转'+
+          '<div class="mini">覆盖不变 · 直达段更多 · p/L='+sup.pMax.toFixed(2)+'</div></div>'+
+          '<button class="btn" style="margin-top:8px" onclick="adopt(\''+sup.st.name+'\')">采用推荐区间</button>'
+        :'<div class="rec">当前区间已是最优（联程 '+curCover+'/'+N+' 段'+(curDirN?('，直达 '+curDirN+' 段'):'，均需中转')+'），无更好的家端点</div>');
   }
   html+='<details><summary>更多家端点（区间优化）</summary>'+optRows()+'</details>';
   html+='<details><summary>参数：绕远倍数（通道判定上限）</summary>'+paramHTML()+'</details>';
@@ -306,15 +390,16 @@ function chainBestLocal(){
     if(!railAdj().nodes.has(s[1]))continue;
     if(s[1]===H.city)continue; // 不再推荐当前家的同城站
     const H2={name:s[0],city:s[1],lat:s[2],lon:s[3]};
-    const cc=chainV2(S,H2,sts,H2,H2,true);
+    const cc=routeChainAt(S,H2);
     const cover=cc.okN;
     if(cover<curCover)continue;
     const Lh=dist(S,H2);
-    let pMax=0;
-    for(const sg of cc.segs){if(sg.inInt){const{p}=corridor(S,H2,sg.b);pMax=Math.max(pMax,p/(Lh||1));}}
+    let pMax=0,dirN=0;
+    for(const sg of cc.segs){ if(sg.inInt)dirN++; if(sg.inInt){const{p}=corridor(S,H2,sg.b);pMax=Math.max(pMax,p/(Lh||1));} }
     const km=dist({lat:s[2],lon:s[3]},{lat:H.lat,lon:H.lon});
-    if(!best||cover>best.cover||(cover===best.cover&&(pMax<best.pMax||(pMax===best.pMax&&km<best.km))))
-      best={st:{name:s[0],city:s[1],lat:s[2],lon:s[3]},cover,pMax};
+    // 覆盖→直达段多→p/L小→距家近 (优先满足直达, 中转兜底)
+    if(!best||cover>best.cover||(cover===best.cover&&(dirN>best.dirN||(dirN===best.dirN&&(pMax<best.pMax||(pMax===best.pMax&&km<best.km))))))
+      best={st:{name:s[0],city:s[1],lat:s[2],lon:s[3]},cover,dirN,pMax};
   }
   return best;
 }
@@ -327,7 +412,7 @@ function optRows(){
     if(!railAdj().nodes.has(s[1]))continue;
     if(s[1]===H.city)continue;
     const H2={name:s[0],city:s[1],lat:s[2],lon:s[3]};
-    const cc=chainV2(S,H2,sts,H2,H2,true);
+    const cc=routeChainAt(S,H2);
     if(!cc||cc.okN===0)continue;
     rows.push({s,cover:cc.okN});
   }
@@ -335,13 +420,56 @@ function optRows(){
   return rows.slice(0,8).map(r=>'<div class="mini-row"><div class="n">'+esc(r.s[0])+' · '+esc(r.s[1])+'</div><div class="d">联程可出 '+r.cover+'/'+(sts.length+2)+' 段</div>'+
     '<button class="ghost" onclick="adopt(\''+r.s[0]+'\')">采用</button></div>').join('');
 }
+let tfmSeg = null, tfmIdx = -1, tfmStep = 1;
+function openTfm(i){
+  const S=state.school.station,H=state.home.station;
+  const cc=routeChain(S,H);
+  tfmSeg=cc.segs[i]; tfmIdx=i; tfmStep=1;
+  if(!tfmSeg||!tfmSeg.hub)return;
+  document.getElementById('tfm').style.display='flex';
+  tfmRender();
+}
+function tfmRender(){
+  const S=state.school.station,H=state.home.station;
+  const b=document.getElementById('tfmBody');
+  const cands=tfmHubs[tfmIdx]||[]; // 已按距发站推荐从高到低排序
+  if(tfmStep===1){
+    b.innerHTML='<div class="tfm-step"><span class="n">1</span><div><b>区间不用改</b>：保持<b>优惠区间为 '+esc(S.name)+' ⇄ '+esc(H.name)+'</b> 不变，只做中转。</div></div>';
+  }else if(tfmStep===2){
+    const NUMS=['①','②','③','④','⑤','⑥','⑦','⑧'];
+    const chips=cands.map((c,j)=>'<span class="hub-badge" style="margin:4px;'+(c.name===tfmSeg.hub?'background:var(--warn-soft);border-color:#d97706':'')+'" onclick="tfmPick('+j+')">'+NUMS[j]+esc(c.name)+'</span>').join('');
+    b.innerHTML='<div class="tfm-step"><span class="n">2</span><div>选择在 12306 上<b>可以中转的地点</b>（①推荐 ②次选…，点选后以下步骤以它为例）：<div style="margin-top:8px">'+chips+'</div></div></div>';
+  }else if(tfmStep===3){
+    b.innerHTML='<div class="tfm-step"><span class="n">3</span><div>在 12306 购票时选「<b>中转</b>」，中转站填 <b>'+esc(tfmSeg.hub)+'</b>。</div></div>'+
+      '<div class="tfm-step"><span class="n">4</span><div>首段 <b>'+esc(tfmSeg.a.name)+' → '+esc(tfmSeg.hub)+'</b> 按学生票购买（两端都在区间内）。</div></div>';
+  }else{
+    b.innerHTML='<div class="tfm-step"><span class="n">5</span><div>后续段 <b>'+esc(tfmSeg.hub)+' → '+esc(tfmSeg.b.name)+'</b> 随联程放行，全程计 1 次优惠。</div></div>'+
+      '<div class="tfm-note">实际以 12306 出票为准；若该中转站没有合适的后续车，回到上一步换一个站。</div>';
+  }
+  document.getElementById('tfmNext').style.display = tfmStep===4?'none':'';
+  document.getElementById('tfmPrev').style.display = tfmStep===1?'none':'';
+  document.getElementById('tfmNext').textContent = tfmStep===2&&document.getElementById('tfmNext') ? (tfmStep===2?'下一步':'下一步') : '下一步';
+}
+function tfmPick(j){
+  const c=tfmHubs[tfmIdx][j];
+  if(!c||!tfmSeg)return;
+  tfmSeg.hub=c.name; // 后续步骤以该站为例
+  tfmStep=3; tfmRender();
+}
+function tfmNext(){ if(tfmSeg) tfmStep=Math.min(4,tfmStep+1); tfmRender(); }
+function tfmPrev(){ if(tfmSeg) tfmStep=Math.max(1,tfmStep-1); tfmRender(); }
+function closeTfm(){document.getElementById('tfm').style.display='none';tfmSeg=null;}
 function adopt(name){
   const r=resolvePlace(name);
   if(!r)return;
   state.home={text:r.station.name,point:r.point,station:r.station};
-  state.depart=state.home.station;
-  $('depLine').innerHTML='📍 出发地：<b>'+esc(r.station.name)+'</b><span>（路线从这里出发，按下面顺序走完再回这里）</span>';
+  // 出发地(state.depart)保持不变 — 只改区间端点(家)
+  locateDepartLine();
   onPlan();
+}
+function locateDepartLine(){
+  const d=state.depart||(state.home&&state.home.station);
+  $('depLine').innerHTML='出发地：<b>'+esc(d?d.name:'——')+'</b><span>（固定不变；推荐只改"家"端点）</span>';
 }
 function paramHTML(){
   const v=state.ratioMax;
@@ -374,7 +502,7 @@ function statsRead(){try{return JSON.parse(localStorage.getItem('srp_stats'))||{
 function statsWrite(s){try{localStorage.setItem('srp_stats',JSON.stringify(s));}catch(e){}}
 function statsVisit(){let s=statsRead();let seen=false;try{seen=sessionStorage.getItem('srp_seen')==='1';}catch(e){}if(!seen){s.v++;statsWrite(s);try{sessionStorage.setItem('srp_seen','1');}catch(e){}}statsShow();}
 function statsPlan(){const s=statsRead();s.p++;statsWrite(s);statsShow();}
-function statsShow(){const el=document.getElementById('statLine');if(!el)return;const s=statsRead();el.textContent=' 👁 访问 '+s.v+' · 🚀 规划 '+s.p;}
+function statsShow(){/* 仅后台统计, 不显示 */}
 window.addEventListener('error',()=>{});
 </script>
 </body>
