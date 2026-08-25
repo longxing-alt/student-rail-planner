@@ -387,12 +387,13 @@ Page({
       const sg = segOf(i);
       const hubs = hubsOf(S, H, sg && sg.a ? sg.a : (state.depart || H));
       const hubChips = hubs.map((hc, k) => ({ m: NUMS[k] || (k+1) + '.', n: hc.name, cur: hc.name === (sg && sg.hub), idx: k }));
+      const plannedNow = planned && S && H;
       return {
         key: 't' + t.id, id: t.id, text: t.text,
         boxCls: j === 2 ? 'ok' : j === 1 ? 'edge' : j === 0 ? 'bad' : '',
-        ring: j === 2 ? 'ok' : j === 1 ? 'edge' : j === 0 ? 'bad' : 'none',
-        status: j >= 1 ? segTxt(i) : '',
-        hub: hub ? sg.hub : '', hubs: hub ? hubChips : [],
+        ring: plannedNow && j >= 0 ? (j === 2 ? 'ok' : j === 1 ? 'edge' : 'bad') : '', // 规划前不显示圆点(与网页添加列表一致)
+        status: plannedNow && j >= 1 ? segTxt(i) : '',
+        hub: plannedNow && hub ? sg.hub : '', hubs: plannedNow && hub ? hubChips : [],
         anim: false,
       };
     });

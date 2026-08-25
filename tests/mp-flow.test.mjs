@@ -88,6 +88,7 @@ const flow = async () => {
   }
   check('添加 6 个目的地', p.data.tripCount === 6);
   check('起点行=石家庄', p.data.startName === '石家庄');
+  check('规划前: 行精简(无圆点/状态/中转候选, 与网页添加列表一致)', p.data.rows.every(r => r.ring === '' && r.status === '' && !r.hub && r.hubs.length === 0));
 
   console.log('== 场景2: 一键规划 ==');
   p.onPlan.call(p); await sync();
@@ -95,6 +96,7 @@ const flow = async () => {
   check('联程未全段可出 → 消耗 0 次', p.data.used === 0 && p.data.remain === 4);
   check('判定: 2绿5红(联程7段·含1中转可出)', p.data.okN === 2 && p.data.badN === 5);
   check('框体已着色', p.data.rows.some(r => r.boxCls === 'bad') && p.data.rows.some(r => r.boxCls === 'ok'));
+  check('规划后: 行展开(圆点+状态出现)', p.data.rows.every(r => r.ring !== '' || r.status !== '' || r.hub !== '') && p.data.rows.some(r => r.status !== ''));
   check('弹窗推荐弹出', p.data.modal.show === true && p.data.modal.suggest && p.data.modal.suggest.name === '南宁');
   console.log('  推荐:', p.data.modal.suggest.name, '| 预览:', p.data.modal.g2 + '绿/' + p.data.modal.e2 + '橙/' + p.data.modal.b2 + '红', '| 顺序:', p.data.rows.map(r => r.text).join('→')); // 注: cap带宽(0.55L≤450km)后推荐由南宁东→崇左南
 
