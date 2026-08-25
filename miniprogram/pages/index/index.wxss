@@ -203,4 +203,4 @@ page {
 .hub-tag{color:#92400e}
 
 .hub-grid{display:flex;flex-wrap:wrap;gap:6px;margin-top:4px}
-.hub-grid .hub-chip{width:calc(50% - 3px);text-align:center;margin:0;box-sizing:border-box}
+.hub-grid .hub-chip{width:auto;text-align:center;margin:0;box-sizing:border-box}

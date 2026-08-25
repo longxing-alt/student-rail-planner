@@ -348,19 +348,24 @@ Page({
   },
   closeModal() { this.setData({ 'modal.show': false }); },
   /* 中转段点击: 分步向导(与网页端一致) */
-  tfmTap(e) {
-    const i = Number(e.currentTarget.dataset.i);
+  openTfmAt(i, startStep) {
     const cc = this._cc;
     const sg = cc && cc.segs[i];
-    if (!sg || !sg.hub) return;
+    if (!sg) return;
     const S = state.school, H = state.home;
     const dep = state.depart || H;
     const cands = hubsOf(S, H, (sg.a && sg.a.name) ? sg.a : dep);
     this.setData({ tfm: {
-      show: true, step: 1, i,
-      hub: sg.hub, a: sg.a ? sg.a.name : '', b: sg.b ? sg.b.name : '',
+      show: true, step: startStep || 1, i,
+      hub: sg.hub || (cands[0] ? cands[0].name : ''), a: sg.a ? sg.a.name : '', b: sg.b ? sg.b.name : '',
       S: S ? S.name : '学校', H: H ? H.name : '家', cands,
     } });
+  },
+  tfmTap(e) {
+    const i = Number(e.currentTarget.dataset.i);
+    const sg = this._cc && this._cc.segs[i];
+    if (!sg || !sg.hub) return;
+    this.openTfmAt(i, 1);
   },
   setHubTap(e) {
     logOp("选择中转站");
@@ -373,6 +378,7 @@ Page({
     this.hubOverride = this.hubOverride || {};
     this.hubOverride[i] = c.name;   // 该段最终中转=所选站
     this.renderAll();
+    this.openTfmAt(i, 3);           // 随即弹出操作说明(第3步: 以所选站为例)
   },
   tfmPick(j) {
     const tfm = this.data.tfm;
