@@ -324,6 +324,7 @@ Page({
     this.renderAll();
     this.closeModal();
     this.setStatus('已按推荐改家为 ' + state.home.name + '；出发地（' + (state.depart ? state.depart.name : state.home.name) + '）不变，已按新区间 ' + state.school.name + ' ⇄ ' + state.home.name + ' 重新判定');
+    console.log('[区间分析] 已采用推荐：家→' + state.home.name + '，新区间 ' + state.school.name + ' ⇄ ' + state.home.name);
   },
   closeModal() { this.setData({ 'modal.show': false }); },
   /* 中转段点击: 分步向导(与网页端一致) */
@@ -385,6 +386,18 @@ Page({
     }).filter(Boolean);
     // 列表
     const NUMS = ['①', '②', '③', '④', '⑤', '⑥', '⑦', '⑧'];
+    // 控制台分析日志(供复制发送分析)
+    if (planned && S && H && cc) {
+      console.log('[区间分析] 学校 ' + S.name + ' | 家 ' + H.name + ' | 出发地 ' + (state.depart ? state.depart.name : H.name) + ' | 区间长 ' + Math.round(dist(S, H)) + 'km');
+      cc.segs.forEach((sg, i) => {
+        const hubs = hubsOf(S, H, sg.a || state.depart || H).slice(0, 4).map(h => h.name).join('、');
+        console.log('  #' + (i + 1) + ' ' + (sg.a ? sg.a.name : '?') + '→' + (sg.b ? sg.b.name : '?') + '：'
+          + (sg.inInt ? '直达 ✓'
+            : sg.hub ? '需中转 · 推荐经' + sg.hub + ' | 候选：' + hubs
+            : '区间外 · 需购成人票'));
+      });
+      console.log('  合计 ' + cc.okN + '/' + cc.segs.length + ' 段可出\n');
+    }
     const rows = state.trips.map((t, i) => {
       const ok = segOk(i), hub = segHub(i);
       const j = planned && S && H ? (ok ? (hub ? 1 : 2) : 0) : -1;
