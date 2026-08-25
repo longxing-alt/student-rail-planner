@@ -77,6 +77,7 @@ function sortByDepart(trips) {
 /* 区间内可选中转站(空间带, 按推荐从高到低=距发站近) */
 function hubsOf(S, H, dep) {
   const out = [];
+  if (!S || !H) return out;
   for (const sc of STATIONS) {
     if (sc[4] !== 1) continue;
     const T = { name: sc[0], city: sc[1], lat: sc[2], lon: sc[3] };
@@ -132,6 +133,8 @@ Page({
       ] },
   },
   onLoad() {
+    this.hubOverride = {};
+    this._cc = null;
     this.renderAll();
     this.setStatus('填写 ① 学校 开始');
   },
@@ -385,11 +388,11 @@ Page({
       const ok = segOk(i), hub = segHub(i);
       const j = planned && S && H ? (ok ? (hub ? 1 : 2) : 0) : -1;
       const sg = segOf(i);
-      const hubs = hubsOf(S, H, sg && sg.a ? sg.a : (state.depart || H));
+      const hubs = (planned && S && H) ? hubsOf(S, H, sg && sg.a ? sg.a : (state.depart || H)) : [];
       const hubChips = hubs.map((hc, k) => ({ m: NUMS[k] || (k+1) + '.', n: hc.name, cur: hc.name === (sg && sg.hub), idx: k }));
       const plannedNow = planned && S && H;
       return {
-        key: 't' + t.id, id: t.id, text: t.text,
+        key: 't' + t.id, id: t.id, iIdx: i, text: t.text,
         boxCls: j === 2 ? 'ok' : j === 1 ? 'edge' : j === 0 ? 'bad' : '',
         ring: plannedNow && j >= 0 ? (j === 2 ? 'ok' : j === 1 ? 'edge' : 'bad') : '', // 规划前不显示圆点(与网页添加列表一致)
         status: plannedNow && j >= 1 ? segTxt(i) : '',
