@@ -134,6 +134,7 @@ Page({
     rows: [], tdIndex: -1, tripCount: 0,
     planned: false, used: '–', budget: 4, remain: '–', okN: 0, edgeN: 0, badN: 0,
     tfm: { show: false, step: 1, i: -1, hub: '', a: '', b: '', S: '', H: '', cands: [] },
+    cntTip: { show: false, lines: [], used: '–', budget: 4, remain: '–' },
     status: '',
     modal: { show: false, suggest: null, g2: 0, e2: 0, b2: 0 },
     dbg: { on: false, badges: [], showLegend: false,
@@ -388,6 +389,26 @@ Page({
   tfmNext() { const st = Math.min(4, this.data.tfm.step + 1); this.setData({ 'tfm.step': st }); },
   tfmPrev() { const st = Math.max(1, this.data.tfm.step - 1); this.setData({ 'tfm.step': st }); },
   closeTfm() { this.setData({ 'tfm.show': false }); },
+  /* 次数疑问: 区间内消耗明细 */
+  showCntTip() {
+    const cc = this._cc;
+    if (!cc) return;
+    const groups = this._ticketGroups || [];
+    const lines = groups.map((g, gi) => {
+      const segs = g.map(i => cc.segs[i]);
+      const path = segs.map(sg => (sg.a ? sg.a.name : '') + '→' + (sg.b ? sg.b.name : '')).join('→');
+      const tag = segs.length === 2 ? '两段合成一张联程票（中转合一）' : (segs[0].inInt ? '直达单票' : '中转单票');
+      return '第' + (gi + 1) + '张 ' + path + '：' + tag + ' · 1 次';
+    });
+    // 区间外程(不计学生次数, 需成人票)
+    cc.segs.forEach((sg, i) => {
+      if (i < cc.segs.length && sg.ok === false) {
+        lines.push('区间外 ' + (sg.a ? sg.a.name : '') + '→' + (sg.b ? sg.b.name : '') + '：需购成人票（不计次数）');
+      }
+    });
+    this.setData({ cntTip: { show: true, lines, used: this.data.used, budget: state.budget, remain: state.budget - (typeof this.data.used === 'number' ? this.data.used : 0) } });
+  },
+  closeCntTip() { this.setData({ 'cntTip.show': false }); },
   noop() { },
 
   /* ---------- 渲染 ---------- */
@@ -439,13 +460,23 @@ Page({
         ring: plannedNow && j >= 0 ? (j === 2 ? 'ok' : j === 1 ? 'edge' : 'bad') : 'none', // 规划前圆点透明(不增删节点, 防渲染层错误)
         status: plannedNow && j >= 1 ? segTxt(i) : '',
         hub: plannedNow && hub ? sg.hub : '', hubs: plannedNow && hubChips.length ? hubChips : [],
+        tkt: (plannedNow && sg && sg.a && sg.b) ? (sg.a.name + '→' + sg.b.name) : '',
         anim: false,
       };
     });
     // 消耗次数(联程: 全程可出=1次/往返2次)
     const okN = cc ? cc.okN : 0;
     const badN = cc ? cc.segs.length - cc.okN : 0;
-    const used = cc && cc.okAll ? (state.trips.some(t => t.round) ? 2 : 1) : 0;
+    // 最省次数: 相邻可出程段两两合成一张联程票(单中转合一, 每张1次), 余段单票; 区间外不计
+    let ticketGroups = [];
+    if (cc) {
+      const legIdx = [];
+      cc.segs.forEach((sg, i) => { if (i < state.trips.length && sg.ok) legIdx.push(i); });
+      for (let k = 0; k < legIdx.length; k += 2) ticketGroups.push(legIdx.slice(k, k + 2));
+    }
+    const roundAll = state.trips.some(t => t.round);
+    const used = ticketGroups.length * (roundAll ? 2 : 1);
+    this._ticketGroups = ticketGroups;
     this.setData({
       ivS: S ? S.name : '学校', ivH: H ? H.name : '出发地', ivDots,
       startName: state.depart ? state.depart.name : '出发地',

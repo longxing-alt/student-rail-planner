@@ -325,12 +325,18 @@ function renderResult(){
   const cc=routeChain(S,H);
   cc.segs.forEach((sg,i)=>{ if(hubOverride[i]) sg.hub=hubOverride[i]; sg.ok=sg.inInt||sg.hub!=null; });
   const N=cc.segs.length,okN=cc.okN;
-  const used=cc.okAll?(roundAny()?2:1):0;
-  const remain=Math.max(0,state.budget-used);
+  let used=0, remain=Math.max(0,state.budget); // 在 tGroups 后按最省方案计算
   const sup=chainBestLocal();
   const curCover=cc.okN, curDirN=cc.segs.filter(sg=>sg.inInt).length;
   const hubN=cc.segs.filter(sg=>sg.hub).length;
   const dirN=cc.segs.filter(sg=>sg.inInt).length;
+  // 最省次数: 相邻可出程段两两合成联程票, 余段单票
+  const sgOkArr = cc.segs.map((sg, i) => (i < state.trips.length && sg.ok) ? i : -1).filter(i => i >= 0);
+  const tGroups = [];
+  for (let k = 0; k < sgOkArr.length; k += 2) tGroups.push(sgOkArr.slice(k, k + 2));
+  const minUsed = tGroups.length * (roundAny() ? 2 : 1);
+  used = minUsed;
+  remain = Math.max(0, state.budget - used);
   const hubList=cc.segs.map((sg,i)=>sg.hub?('第'+(i+1)+'程 经'+sg.hub):null).filter(Boolean).join('、');
   tfmHubs=cc.segs.map(sg=>sg.hub?hubsInBand(S,H):[]);
   let html='<div class="card" id="resCard">'+
@@ -338,6 +344,7 @@ function renderResult(){
     '<div class="sum">'+
     (cc.okAll?'联程全程可出':'<b>'+okN+'/'+N+'</b> 段可出 · '+(N-okN)+' 段需另购')+
     (hubN?(' · 中转 '+hubN+' 段（'+esc(hubList)+'）'):'')+
+    '<div style="font-size:11px;color:var(--ok);font-weight:600;margin-top:2px">最省方案：'+tGroups.length+' 张票 · '+used+' 次'+(roundAny()?'（往返×2）':'')+' · 剩余 '+remain+' 次</div>'+
     '<div style="font-size:11.5px;color:var(--mut);font-weight:500;margin-top:2px">其中 直达 '+dirN+' 段 · 数优先直达，实在没有才用中转</div>'+
     '</div><div class="note">出发地 '+esc((state.depart||H).name)+' · 区间 '+esc(S.name)+' ⇄ '+esc(H.name)+' · '+
     (cc.okAll?'全程联程 <b>'+used+'</b> 次 · 剩余 <b>'+remain+'</b> 次':'按 分段/搭桥 另计')+'</div>';
@@ -385,6 +392,16 @@ function renderResult(){
           '<button class="btn" style="margin-top:8px" onclick="adopt(\''+sup.st.name+'\')">采用推荐区间</button>'
         :'<div class="rec">当前区间已是最优（联程 '+curCover+'/'+N+' 段'+(curDirN?('，直达 '+curDirN+' 段'):'，均需中转')+'），无更好的家端点</div>');
   }
+  html+='<details><summary>🎫 次数明细（怎么省到最少）</summary>'+
+    tGroups.map((g, gi) => {
+      const segs = g.map(j => cc.segs[j]);
+      const path = segs.map(x => esc(x.a.name) + '→' + esc(x.b.name)).join('→');
+      return '<div class="mini-row"><div class="n">第' + (gi + 1) + '张 ' + path + '</div><div class="d">' + (segs.length === 2 ? '两段合成联程票（中转合一）' : (segs[0].inInt ? '直达' : '中转')) + ' · 1 次</div></div>';
+    }).join('') +
+    cc.segs.filter((sg, i) => i < state.trips.length && !sg.ok).map(sg =>
+      '<div class="mini-row"><div class="n">区间外 ' + esc(sg.a.name) + '→' + esc(sg.b.name) + '</div><div class="d">需购成人票 · 不计</div></div>').join('') +
+    '<div style="font-size:11.5px;color:var(--mut);margin-top:6px">每张票=1次（含中转联程）；相邻两段可合成一张单中转联程票；勾全程往返每张×2。</div>' +
+    '</details>';
   html+='<details><summary>更多家端点（区间优化）</summary>'+optRows()+'</details>';
   html+='<details><summary>参数：绕远倍数（通道判定上限）</summary>'+paramHTML()+'</details>';
   html+='</div>';

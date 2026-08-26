@@ -93,7 +93,7 @@ const flow = async () => {
   console.log('== 场景2: 一键规划 ==');
   p.onPlan.call(p); await sync();
   check('规划标记', p.data.planned === true);
-  check('联程未全段可出 → 消耗 0 次', p.data.used === 0 && p.data.remain === 4);
+  check('最省组票: 前2段合成1张联程票 → 消耗 1 次', p.data.used === 1 && p.data.remain === 3);
   check('判定: 2绿4红(联程6段·去程,含1中转)', p.data.okN === 2 && p.data.badN === 4);
   check('框体已着色', p.data.rows.some(r => r.boxCls === 'bad') && p.data.rows.some(r => r.boxCls === 'ok'));
   check('规划后: 行展开(圆点+状态出现)', p.data.rows.every(r => r.ring !== '' || r.status !== '' || r.hub !== '') && p.data.rows.some(r => r.status !== ''));
