@@ -401,18 +401,14 @@ Page({
   showCntTip() {
     const cc = this._cc;
     if (!cc) return;
-    const groups = this._ticketGroups || [];
-    const lines = groups.map((g, gi) => {
-      const segs = g.map(i => cc.segs[i]);
-      const path = segs.map(sg => (sg.a ? sg.a.name : '') + '→' + (sg.b ? sg.b.name : '')).join('→');
-      const tag = segs.length === 2 ? '两段合成一张联程票（中转合一）' : (segs[0].inInt ? '直达单票' : '中转单票');
-      return '第' + (gi + 1) + '张 ' + path + '：' + tag + ' · 1 次';
-    });
-    // 区间外程(不计学生次数, 需成人票)
-    cc.segs.forEach((sg, i) => {
-      if (i < cc.segs.length && sg.ok === false) {
-        lines.push('区间外 ' + (sg.a ? sg.a.name : '') + '→' + (sg.b ? sg.b.name : '') + '：需购成人票（不计次数）');
+    const lines = cc.segs.map((sg, i) => {
+      const isTrip = i < state.trips.length;
+      const t = isTrip ? state.trips[i] : null;
+      if (!isTrip || sg.ok === false) {
+        return (isTrip ? '区间外 ' : '回程 ') + (sg.a ? sg.a.name : '') + '→' + (sg.b ? sg.b.name : '') + '：需购成人票（不计学生次数）';
       }
+      return '第' + (i + 1) + '张 ' + (sg.a ? sg.a.name : '') + '→' + (sg.b ? sg.b.name : '') + '：'
+        + (sg.inInt ? '直达' : '中转·经' + sg.hub) + (t && t.round ? ' · 往返 2 次' : ' · 1 次');
     });
     this.setData({ cntTip: { show: true, lines, used: this.data.used, budget: state.budget, remain: state.budget - (typeof this.data.used === 'number' ? this.data.used : 0) } });
   },
@@ -475,16 +471,9 @@ Page({
     // 消耗次数(联程: 全程可出=1次/往返2次)
     const okN = cc ? cc.okN : 0;
     const badN = cc ? cc.segs.length - cc.okN : 0;
-    // 最省次数: 相邻可出程段两两合成一张联程票(单中转合一, 每张1次), 余段单票; 区间外不计
-    let ticketGroups = [];
-    if (cc) {
-      const legIdx = [];
-      cc.segs.forEach((sg, i) => { if (i < state.trips.length && sg.ok) legIdx.push(i); });
-      for (let k = 0; k < legIdx.length; k += 2) ticketGroups.push(legIdx.slice(k, k + 2));
-    }
+    // 按程计次: 每程=1张票(每程可自行加一次中转查询, 中转次数不限), 单程1次/往返2次, 区间外不计
     const roundAll = state.trips.some(t => t.round);
-    const used = ticketGroups.length * (roundAll ? 2 : 1);
-    this._ticketGroups = ticketGroups;
+    const used = cc ? state.trips.reduce((sum, t, i) => sum + ((segOf(i) && segOf(i).ok) ? (t.round ? 2 : 1) : 0), 0) : 0;
     this.setData({
       ivS: S ? S.name : '学校', ivH: H ? H.name : '出发地', ivDots,
       startName: state.depart ? state.depart.name : '出发地',
