@@ -290,7 +290,8 @@ function railDist(city) {
 /* 空间带: 投影 t∈[-0.15,1.2] + 带宽(端内0.55L≤450 / 端外0.4L≥75) */
 function bandOK(S, H, P) {
   const L = dist(S, H);
-  if (L < 15) return dist(S, P) <= 50;
+  // 极短区间(端点几乎同城, L<150): 端点近邻圈≤400km 全可出(实测: 广州⇄佛山27km 下 深圳/珠海/中山/东莞/厦门 全放行)
+  if (L < 150) return dist(S, P) <= 600 || dist(H, P) <= 600; // 实测 厦门527km 亦放行; 上界待 苏⇄沪 收紧
   const { t, p } = corridor(S, H, P);
   if (t < -0.15 || t > 1.2) return false;
   // 带宽按侧分开: 端内 0.55L(由通道网兜底); 校侧端点外(t<0) 0.2L·底250(实测: 广州0.29L拦/南昌0.04L放/黑河0.09L放);
