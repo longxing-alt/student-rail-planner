@@ -467,6 +467,7 @@ const w = (t < 0.0) ? Math.max(250, 0.2 * L)
 function chanOK(S, H, P) {
   const g = railAdj();
   if (!P || !P.city || !S || !S.city || !H || !H.city) return false;
+  if (dist(S, H) < 150) return bandOK(S, H, P); // 极短区间: 通道退化为近邻圈判定(600km)
   if (!g.nodes.has(S.city) || !g.nodes.has(H.city)) return bandOK(S, H, P);
   const L = dist(S, H);
   const dS = railDist(S.city), dH = railDist(H.city);
