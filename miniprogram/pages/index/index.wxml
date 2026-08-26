@@ -64,6 +64,7 @@
           <text class="handle" data-i="{{index}}" catchtouchstart="tdStart" catchtouchmove="tdMove" catchtouchend="tdEnd">≡</text>
           <view class="ring {{item.ring}}"></view>
           <text class="name">{{item.text}}</text>
+          <text class="tkt" wx:if="{{item.tkt}}">{{item.tkt}}</text>
           <text class="status" wx:if="{{item.status}}">{{item.status}}</text>
           <view wx:if="{{item.hubs.length}}" class="hub-line">
             <text class="hub-tag">最终中转可选：</text>
@@ -74,6 +75,8 @@
           <text class="x" data-id="{{item.id}}" catchtap="removeTrip">✕</text>
         </view>
       </view>
+
+      <view class="cnt-entry" wx:if="{{planned}}" catchtap="showCntTip">❓ 当前消耗次数有疑问？点此查看区间内明细</view>
 
       <!-- 结果: 消耗次数 -->
       <view class="result {{planned?'show':''}}">
@@ -124,6 +127,21 @@
 
   <view class="footer">
     免责声明：判定结果基于实测数据推算，仅供参考，实际以 12306 出票为准；不构成购票或区间修改建议。
+  </view>
+
+  <!-- 次数明细弹窗 -->
+  <view class="mask" wx:if="{{cntTip.show}}" bindtap="closeCntTip">
+    <view class="dialog" catchtap="noop">
+      <view class="dialog-title">🎫 次数明细（区间内怎么消耗）<text class="dialog-close" catchtap="closeCntTip">✕</text></view>
+      <view class="dialog-body">
+        <view class="m-line" wx:for="{{cntTip.lines}}" wx:key="*this">{{item}}</view>
+        <view class="m-note">每程=1张票：直达到达计 1 次，中转联程（同一程内）仍计该程 1 次；勾选全程往返再 +1 次/程。区间外程不计学生优惠。</view>
+        <view class="m-line"><b>合计 {{cntTip.used}} / {{cntTip.budget}} 次 · 剩余 {{cntTip.remain}} 次</b></view>
+      </view>
+      <view class="dialog-btns">
+        <button hover-class="bh" class="btn primary sm" catchtap="closeCntTip">知道了</button>
+      </view>
+    </view>
   </view>
 
   <!-- 中转购买说明(分步向导, 仿网页) -->
