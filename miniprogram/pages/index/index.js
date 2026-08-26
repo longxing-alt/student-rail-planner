@@ -401,17 +401,24 @@ Page({
   showCntTip() {
     const cc = this._cc;
     if (!cc) return;
-    const lines = cc.segs.map((sg, i) => {
-      const isTrip = i < state.trips.length;
-      const t = isTrip ? state.trips[i] : null;
-      if (!isTrip || sg.ok === false) {
-        return (isTrip ? '区间外 ' : '回程 ') + (sg.a ? sg.a.name : '') + '→' + (sg.b ? sg.b.name : '') + '：需购成人票（不计学生次数）';
-      }
-      return '第' + (i + 1) + '张 ' + (sg.a ? sg.a.name : '') + '→' + (sg.b ? sg.b.name : '') + '：'
-        + (sg.inInt ? '直达' : '中转·经' + sg.hub) + (t && t.round ? ' · 往返 2 次' : ' · 1 次');
+    const groups = this._ticketGroups || [];
+    const lines = [];
+    groups.forEach((g, gi) => {
+      const segs = g.map(j => cc.segs[j]);
+      const path = segs.map(x => (x.a ? x.a.name : '') + '→' + (x.b ? x.b.name : '')).join('→');
+      const tag = segs.length === 2 ? '两段合一（一次中转查询，1张票）' : (segs[0].inInt ? '直达单票' : '中转单票');
+      lines.push('第' + (gi + 1) + '张 ' + path + '：' + tag + ' · 1 次');
     });
-    this.setData({ cntTip: { show: true, lines, used: this.data.used, budget: state.budget, remain: state.budget - (typeof this.data.used === 'number' ? this.data.used : 0) } });
+    cc.segs.forEach((sg, i) => {
+      if (i < state.trips.length && !sg.ok) {
+        lines.push('区间外 ' + (sg.a ? sg.a.name : '') + '→' + (sg.b ? sg.b.name : '') + '：需购成人票（不计学生次数）');
+      }
+    });
+    const sep = groups.reduce((s2, g) => s2 + g.length, 0);
+    lines.push('分开买则每程 1 张 = ' + sep + ' 次（往返×2则各×2）');
+    this.setData({ cntTip: { show: true, lines, used: this.data.used, budget: state.budget, remain: (state.budget - (typeof this.data.used === 'number' ? this.data.used : 0)) } });
   },
+
   closeCntTip() { this.setData({ 'cntTip.show': false }); },
   noop() { },
 
@@ -471,9 +478,15 @@ Page({
     // 消耗次数(联程: 全程可出=1次/往返2次)
     const okN = cc ? cc.okN : 0;
     const badN = cc ? cc.segs.length - cc.okN : 0;
-    // 按程计次: 每程=1张票(每程可自行加一次中转查询, 中转次数不限), 单程1次/往返2次, 区间外不计
+    // 计次: 相邻可出程段两两合一(一次中转查询, 每张1次)→最少购票; 分开买=每程1张
     const roundAll = state.trips.some(t => t.round);
-    const used = cc ? state.trips.reduce((sum, t, i) => sum + ((segOf(i) && segOf(i).ok) ? (t.round ? 2 : 1) : 0), 0) : 0;
+    const okLegs = [];
+    if (cc) cc.segs.forEach((sg, i) => { if (i < state.trips.length && sg.ok) okLegs.push(i); });
+    const groups = [];
+    for (let k = 0; k < okLegs.length; k += 2) groups.push(okLegs.slice(k, k + 2));
+    this._ticketGroups = groups;
+    const used = groups.length * (roundAll ? 2 : 1);
+    this._sepaUsed = okLegs.length * (roundAll ? 2 : 1);
     this.setData({
       ivS: S ? S.name : '学校', ivH: H ? H.name : '出发地', ivDots,
       startName: state.depart ? state.depart.name : '出发地',
