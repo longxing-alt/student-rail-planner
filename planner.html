@@ -926,17 +926,20 @@ function renderResult(){
   const cc=routeChain(S,H);
   cc.segs.forEach((sg,i)=>{ if(hubOverride[i]) sg.hub=hubOverride[i]; sg.ok=sg.inInt||sg.hub!=null; });
   const N=cc.segs.length,okN=cc.okN;
-  let used=0, remain=Math.max(0,state.budget), sepaUsed2=0;
+  let used=0, remain=Math.max(0,state.budget);
   const sup=chainBestLocal();
   const curCover=cc.okN, curDirN=cc.segs.filter(sg=>sg.inInt).length;
   const hubN=cc.segs.filter(sg=>sg.hub).length;
   const dirN=cc.segs.filter(sg=>sg.inInt).length;
-  // 计次: 相邻可出段两两合一→最少购票; 分开买=每程1张
-  const sgOkArr2 = cc.segs.map((sg, i) => (i < state.trips.length && sg.ok) ? i : -1).filter(i => i >= 0);
-  const tGroups2 = [];
-  for (let k = 0; k < sgOkArr2.length; k += 2) tGroups2.push(sgOkArr2.slice(k, k + 2));
-  used = tGroups2.length * (roundAny() ? 2 : 1);
-  sepaUsed2 = sgOkArr2.length * (roundAny() ? 2 : 1);
+  // 计次: 连续可出段=同一趟行程(无绕路,非往返)→1次; 区间外断程切分; 往返×2
+  const okRuns = [];
+  let curR = [];
+  cc.segs.forEach((sg, i) => {
+    if (i < state.trips.length && sg.ok) curR.push(i);
+    else if (curR.length) { okRuns.push(curR); curR = []; }
+  });
+  if (curR.length) okRuns.push(curR);
+  used = Math.max(1, okRuns.length) * (roundAny() ? 2 : 1);
   remain = Math.max(0, state.budget - used);
   const hubList=cc.segs.map((sg,i)=>sg.hub?('第'+(i+1)+'程 经'+sg.hub):null).filter(Boolean).join('、');
   tfmHubs=cc.segs.map(sg=>sg.hub?hubsInBand(S,H):[]);
@@ -945,7 +948,7 @@ function renderResult(){
     '<div class="sum">'+
     (cc.okAll?'联程全程可出':'<b>'+okN+'/'+N+'</b> 段可出 · '+(N-okN)+' 段需另购')+
     (hubN?(' · 中转 '+hubN+' 段（'+esc(hubList)+'）'):'')+
-    '<div style="font-size:11px;color:var(--ok);font-weight:600;margin-top:2px">可合并购票：'+tGroups2.length+' 张票 · '+used+' 次'+(roundAny()?'（往返×2）':'')+'（分开买 '+sepaUsed2+' 次）· 剩余 '+remain+' 次</div>'+
+    '<div style="font-size:11px;color:var(--ok);font-weight:600;margin-top:2px">连续联程（无绕路·非往返）：'+okRuns.length+' 趟行程 · 共 '+used+' 次'+(roundAny()?'（往返×2）':'')+' · 剩余 '+remain+' 次</div>'+
     '<div style="font-size:11.5px;color:var(--mut);font-weight:500;margin-top:2px">其中 直达 '+dirN+' 段 · 数优先直达，实在没有才用中转</div>'+
     '</div><div class="note">出发地 '+esc((state.depart||H).name)+' · 区间 '+esc(S.name)+' ⇄ '+esc(H.name)+' · '+
     (cc.okAll?'全程联程 <b>'+used+'</b> 次 · 剩余 <b>'+remain+'</b> 次':'按 分段/搭桥 另计')+'</div>';
@@ -993,15 +996,16 @@ function renderResult(){
           '<button class="btn" style="margin-top:8px" onclick="adopt(\''+sup.st.name+'\')">采用推荐区间</button>'
         :'<div class="rec">当前区间已是最优（联程 '+curCover+'/'+N+' 段'+(curDirN?('，直达 '+curDirN+' 段'):'，均需中转')+'），无更好的家端点</div>');
   }
-  html+='<details><summary>🎫 次数明细（可合并购票）</summary>'+
-    tGroups2.map((g, gi) => {
-      const segs = g.map(j => cc.segs[j]);
+  html+='<details><summary>🎫 次数明细（连续行程怎么计）</summary>'+
+    okRuns.map((run, ri) => {
+      const segs = run.map(j => cc.segs[j]);
       const path = segs.map(x => esc(x.a.name) + '→' + esc(x.b.name)).join('→');
-      return '<div class="mini-row"><div class="n">第' + (gi + 1) + '张 ' + path + '</div><div class="d">' + (segs.length === 2 ? '两段合一·一次中转查询' : (segs[0].inInt ? '直达' : '中转')) + ' · 1 次</div></div>';
+      const tags = segs.map(x => x.inInt ? '直达' : '中转·经' + esc(x.hub)).join(' / ');
+      return '<div class="mini-row"><div class="n">行程' + (ri + 1) + ' ' + path + '</div><div class="d">全程联程（无绕路）· 计 1 次（' + tags + '）</div></div>';
     }).join('') +
     cc.segs.filter((sg, i) => i < state.trips.length && !sg.ok).map(sg =>
-      '<div class="mini-row"><div class="n">区间外 ' + esc(sg.a.name) + '→' + esc(sg.b.name) + '</div><div class="d">需购成人票·不计</div></div>').join('') +
-    '<div style="font-size:11.5px;color:var(--mut);margin-top:6px">相邻两段可合成一张票（购票时查询一次中转）；分开买则每程 1 张=每程 1 次；勾全程往返每张×2；区间外程需成人票。</div>'+
+      '<div class="mini-row"><div class="n">区间外 ' + esc(sg.a.name) + '→' + esc(sg.b.name) + '</div><div class="d">需购成人票（此段断开行程）</div></div>').join('') +
+    '<div style="font-size:11.5px;color:var(--mut);margin-top:6px">规则：同一趟连续行程（不折返、不往返）无论分几张票/几次中转，全程计 1 次；勾全程往返则 ×2；区间外段需成人票并断开行程。</div>'+
     '</details>';
   html+='<details><summary>更多家端点（区间优化）</summary>'+optRows()+'</details>';
   html+='<details><summary>参数：绕远倍数（通道判定上限）</summary>'+paramHTML()+'</details>';

@@ -401,21 +401,20 @@ Page({
   showCntTip() {
     const cc = this._cc;
     if (!cc) return;
-    const groups = this._ticketGroups || [];
+    const runs = this._ticketRuns || [];
     const lines = [];
-    groups.forEach((g, gi) => {
-      const segs = g.map(j => cc.segs[j]);
+    runs.forEach((run, ri) => {
+      const segs = run.map(j => cc.segs[j]);
       const path = segs.map(x => (x.a ? x.a.name : '') + '→' + (x.b ? x.b.name : '')).join('→');
-      const tag = segs.length === 2 ? '两段合一（一次中转查询，1张票）' : (segs[0].inInt ? '直达单票' : '中转单票');
-      lines.push('第' + (gi + 1) + '张 ' + path + '：' + tag + ' · 1 次');
+      const tags = segs.map(x => x.inInt ? '直达' : '中转·经' + x.hub).join(' / ');
+      lines.push('行程' + (ri + 1) + ' ' + path + '：全程联程（无绕路）· 计 1 次（' + tags + '）');
     });
     cc.segs.forEach((sg, i) => {
       if (i < state.trips.length && !sg.ok) {
-        lines.push('区间外 ' + (sg.a ? sg.a.name : '') + '→' + (sg.b ? sg.b.name : '') + '：需购成人票（不计学生次数）');
+        lines.push('区间外 ' + (sg.a ? sg.a.name : '') + '→' + (sg.b ? sg.b.name : '') + '：需购成人票（此段断开行程）');
       }
     });
-    const sep = groups.reduce((s2, g) => s2 + g.length, 0);
-    lines.push('分开买则每程 1 张 = ' + sep + ' 次（往返×2则各×2）');
+    lines.push('规则：同一趟连续行程（不折返、不往返）无论分几张票/几次中转，全程计 1 次；勾全程往返则 ×2。');
     this.setData({ cntTip: { show: true, lines, used: this.data.used, budget: state.budget, remain: (state.budget - (typeof this.data.used === 'number' ? this.data.used : 0)) } });
   },
 
@@ -478,15 +477,17 @@ Page({
     // 消耗次数(联程: 全程可出=1次/往返2次)
     const okN = cc ? cc.okN : 0;
     const badN = cc ? cc.segs.length - cc.okN : 0;
-    // 计次: 相邻可出程段两两合一(一次中转查询, 每张1次)→最少购票; 分开买=每程1张
+    // 计次: 连续可出段=同一趟行程(无绕路,非往返)→1次; 区间外断程会切分行程; 往返×2
     const roundAll = state.trips.some(t => t.round);
-    const okLegs = [];
-    if (cc) cc.segs.forEach((sg, i) => { if (i < state.trips.length && sg.ok) okLegs.push(i); });
-    const groups = [];
-    for (let k = 0; k < okLegs.length; k += 2) groups.push(okLegs.slice(k, k + 2));
-    this._ticketGroups = groups;
-    const used = groups.length * (roundAll ? 2 : 1);
-    this._sepaUsed = okLegs.length * (roundAll ? 2 : 1);
+    const runs = [];
+    let cur = [];
+    if (cc) cc.segs.forEach((sg, i) => {
+      if (i < state.trips.length && sg.ok) { cur.push(i); }
+      else if (cur.length) { runs.push(cur); cur = []; }
+    });
+    if (cur.length) runs.push(cur);
+    this._ticketRuns = runs;
+    const used = Math.max(1, runs.length) * (roundAll ? 2 : 1);
     this.setData({
       ivS: S ? S.name : '学校', ivH: H ? H.name : '出发地', ivDots,
       startName: state.depart ? state.depart.name : '出发地',
