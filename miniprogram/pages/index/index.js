@@ -29,16 +29,24 @@ function bestRoute(S, H, trips) {
   const arr = trips.slice();
   if (arr.length <= 1) return arr;
   const sts = arr.map(t => t.station);
+  const ticketCount = oks => { let t = 0, r = 0; for (const o of oks) { if (o) r++; else { t += Math.ceil(r / 2); r = 0; } } return t + Math.ceil(r / 2); };
   const evalOrder = ord => {
-    let ok = 0, km = 0, prev = H;
-    for (const i of ord) {
-      const q = sts[i];
-      if (logic.beltV2(S, H, prev) === 2 && logic.beltV2(S, H, q) === 2) ok++;
+    const oks = []; let dirN = 0, km = 0, prev = H, sim = 0;
+    for (let k = 0; k < ord.length; k++) {
+      const i = ord[k], q = sts[i];
+      const d = logic.beltV2(S, H, prev) === 2 && logic.beltV2(S, H, q) === 2;
+      oks.push(d); if (d) dirN++;
+      if (ord[k] === k) sim++;           // 与原始输入顺序一致度
       km += dist(prev, q); prev = q;
     }
     km += dist(prev, H);
-    return { ok, km };
+    return { tickets: ticketCount(oks), okN: oks.filter(Boolean).length, dirN, sim, km };
   };
+  const better = (a, b) => a.tickets !== b.tickets ? a.tickets < b.tickets
+    : a.okN !== b.okN ? a.okN > b.okN
+    : a.dirN !== b.dirN ? a.dirN > b.dirN
+    : a.sim !== b.sim ? a.sim > b.sim
+    : a.km < b.km;
   const n = arr.length;
   let bestOrd = null, bestScore = null;
   if (n <= 9) {
@@ -46,7 +54,7 @@ function bestRoute(S, H, trips) {
     (function dfs() {
       if (perm.length === n) {
         const sc = evalOrder(perm);
-        if (!bestScore || sc.ok > bestScore.ok || (sc.ok === bestScore.ok && sc.km < bestScore.km)) { bestScore = sc; bestOrd = perm.slice(); }
+        if (!bestScore || better(sc, bestScore)) { bestScore = sc; bestOrd = perm.slice(); }
         return;
       }
       for (let i = 0; i < n; i++) if (!used[i]) { used[i] = 1; perm.push(i); dfs(); used[i] = 0; perm.pop(); }
@@ -63,7 +71,7 @@ function bestRoute(S, H, trips) {
       improved = false;
       for (let i = 0; i < n - 1; i++) {
         const a = ord.slice(), tmp = a[i]; a[i] = a[i + 1]; a[i + 1] = tmp;
-        if (evalOrder(a).ok > evalOrder(ord).ok) { ord = a; improved = true; }
+        if (better(evalOrder(a), evalOrder(ord))) { ord = a; improved = true; }
       }
     }
     bestOrd = ord;

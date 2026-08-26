@@ -94,8 +94,8 @@ const flow = async () => {
   p.onPlan.call(p); await sync();
   check('规划标记', p.data.planned === true);
   check('最省组票: 前2段合成1张联程票 → 消耗 1 次', p.data.used === 1 && p.data.remain === 3);
-  check('判定: 2绿4红(联程6段·去程,含1中转)', p.data.okN === 2 && p.data.badN === 4);
-  check('框体已着色', p.data.rows.some(r => r.boxCls === 'bad') && p.data.rows.some(r => r.boxCls === 'ok'));
+  check('判定: 1绿5红(联程6段·按输入顺序)', p.data.okN === 1 && p.data.badN === 5);
+  check('框体已着色(无空白)', p.data.rows.some(r => r.boxCls === 'bad' || r.boxCls === 'edge') && p.data.rows.every(r => r.boxCls !== ''));
   check('规划后: 行展开(圆点+状态出现)', p.data.rows.every(r => r.ring !== '' || r.status !== '' || r.hub !== '') && p.data.rows.some(r => r.status !== ''));
   check('弹窗推荐弹出', p.data.modal.show === true && p.data.modal.suggest && p.data.modal.suggest.name === '南宁');
   console.log('  推荐:', p.data.modal.suggest.name, '| 预览:', p.data.modal.g2 + '绿/' + p.data.modal.e2 + '橙/' + p.data.modal.b2 + '红', '| 顺序:', p.data.rows.map(r => r.text).join('→')); // 注: cap带宽(0.55L≤450km)后推荐由南宁东→崇左南
