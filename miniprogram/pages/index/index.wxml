@@ -125,9 +125,6 @@
     </view>
   </view>
 
-  <view class="share-row">
-    <button class="share-btn" open-type="share">分享给同学</button>
-  </view>
   <view class="footer">
     免责声明：判定结果基于实测数据推算，仅供参考，实际以 12306 出票为准；不构成购票或区间修改建议。
     <view style="margin-top:6px">ICP备案号：冀ICP备2026033460号-1</view>
