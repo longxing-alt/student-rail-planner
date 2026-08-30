@@ -156,9 +156,9 @@ Page({
   onLoad() {
     this.hubOverride = {};
     this._cc = null;
-    // 开启分享: 右上角菜单转发 + 朋友圈
+    // 开启分享: 仅转发到会话(好友), 不发朋友圈; 右上角菜单自带『复制链接』可提取 #小程序:// 链接
     if (wx.showShareMenu) {
-      try { wx.showShareMenu({ menus: ['shareAppMessage', 'shareTimeline'], withShareTicket: true }); } catch (e) { }
+      try { wx.showShareMenu({ menus: ['shareAppMessage'], withShareTicket: true }); } catch (e) { }
     }
     this.renderAll();
     this.setStatus('填写 ① 学校 开始');
@@ -433,9 +433,7 @@ Page({
   onShareAppMessage() {
     return { title: this.shareText(), path: '/pages/index/index' };
   },
-  onShareTimeline() {
-    return { title: this.shareText() };
-  },
+
 
   /* ---------- 渲染 ---------- */
   renderAll() {
