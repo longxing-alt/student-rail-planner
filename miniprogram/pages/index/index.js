@@ -156,6 +156,10 @@ Page({
   onLoad() {
     this.hubOverride = {};
     this._cc = null;
+    // 开启分享: 右上角菜单转发 + 朋友圈
+    if (wx.showShareMenu) {
+      try { wx.showShareMenu({ menus: ['shareAppMessage', 'shareTimeline'], withShareTicket: true }); } catch (e) { }
+    }
     this.renderAll();
     this.setStatus('填写 ① 学校 开始');
   },
@@ -420,6 +424,18 @@ Page({
 
   closeCntTip() { this.setData({ 'cntTip.show': false }); },
   noop() { },
+  /* 分享方案: 转发/朋友圈 统一文案 */
+  shareText() {
+    const S = state.school, H = state.home, N = state.trips.length;
+    if (S && H) return '学生票区间规划 · ' + S.name + ' ⇄ ' + H.name + (N ? ' · ' + N + ' 程查票' : '');
+    return '学生票区间规划 · 看看你的优惠区间能去哪';
+  },
+  onShareAppMessage() {
+    return { title: this.shareText(), path: '/pages/index/index' };
+  },
+  onShareTimeline() {
+    return { title: this.shareText() };
+  },
 
   /* ---------- 渲染 ---------- */
   renderAll() {

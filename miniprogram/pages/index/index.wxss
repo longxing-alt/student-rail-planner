@@ -208,3 +208,8 @@ page {
 /* 1.0.14: 票面标签 + 次数疑问入口 */
 .tkt{font-size:10px;color:#a8a29e;margin-left:auto;padding-right:6px}
 .cnt-entry{margin-top:2px;padding:10px 12px;font-size:12.5px;color:#4f46e5;background:rgba(79,70,229,.06);border:1px dashed rgba(79,70,229,.3);border-radius:10px;text-align:center}
+
+/* 分享 */
+.share-row{padding:0 18px;margin-top:14px}
+.share-btn{width:100%;background:#4f46e5;color:#fff;border-radius:12px;font-size:14px;font-weight:700;padding:11px 0}
+.share-btn::after{border:none}
