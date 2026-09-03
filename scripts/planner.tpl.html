@@ -256,6 +256,7 @@ function hubsInBand(S,H){
     if(sc[4]!==1)continue;
     const T={name:sc[0],city:sc[1],lat:sc[2],lon:sc[3]};
     if(T.name===S.name||T.name===H.name)continue;
+    if(T.city===S.city||T.city===H.city)continue; // 与端点同城=没换地方, 不算中转
     if(!bandOK(S,H,T))continue;
     out.push({name:T.name,city:T.city,km:Math.round(dist(S,T))});
   }
@@ -350,13 +351,13 @@ function renderResult(){
   if (curR.length) okRuns.push(curR);
   used = Math.max(1, okRuns.length) * (roundAny() ? 2 : 1);
   remain = Math.max(0, state.budget - used);
-  const hubList=cc.segs.map((sg,i)=>sg.hub?('第'+(i+1)+'程 经'+sg.hub):null).filter(Boolean).join('、');
   tfmHubs=cc.segs.map(sg=>sg.hub?hubsInBand(S,H):[]);
+  const hubLineHtml=hubN?('<div style="font-size:11px;color:var(--warn);font-weight:600;margin-top:2px">中转 '+hubN+' 段：'+cc.segs.map((sg,i)=>sg.hub?('第'+(i+1)+'程 经'+esc(sg.hub)):null).filter(Boolean).join('、')+'</div>'):'';
   let html='<div class="card" id="resCard">'+
     (adoptNote?'<div class="rec" style="margin-bottom:10px">'+adoptNote+'</div>':'')+
     '<div class="sum">'+
     (cc.okAll?'联程全程可出':'<b>'+okN+'/'+N+'</b> 段可出 · '+(N-okN)+' 段需另购')+
-    (hubN?(' · 中转 '+hubN+' 段（'+esc(hubList)+'）'):'')+
+    hubLineHtml+
     '<div style="font-size:11px;color:var(--ok);font-weight:600;margin-top:2px">连续联程（无绕路·非往返）：'+okRuns.length+' 趟行程 · 共 '+used+' 次'+(roundAny()?'（往返×2）':'')+' · 剩余 '+remain+' 次</div>'+
     '<div style="font-size:11.5px;color:var(--mut);font-weight:500;margin-top:2px">其中 直达 '+dirN+' 段 · 数优先直达，实在没有才用中转</div>'+
     '</div><div class="note">出发地 '+esc((state.depart||H).name)+' · 区间 '+esc(S.name)+' ⇄ '+esc(H.name)+' · '+

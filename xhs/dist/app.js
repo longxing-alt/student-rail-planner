@@ -691,6 +691,7 @@ function hubsInBand(S,H){
     if(sc[4]!==1)continue;
     const T={name:sc[0],city:sc[1],lat:sc[2],lon:sc[3]};
     if(T.name===S.name||T.name===H.name)continue;
+    if(T.city===S.city||T.city===H.city)continue; // 与端点同城=没换地方, 不算中转
     if(!bandOK(S,H,T))continue;
     out.push({name:T.name,city:T.city,km:Math.round(dist(S,T))});
   }
