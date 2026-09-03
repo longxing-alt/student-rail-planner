@@ -46,6 +46,8 @@ js += `
   on('btnAdd', 'click', addTrip);
   on('btnPlan', 'click', onPlan);
   on('btnClear', 'click', clearAll);
+  on('btnBackHome', 'click', function () { prevStep('School'); });
+  on('btnBackTrips', 'click', function () { prevStep('Home'); });
   on('btnReset', 'click', resetRatio);
   on('tfmNext', 'click', tfmNext);
   on('tfmPrev', 'click', tfmPrev);
@@ -81,6 +83,8 @@ let html = src
   .replace(/onclick="addTrip\(\)"/g, 'id="btnAdd"')
   .replace(/onclick="onPlan\(\)"/g, 'id="btnPlan"')
   .replace(/onclick="clearAll\(\)"/g, 'id="btnClear"')
+  .replace(/onclick="prevStep\('School'\)"/g, 'id="btnBackHome"')
+  .replace(/onclick="prevStep\('Home'\)"/g, 'id="btnBackTrips"')
   .replace(/onclick="resetRatio\(\)"/g, 'id="btnReset"')
   .replace(/onclick="closeTfm\(\)"/g, 'id="tfmClose"')
   .replace(/oninput="setRatio\(this\.value\)"/g, 'id="ratioRange"')

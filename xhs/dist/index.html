@@ -122,7 +122,10 @@ input[type=range]{width:100%;accent-color:var(--accent);margin-top:10px}
   <div class="card step" id="stepHome">
     <h2><span class="step-no">2</span>出发地</h2>
     <input type="text" id="homeInput" placeholder="例如：石家庄 / 南宁 / 福州" autocomplete="off" >
-    <button class="btn" id="btnHome">下一步</button>
+    <div style="display:flex;gap:10px">
+      <button class="ghost" style="flex:1" id="btnBackHome">← 上一步</button>
+      <button class="btn" style="flex:2;margin-top:0" id="btnHome">下一步</button>
+    </div>
   </div>
 
   <div class="card step" id="stepTrips">
@@ -140,7 +143,10 @@ input[type=range]{width:100%;accent-color:var(--accent);margin-top:10px}
       <span style="flex:1"></span>
       <button class="ghost" style="padding:5px 12px" id="btnClear">🗑 一键清空</button>
     </div>
-    <button class="btn" id="btnPlan">一键规划</button>
+    <div style="display:flex;gap:10px;margin-top:14px">
+      <button class="ghost" style="flex:1;margin-top:0" id="btnBackTrips">← 上一步</button>
+      <button class="btn" style="flex:2;margin-top:0" id="btnPlan">一键规划</button>
+    </div>
   </div>
 
   <div id="result"></div>

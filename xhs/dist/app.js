@@ -604,6 +604,12 @@ function showStep(name){
   const inp=el.querySelector('input[type=text]');
   if(inp)setTimeout(()=>{try{inp.focus();}catch(e){}},60); // 自动聚焦到输入框
 }
+function prevStep(name){
+  const el=$('step'+name); if(!el)return;
+  const inp=el.querySelector('input[type=text]');
+  if(inp){inp.readOnly=false;inp.style.color='';} // 返回可修改
+  showStep(name);
+}
 function resolvePlace(q){
   q=String(q||'').trim();
   const qn=cleanCity(q);
@@ -617,8 +623,6 @@ function nextSchool(){
   if(!r){setErr('stepSchool','未收录该站，试试输入 城市名 或 车站名');return;}
   state.school={text:$('schoolInput').value.trim(),point:r.point,station:r.station};
   $('schoolInput').value=r.station.name;
-  $('schoolInput').readOnly=true;            // 学校的点固定, 不可再改
-  $('schoolInput').style.color='var(--mut)';
   showStep('Home');
 }
 function nextHome(){
@@ -781,13 +785,13 @@ function renderResult(){
   if (curR.length) okRuns.push(curR);
   used = Math.max(1, okRuns.length) * (roundAny() ? 2 : 1);
   remain = Math.max(0, state.budget - used);
-  const hubList=cc.segs.map((sg,i)=>sg.hub?('第'+(i+1)+'程 经'+sg.hub):null).filter(Boolean).join('、');
   tfmHubs=cc.segs.map(sg=>sg.hub?hubsInBand(S,H):[]);
+  const hubLineHtml=hubN?('<div style="font-size:11px;color:var(--warn);font-weight:600;margin-top:2px">中转 '+hubN+' 段：'+cc.segs.map((sg,i)=>sg.hub?('第'+(i+1)+'程 经'+esc(sg.hub)):null).filter(Boolean).join('、')+'</div>'):'';
   let html='<div class="card" id="resCard">'+
     (adoptNote?'<div class="rec" style="margin-bottom:10px">'+adoptNote+'</div>':'')+
     '<div class="sum">'+
     (cc.okAll?'联程全程可出':'<b>'+okN+'/'+N+'</b> 段可出 · '+(N-okN)+' 段需另购')+
-    (hubN?(' · 中转 '+hubN+' 段（'+esc(hubList)+'）'):'')+
+    hubLineHtml+
     '<div style="font-size:11px;color:var(--ok);font-weight:600;margin-top:2px">连续联程（无绕路·非往返）：'+okRuns.length+' 趟行程 · 共 '+used+' 次'+(roundAny()?'（往返×2）':'')+' · 剩余 '+remain+' 次</div>'+
     '<div style="font-size:11.5px;color:var(--mut);font-weight:500;margin-top:2px">其中 直达 '+dirN+' 段 · 数优先直达，实在没有才用中转</div>'+
     '</div><div class="note">出发地 '+esc((state.depart||H).name)+' · 区间 '+esc(S.name)+' ⇄ '+esc(H.name)+' · '+
@@ -799,8 +803,10 @@ function renderResult(){
   for(let i=0;i<pts.length;i++){
     if(i>0){
       const sgA=cc.segs[i-1];
-      html+='<span style="color:'+(sgA.inInt?'var(--ok)':sgA.hub?'var(--warn)':'var(--no)')+';font-weight:800">'+(sgA.inInt?'→':sgA.hub?'⇄':'⇢')+'</span>'+
-        (sgA.hub?'<span style="font-size:10.5px;color:var(--warn);font-weight:600">经'+esc(sgA.hub)+'</span>':'');
+      html+='<span style="color:'+(sgA.inInt?'var(--ok)':sgA.hub?'var(--warn)':'var(--no)')+';font-weight:800">'+(sgA.inInt||sgA.hub?'→':'⇢')+'</span>';
+      if(sgA.hub&&!sgA.inInt){
+        html+='<span class="chip warn">'+esc(sgA.hub)+'<span style="display:block;font-size:9px;color:#d97706;font-weight:700;line-height:1.15">中转站</span></span>';
+      }
     }
     const badAdj=(i>0&&!cc.segs[i-1].ok)||(i<pts.length-1&&!cc.segs[i].ok);
     html+='<span class="chip '+(badAdj?'no':'ok')+'">'+esc(pts[i].name)+'</span>';
@@ -816,7 +822,7 @@ function renderResult(){
         '<div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;margin-top:4px">'+
         cands4.map((c,j)=>'<span class="hub-badge" style="margin:0;'+(c.name===sg.hub?'background:var(--warn-soft);border-color:#d97706':'')+'" data-hub="'+i+','+j+'">'+NUMS2[j]+esc(c.name)+'</span>').join('')+'</div></div>':'';
       return '<div style="display:flex;align-items:flex-start;gap:10px;padding:9px 11px;border:1px solid var(--line);border-radius:12px;margin-bottom:7px;background:#fff">'+
-      '<div style="flex:1;font-size:12.5px;color:var(--mut)"><b style="color:var(--ink)">'+lbl+' '+esc(sg.a.name)+' → '+esc(sg.b.name)+'</b>'+
+      '<div style="flex:1;font-size:12.5px;color:var(--mut)"><b style="color:var(--ink)">'+lbl+' '+esc(sg.a.name)+' → '+(sg.hub?'<span style="color:#d97706">'+esc(sg.hub)+'</span> → ':'')+esc(sg.b.name)+'</b>'+
       (sg.inInt?'<span class="chip ok" style="margin-left:8px">✓ 区间内·直达</span>':sg.hub?'<span class="chip ok" style="margin-left:8px">✓ 可出·中转</span>':'<span class="chip no" style="margin-left:8px">✕ 区间外·需购成人票</span>')+hubLine+'</div>'+
       (sg.inInt?'':sg.hub?'<span class="hub-badge" data-tfm="'+i+'">⇄ 可中转哪里出票·推荐'+esc(sg.hub)+'</span>':'')+
       '</div>';
@@ -998,6 +1004,8 @@ window.addEventListener('error',()=>{});
   on('btnAdd', 'click', addTrip);
   on('btnPlan', 'click', onPlan);
   on('btnClear', 'click', clearAll);
+  on('btnBackHome', 'click', function () { prevStep('School'); });
+  on('btnBackTrips', 'click', function () { prevStep('Home'); });
   on('btnReset', 'click', resetRatio);
   on('tfmNext', 'click', tfmNext);
   on('tfmPrev', 'click', tfmPrev);
