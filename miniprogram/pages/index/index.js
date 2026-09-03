@@ -119,18 +119,20 @@ function smartBest(S, H, trips) {
     if (s[0] === S.name) continue;
     if (!logic.railAdj().nodes.has(s[1])) continue; // 推荐只考虑通道网内端点(图外支线/海岛可手动填写)
     if (H && s[1] === H.city) continue; // 不再推荐当前家同城
+    if (S && s[1] === S.city) continue; // 家不能与学校同城(北京⇄北京 无法认定); 推荐跨城端点
     const H2 = { name: s[0], city: s[1], lat: s[2], lon: s[3] };
     const cc = mpChain(S, H2, trips, true);
     const cover = cc ? cc.okN : 0;
     if (cover < curCover) continue;
     const Lh = dist(S, H2);
-    let pMax = 0;
+    let pMax = 0, dirN = 0;
     for (const sg of (cc ? cc.segs : [])) {
-      if (sg.inInt) { const { p } = corridor(S, H2, sg.b); pMax = Math.max(pMax, p / (Lh || 1)); }
+      if (sg.inInt) { dirN++; const { p } = corridor(S, H2, sg.b); pMax = Math.max(pMax, p / (Lh || 1)); }
     }
     const km = dist({ lat: s[2], lon: s[3] }, { lat: H.lat, lon: H.lon });
-    if (!best || cover > best.cover || (cover === best.cover && (pMax < best.pMax || (pMax === best.pMax && km < best.km)))) {
-      best = { st: { name: s[0], city: s[1], lat: s[2], lon: s[3] }, cover, pMax };
+    // 覆盖→直达段多→p/L小→距家近 (优先满足直达, 中转兜底)
+    if (!best || cover > best.cover || (cover === best.cover && (dirN > best.dirN || (dirN === best.dirN && (pMax < best.pMax || (pMax === best.pMax && km < best.km)))))) {
+      best = { st: { name: s[0], city: s[1], lat: s[2], lon: s[3] }, cover, dirN, pMax };
     }
   }
   return best;

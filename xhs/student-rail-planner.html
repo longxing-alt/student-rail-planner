@@ -1038,6 +1038,7 @@ function chainBestLocal(){
     if(s[0]===S.name)continue;
     if(!railAdj().nodes.has(s[1]))continue;
     if(s[1]===H.city)continue; // 不再推荐当前家的同城站
+    if(s[1]===S.city)continue; // 家不能与学校同城(北京⇄北京 无法认定); 推荐跨城端点
     const H2={name:s[0],city:s[1],lat:s[2],lon:s[3]};
     const cc=routeChainAt(S,H2);
     const cover=cc.okN;
@@ -1060,6 +1061,7 @@ function optRows(){
     if(s[0]===S.name)continue;
     if(!railAdj().nodes.has(s[1]))continue;
     if(s[1]===H.city)continue;
+    if(s[1]===S.city)continue; // 家不能与学校同城(北京⇄北京 无法认定); 推荐跨城端点
     const H2={name:s[0],city:s[1],lat:s[2],lon:s[3]};
     const cc=routeChainAt(S,H2);
     if(!cc||cc.okN===0)continue;
