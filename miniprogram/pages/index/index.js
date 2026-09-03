@@ -83,16 +83,18 @@ function sortByDepart(trips) {
   const dep = state.depart;
   return trips.slice().sort((a, b) => dist(dep, a.station) - dist(dep, b.station));
 }
-/* 区间内可选中转站(空间带, 按推荐从高到低=距发站近) */
+/* 区间内可选中转站(空间带, 按推荐从高到低=距发站近; 与端点同城不算中转) */
 function hubsOf(S, H, dep) {
   const out = [];
   if (!S || !H) return out;
+  const d0 = dep || S;
   for (const sc of STATIONS) {
     if (sc[4] !== 1) continue;
     const T = { name: sc[0], city: sc[1], lat: sc[2], lon: sc[3] };
     if (T.name === S.name || T.name === H.name) continue;
+    if (T.city === S.city || T.city === H.city || T.city === d0.city) continue; // 同城=没换地方, 不算中转
     if (!logic.bandOK(S, H, T)) continue;
-    out.push({ name: T.name, km: Math.round(dist(dep || S, T)) });
+    out.push({ name: T.name, km: Math.round(dist(d0, T)) });
   }
   out.sort((a, b) => a.km - b.km);
   return out.slice(0, 8);
@@ -442,7 +444,7 @@ Page({
     const segOk = i => { const sg = segOf(i); return !!(sg && (sg.inInt || sg.hub)); };
     const segHub = i => { const sg = segOf(i); return !!(sg && sg.hub); };
     if (cc) cc.segs.forEach((sg2, i2) => { if (this.hubOverride && this.hubOverride[i2]) { sg2.hub = this.hubOverride[i2]; sg2.ok = sg2.inInt || !!sg2.hub; } });
-    const segTxt = i => { const sg = segOf(i); return sg ? (sg.inInt ? '区间内' : sg.hub ? '⇄ 可中转哪里出票·推荐' + sg.hub : '区间外·需购成人票') : ''; };
+    const segTxt = i => { const sg = segOf(i); return sg ? (sg.inInt ? '区间内' : sg.hub ? (sg.lowConf ? '⚠ 近邻中转·未实测' : '⇄ 可中转哪里出票·推荐' + sg.hub) : '区间外·需购成人票') : ''; };
     this._cc = cc;
     // 区间线圆点
     const ivDots = state.trips.map((t, i) => {
@@ -471,7 +473,7 @@ Page({
       const j = planned && S && H ? (ok ? (hub ? 1 : 2) : 0) : -1;
       const sg = segOf(i);
       // 直达可行→不再显示中转; 直达不行→显示最多4个候选(两行两列)
-      const hubs = (planned && S && H && !sg.inInt) ? hubsOf(S, H, sg && sg.a ? sg.a : (state.depart || H)).slice(0, 4) : [];
+      const hubs = (planned && S && H && sg && sg.hub) ? hubsOf(S, H, sg && sg.a ? sg.a : (state.depart || H)).slice(0, 4) : [];
       const hubChips = hubs.map((hc, k) => ({ m: NUMS[k] || (k+1) + '.', n: hc.name, cur: hc.name === (sg && sg.hub), idx: k }));
       const plannedNow = planned && S && H;
       return {

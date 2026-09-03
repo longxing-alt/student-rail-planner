@@ -743,11 +743,12 @@ function chainV2(S, H, stList, rStart, rEnd, fast) {
         if (sc[4] !== 1) continue; // 12306 中转站=枢纽级
         const T = { name: sc[0], city: sc[1], lat: sc[2], lon: sc[3] };
         if (T.name === A.name || T.name === B.name || T.name === H.name || T.name === S.name) continue;
+        if (T.city === A.city || T.city === B.city || T.city === S.city || T.city === H.city) continue; // 同城=没换地方, 不算中转
         if (!bandOK(S, H, T)) continue;
         const via = dist(A, T) + dist(T, B);
         if (via < bestVia) { bestVia = via; bestT = T.name; }
       }
-      if (bestT) seg.hub = bestT;
+      if (bestT) { seg.hub = bestT; if (dist(S, H) < 150) seg.lowConf = true; } // 极短区间近邻中转: 未实测, 界面降级提示
     }
     seg.ok = seg.inInt || seg.hub != null;
     segs.push(seg);
@@ -949,7 +950,7 @@ function renderResult(){
   let html='<div class="card" id="resCard">'+
     (adoptNote?'<div class="rec" style="margin-bottom:10px">'+adoptNote+'</div>':'')+
     '<div class="sum">'+
-    (cc.okAll?'联程全程可出':'<b>'+okN+'/'+N+'</b> 段可出 · '+(N-okN)+' 段需另购')+
+    (cc.okAll?(cc.segs.some(s=>s.lowConf)?'联程全程可出 · ⚠含未实测近邻中转':'联程全程可出'):'<b>'+okN+'/'+N+'</b> 段可出 · '+(N-okN)+' 段需另购')+
     hubLineHtml+
     '<div style="font-size:11px;color:var(--ok);font-weight:600;margin-top:2px">连续联程（无绕路·非往返）：'+okRuns.length+' 趟行程 · 共 '+used+' 次'+(roundAny()?'（往返×2）':'')+' · 剩余 '+remain+' 次</div>'+
     '<div style="font-size:11.5px;color:var(--mut);font-weight:500;margin-top:2px">其中 直达 '+dirN+' 段 · 数优先直达，实在没有才用中转</div>'+
@@ -980,8 +981,8 @@ function renderResult(){
         cands4.map((c,j)=>'<span class="hub-badge" style="margin:0;'+(c.name===sg.hub?'background:var(--warn-soft);border-color:#d97706':'')+'" onclick="setHub('+i+','+j+')">'+NUMS2[j]+esc(c.name)+'</span>').join('')+'</div></div>':'';
       return '<div style="display:flex;align-items:flex-start;gap:10px;padding:9px 11px;border:1px solid var(--line);border-radius:12px;margin-bottom:7px;background:#fff">'+
       '<div style="flex:1;font-size:12.5px;color:var(--mut)"><b style="color:var(--ink)">'+lbl+' '+esc(sg.a.name)+' → '+esc(sg.b.name)+'</b>'+
-      (sg.inInt?'<span class="chip ok" style="margin-left:8px">✓ 区间内·直达</span>':sg.hub?'<span class="chip ok" style="margin-left:8px">✓ 可出·中转</span>':'<span class="chip no" style="margin-left:8px">✕ 区间外·需购成人票</span>')+hubLine+'</div>'+
-      (sg.inInt?'':sg.hub?'<span class="hub-badge" onclick="openTfm('+i+')">⇄ 可中转哪里出票·推荐'+esc(sg.hub)+'</span>':'')+
+      (sg.inInt?'<span class="chip ok" style="margin-left:8px">✓ 区间内·直达</span>':sg.hub?(sg.lowConf?'<span class="chip warn" style="margin-left:8px">⚠ 近邻中转·未实测</span>':'<span class="chip ok" style="margin-left:8px">✓ 可出·中转</span>'):'<span class="chip no" style="margin-left:8px">✕ 区间外·需购成人票</span>')+hubLine+'</div>'+
+      (sg.inInt?'':sg.hub?'<span class="hub-badge" onclick="openTfm('+i+')">'+(sg.lowConf?'⚠ 近邻中转·可能被拦·推荐':'⇄ 可中转哪里出票·推荐')+esc(sg.hub)+'</span>':'')+
       '</div>';
     }).join('')+'</div>';
     html+='<div class="bridge">⚠ '+(N-okN)+' 段不可出：可<b>分段购买</b>（区间内/中转段学生票+其余全价）；或先购「区间内 → '+esc(H.name)+'」合法票再购后续段（搭桥法，实测有效），最后退掉第一张。</div>';

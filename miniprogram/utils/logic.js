@@ -581,11 +581,12 @@ function chainV2(S, H, stList, rStart, rEnd, fast) {
         if (sc[4] !== 1) continue; // 12306 中转站=枢纽级
         const T = { name: sc[0], city: sc[1], lat: sc[2], lon: sc[3] };
         if (T.name === A.name || T.name === B.name || T.name === H.name || T.name === S.name) continue;
+        if (T.city === A.city || T.city === B.city || T.city === S.city || T.city === H.city) continue; // 同城=没换地方, 不算中转
         if (!bandOK(S, H, T)) continue;
         const via = dist(A, T) + dist(T, B);
         if (via < bestVia) { bestVia = via; bestT = T.name; }
       }
-      if (bestT) seg.hub = bestT;
+      if (bestT) { seg.hub = bestT; if (dist(S, H) < 150) seg.lowConf = true; } // 极短区间近邻中转: 未实测, 界面降级提示
     }
     seg.ok = seg.inInt || seg.hub != null;
     segs.push(seg);
