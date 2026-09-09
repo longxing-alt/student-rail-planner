@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RailGo · 铁路学生出游智能规划 Demo</title>
+<link rel="stylesheet" href="railgo.css">
+</head>
+<body>
+<header class="brand-bar">
+  <div class="wrap">
+    <h1>🚄 RailGo</h1>
+    <div class="sub">铁路学生出游智能规划 · 交互 Demo（第一阶段）</div>
+    <div class="tagline">"让铁路成为旅行主线，让城市成为旅途节点。"</div>
+  </div>
+</header>
+
+<main class="wrap">
+
+  <!-- 1 出游输入 -->
+  <section class="card">
+    <h2><span class="no">1</span>出游输入</h2>
+    <div class="row">
+      <div class="field"><label>起点</label>
+        <input id="inStart" list="cityList" value="石家庄">
+      </div>
+      <div class="field"><label>目的地（可加多个）</label>
+        <input id="inDest" list="cityList" placeholder="城市名，如 杭州">
+      </div>
+      <button class="btn ghost small" id="btnAddDest">＋ 添加目的地</button>
+    </div>
+    <div class="dest-list" id="destChips"></div>
+
+    <div class="row">
+      <div class="field"><label>旅行天数</label>
+        <select id="inDays">
+          <option>2</option><option>3</option><option>4</option><option selected>5</option>
+          <option>6</option><option>7</option><option>10</option>
+        </select>
+      </div>
+      <div class="field"><label>预算（元）</label>
+        <input id="inBudget" type="number" value="1500" min="100" step="50">
+      </div>
+      <div class="field"><label>规划模式</label>
+        <div class="chip-row">
+          <span class="seg" id="segUser">按我的顺序</span>
+          <span class="seg on" id="segSmart">智能优化</span>
+        </div>
+      </div>
+      <div class="field"><label>偏好</label>
+        <select id="inPref">
+          <option value="play">游玩优先</option>
+          <option value="time">时间优先</option>
+          <option value="money">省钱优先</option>
+          <option value="comfort">舒适优先</option>
+        </select>
+      </div>
+    </div>
+    <div class="row">
+      <label class="toggle"><input type="checkbox" id="inSuggestStop" checked> ☑ 自动发现适合的中途城市</label>
+      <span class="hint" id="lockHint"></span>
+    </div>
+    <button class="btn" id="btnPlan">开始智能规划</button>
+  </section>
+
+  <datalist id="cityList"></datalist>
+
+  <!-- 2 结果 -->
+  <section id="resSection" hidden>
+    <div class="sum" id="sumBox"></div>
+    <div id="verdictBox"></div>
+    <div id="stopBox"></div>
+    <div class="card" id="timelineCard">
+      <h2>路线时间轴</h2>
+      <div class="timeline" id="timeline"></div>
+    </div>
+    <div class="card">
+      <h2>地图</h2>
+      <div class="map-box" id="mapBox">
+        <div class="placeholder" id="mapPlaceholder">
+          <div>🗺️ 演示地图模式（SVG 连线）</div>
+          <div>配置百度地图 AK 后启用真实地图</div>
+        </div>
+        <svg id="mapSvg" viewBox="0 0 1000 340" preserveAspectRatio="xMidYMid meet"></svg>
+      </div>
+      <div class="api-note" id="mapNote"></div>
+    </div>
+    <div class="card" id="budgetCard" hidden>
+      <h2>预算分析 <span class="badge mock">模拟</span></h2>
+      <div id="budgetBox"></div>
+    </div>
+  </section>
+
+  <!-- 3 城市详情 -->
+  <section id="detailSection" hidden>
+    <div class="card">
+      <h2 id="detailTitle"></h2>
+      <div class="city-detail" id="detailBody"></div>
+    </div>
+  </section>
+
+  <!-- API 设置 -->
+  <details class="setting">
+    <summary>🔧 地图 API 设置</summary>
+    <p class="hint">百度地图 AK 仅存于本机 localStorage，不会写入源码/提交 Git。无 AK 时页面使用演示地图模式，功能完整可预览。</p>
+    <input type="text" id="inAk" placeholder="粘贴百度地图浏览器端 AK">
+    <button class="btn small ghost" id="btnSaveAk">保存</button>
+    <button class="btn small ghost" id="btnClearAk">清除</button>
+    <span id="akState" class="hint"></span>
+  </details>
+
+  <div class="api-note" id="mockBanner"></div>
+  <footer>RailGo Demo · 铁路费用/时间/价格为<b>模拟估算</b>，非实时数据，实际以 12306 为准 · 百度 API 仅用于城市内 POI/路线</footer>
+</main>
+
+<script src="mock-data.js"></script>
+<script src="railgo.core.js"></script>
+<script src="baidu-api.js"></script>
+<script src="railgo.js"></script>
+</body>
+</html>
