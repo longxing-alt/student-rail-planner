@@ -96,7 +96,101 @@
   /** AK 可用性探测 */
   function ping() { return geocode('北京', '北京'); }
 
-  const API = { getAK, searchPOI, searchNearbyPOI, geocode, reverseGeocode, walkingRoute, transitRoute, drivingRoute, coordConvert, ping };
+  /* ==================== 阶段4: 坐标处理层 ====================
+   * 目标: RailGo 城市对象(WGS84) → 百度地图坐标(BD09), 全项目唯一转换入口。
+   * 设计: 优先本地确定性算法(离线/零配额/无 CORS), 缺坐标才调地理编码 API。
+   * 禁止在其他层(组件/railgo.js)再做转换。
+   *
+   * 体系判定依据(见阶段4报告): 本表 北京西站 (39.895,116.322) 与已知 WGS84
+   * 实测 (39.8948,116.3220) 吻合至 4 位小数, 而 BD09 应约 (39.9026,116.3346)
+   * → 本表为 WGS84(GPS), 展示到百度地图前必须转 BD09。
+   */
+  const X_PI = Math.PI * 3000.0 / 180.0;
+  const GCJ_A = 6378245.0, GCJ_EE = 0.00669342162296594323;
+  const CGEO_CACHE_KEY = 'RAILGO_GEO_CACHE';
+
+  function _outOfChina(lat, lon) { return !(lon > 73.66 && lon < 135.05 && lat > 3.86 && lat < 53.55); }
+  function _tLat(x, y) {
+    let r = -100 + 2 * x + 3 * y + 0.2 * y * y + 0.1 * x * y + 0.2 * Math.sqrt(Math.abs(x));
+    r += (20 * Math.sin(6 * x * Math.PI) + 20 * Math.sin(2 * x * Math.PI)) * 2 / 3;
+    r += (20 * Math.sin(y * Math.PI) + 40 * Math.sin(y / 3 * Math.PI)) * 2 / 3;
+    r += (160 * Math.sin(y / 12 * Math.PI) + 320 * Math.sin(y * Math.PI / 30)) * 2 / 3;
+    return r;
+  }
+  function _tLon(x, y) {
+    let r = 300 + x + 2 * y + 0.1 * x * x + 0.1 * x * y + 0.1 * Math.sqrt(Math.abs(x));
+    r += (20 * Math.sin(6 * x * Math.PI) + 20 * Math.sin(2 * x * Math.PI)) * 2 / 3;
+    r += (20 * Math.sin(x * Math.PI) + 40 * Math.sin(x / 3 * Math.PI)) * 2 / 3;
+    r += (150 * Math.sin(x / 12 * Math.PI) + 300 * Math.sin(x / 30 * Math.PI)) * 2 / 3;
+    return r;
+  }
+  /** WGS84 → GCJ02 (公开标准算法) */
+  function wgs84ToGcj02(lat, lon) {
+    if (_outOfChina(lat, lon)) return [lat, lon];
+    let dLat = _tLat(lon - 105, lat - 35), dLon = _tLon(lon - 105, lat - 35);
+    const radLat = lat / 180 * Math.PI;
+    let magic = Math.sin(radLat); magic = 1 - GCJ_EE * magic * magic;
+    const sq = Math.sqrt(magic);
+    dLat = (dLat * 180) / ((GCJ_A * (1 - GCJ_EE)) / (magic * sq) * Math.PI);
+    dLon = (dLon * 180) / (GCJ_A / sq * Math.cos(radLat) * Math.PI);
+    return [lat + dLat, lon + dLon];
+  }
+  /** GCJ02 → BD09 (公开标准算法) */
+  function gcj02ToBd09(lat, lon) {
+    const z = Math.sqrt(lon * lon + lat * lat) + 0.00002 * Math.sin(lat * X_PI);
+    const th = Math.atan2(lat, lon) + 0.000003 * Math.cos(lon * X_PI);
+    return [z * Math.sin(th) + 0.006, z * Math.cos(th) + 0.0065];
+  }
+  /** WGS84 → BD09 (本地确定性, 离线可用, 无配额) */
+  function wgs84ToBd09(lat, lon) {
+    const g = wgs84ToGcj02(lat, lon);
+    return gcj02ToBd09(g[0], g[1]);
+  }
+
+  function _readCache() { try { return JSON.parse(root.localStorage.getItem(CGEO_CACHE_KEY)) || {}; } catch (e) { return {}; } }
+  function _writeCache(o) { try { root.localStorage.setItem(CGEO_CACHE_KEY, JSON.stringify(o)); } catch (e) {} }
+
+  /** 解析单个城市为 BD09 坐标 {id,name,lat,lng,source}; 缺坐标才走地理编码 */
+  async function resolveCityCoord(city) {
+    if (!city) return null;
+    const key = city.id || city.name;
+    const cache = _readCache();
+    if (cache[key] && typeof cache[key].lat === 'number') {
+      return { id: city.id, name: city.name, lat: cache[key].lat, lng: cache[key].lng, source: cache[key].source || 'cache' };
+    }
+    // 优先: 已有 WGS84 坐标 → 本地算法转换(不请求 API, 不重复请求)
+    if (typeof city.lat === 'number' && typeof city.lon === 'number') {
+      const bd = wgs84ToBd09(city.lat, city.lon);
+      const out = { id: city.id, name: city.name, lat: bd[0], lng: bd[1], source: 'local-wgs84' };
+      cache[key] = { lat: out.lat, lng: out.lng, source: out.source, ts: Date.now() };
+      _writeCache(cache);
+      return out;
+    }
+    // 缺失坐标 → 地理编码(失败返回 null, 由调用方跳过定位)
+    try {
+      const r = await geocode(city.name, city.name);
+      if (r && r.success && r.data && typeof r.data.lat === 'number') {
+        const out = { id: city.id, name: city.name, lat: r.data.lat, lng: r.data.lng, source: 'baidu-geocode' };
+        cache[key] = { lat: out.lat, lng: out.lng, source: out.source, ts: Date.now() };
+        _writeCache(cache);
+        return out;
+      }
+    } catch (e) { /* 网络/配额失败 → 降级 */ }
+    return null;
+  }
+
+  /** 批量: RailGo 城市列表 → BD09 坐标列表(跳过无法解析的城市, 不抛异常) */
+  async function resolveCityCoords(cities) {
+    const out = [];
+    for (const c of cities || []) {
+      try { const r = await resolveCityCoord(c); if (r) out.push(r); } catch (e) { /* 单城失败不影响整体 */ }
+    }
+    return out;
+  }
+
+  function clearCoordCache() { try { root.localStorage.removeItem(CGEO_CACHE_KEY); } catch (e) {} }
+
+  const API = { getAK, searchPOI, searchNearbyPOI, geocode, reverseGeocode, walkingRoute, transitRoute, drivingRoute, coordConvert, ping, wgs84ToGcj02, gcj02ToBd09, wgs84ToBd09, resolveCityCoord, resolveCityCoords, clearCoordCache, CGEO_CACHE_KEY };
   if (typeof module === 'object' && module.exports) module.exports = API;
   root.RailGoBaidu = API;
 })();

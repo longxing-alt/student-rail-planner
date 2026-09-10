@@ -277,17 +277,28 @@
     renderSvgMap(route);
   }
 
-  /* 在百度地图上绘制 RailGo 规划结果: 仅调用地图层, 不含地图 API 细节 */
-  function drawRouteOnBaidu(BM, route) {
-    const cities = route.map((id, i) => {
+  /* 在百度地图上绘制 RailGo 规划结果: 仅调用地图层, 不含地图 API 细节
+   * 坐标经 baidu-api 坐标层统一转换(WGS84→BD09), 本地完成不请求 API */
+  async function drawRouteOnBaidu(BM, route) {
+    const raw = route.map((id, i) => {
       const c = C.cityById(id);
       if (!c || typeof c.lat !== 'number') return null; // 缺坐标优雅跳过
       return { id: c.id, name: c.name, lat: c.lat, lon: c.lon, role: i === 0 ? 'start' : (i === route.length - 1 ? 'end' : 'mid') };
     }).filter(Boolean);
+    // 统一坐标转换(唯一入口); 失败时回退原坐标, 不中断
+    let coords = raw;
+    try {
+      const bd = await BAIDU.resolveCityCoords(raw);
+      if (bd && bd.length) {
+        const map = {};
+        bd.forEach(b => { map[b.id] = b; });
+        coords = raw.map(r => (map[r.id] ? { id: r.id, name: r.name, lat: map[r.id].lat, lon: map[r.id].lng, role: r.role } : r));
+      }
+    } catch (e) { /* 转换失败保留原坐标 */ }
     BM.clearOverlays();                 // 清旧 Marker/Polyline, 防叠加
-    BM.addMarkers(cities);
-    BM.drawPolyline(cities);            // 旅行路线示意(非铁路轨道)
-    BM.fitView(cities);                 // 自动视野
+    BM.addMarkers(coords);
+    BM.drawPolyline(coords);            // 旅行路线示意(非铁路轨道)
+    BM.fitView(coords);                 // 自动视野
   }
 
   /* SVG 演示地图(保留为 fallback) */
