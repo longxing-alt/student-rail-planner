@@ -85,6 +85,7 @@
           <div>🗺️ 演示地图模式（SVG 连线）</div>
           <div>配置百度地图 AK 后启用真实地图</div>
         </div>
+        <div id="baiduMap" class="baidu-map" hidden></div>
         <svg id="mapSvg" viewBox="0 0 1000 340" preserveAspectRatio="xMidYMid meet"></svg>
       </div>
       <div class="api-note" id="mapNote"></div>
@@ -117,9 +118,12 @@
   <footer>RailGo Demo · 铁路费用/时间/价格为<b>模拟估算</b>，非实时数据，实际以 12306 为准 · 百度 API 仅用于城市内 POI/路线</footer>
 </main>
 
+<!-- 本地 AK 配置(被 .gitignore 忽略; 缺失时 404 无害, 页面自动走演示模式) -->
+<script src="config.local.js"></script>
 <script src="mock-data.js"></script>
 <script src="railgo.core.js"></script>
 <script src="baidu-api.js"></script>
+<script src="baidu-map.js"></script>
 <script src="railgo.js"></script>
 </body>
 </html>

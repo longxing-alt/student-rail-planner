@@ -6,6 +6,9 @@
     Element.prototype.scrollIntoView = function () {}; // jsdom 测试垫片, 浏览器原生有
   }
   const M = window.RailGoMock, C = window.RailGoCore, BAIDU = window.RailGoBaidu;
+  function esc(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  }
 
   let state = { dests: [], mode: 'smart', pref: 'play', stopSuggest: true, candidates: [], active: 0 };
 
@@ -97,7 +100,7 @@
     renderSum(c, budget);
     renderVerdict(c, budget, days);
     renderTimeline(c);
-    renderMap(c.cities);
+    Promise.resolve(renderMap(c.cities)).catch(() => { try { renderSvgMap(c.cities); } catch (e) {} });
     renderBudget(c.budget, budget);
   }
 
@@ -252,8 +255,55 @@
     if (no) no.addEventListener('click', () => { state.stopSuggest = false; box.innerHTML = '<div class="stop-card">已选择不增加中途城市。</div>'; });
   }
 
-  /* ---------- 演示地图(SVG) ---------- */
-  function renderMap(route) {
+  /* ---------- 地图: 有 AK 走百度 JSAPI, 否则/失败回退 SVG 演示 ---------- */
+  async function renderMap(route) {
+    const BM = window.RailGoBaiduMap;
+    const hasAk = BM && BM.isAvailable();
+    if (hasAk) {
+      const center = { lat: C.cityById(route[0]).lat, lon: C.cityById(route[0]).lon, zoom: 6 };
+      const r = await BM.initMap('baiduMap', center);
+      if (r.ok) {
+        $('baiduMap').hidden = false;
+        $('mapSvg').hidden = true;
+        const ph = $('mapPlaceholder'); if (ph) ph.hidden = true;
+        try { drawRouteOnBaidu(r.ns, r.map, route); } catch (e) { /* 绘制异常不影响底图 */ }
+        $('mapNote').textContent = '百度地图 JSAPI 已加载（' + (r.ns === window.BMapGL ? 'GL' : '经典 4.0') + '）。线路为 RailGo 规划的旅行路线示意，非铁路轨道轨迹。';
+        return;
+      }
+      // 失败 → 回退 SVG, 并说明原因(不含 AK)
+      $('mapNote').innerHTML = '<span style="color:var(--warn)">百度地图不可用（' + esc(r.message || r.code) + '），已切换演示地图模式。</span>';
+      $('baiduMap').hidden = true;
+    }
+    renderSvgMap(route);
+  }
+
+  /* 在百度地图上绘制 RailGo 规划结果: Marker(城名) + Polyline(旅行路线示意) */
+  function drawRouteOnBaidu(ns, map, route) {
+    if (map.clearOverlays) map.clearOverlays(); // 清理旧 Marker/Polyline, 防叠加
+    const pts = [];
+    route.forEach((id, i) => {
+      const c = C.cityById(id);
+      if (!c || typeof c.lat !== 'number') return; // 缺坐标优雅跳过
+      const pt = new ns.Point(c.lon, c.lat);
+      pts.push(pt);
+      const isStart = i === 0, isEnd = i === route.length - 1;
+      try {
+        const label = new ns.Label(c.name + (isStart ? '（出发）' : isEnd ? '（终点）' : ''), { offset: new ns.Size(0, -18) });
+        const mk = new ns.Marker(pt, { title: c.name, label });
+        map.addOverlay(mk);
+      } catch (e) { /* 单个 Marker 失败不影响其余 */ }
+    });
+    if (pts.length >= 2 && ns.Polyline) {
+      try {
+        map.addOverlay(new ns.Polyline(pts, { strokeColor: '#3a5bd9', strokeWeight: 4, strokeOpacity: 0.85, strokeStyle: 'dashed' }));
+      } catch (e) { /* 忽略 */ }
+    }
+    if (pts.length && map.setViewport) { try { map.setViewport(pts); } catch (e) {} }
+  }
+
+  /* SVG 演示地图(保留为 fallback) */
+  function renderSvgMap(route) {
+    $('mapSvg').hidden = false;
     const svg = $('mapSvg');
     const W = 1000, H = 340;
     let ns = '', edges = '';
