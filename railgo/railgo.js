@@ -266,7 +266,7 @@
         $('baiduMap').hidden = false;
         $('mapSvg').hidden = true;
         const ph = $('mapPlaceholder'); if (ph) ph.hidden = true;
-        try { drawRouteOnBaidu(r.ns, r.map, route); } catch (e) { /* 绘制异常不影响底图 */ }
+        try { drawRouteOnBaidu(BM, route); } catch (e) { /* 绘制异常不影响底图 */ }
         $('mapNote').textContent = '百度地图 JSAPI 已加载（' + (r.ns === window.BMapGL ? 'GL' : '经典 4.0') + '）。线路为 RailGo 规划的旅行路线示意，非铁路轨道轨迹。';
         return;
       }
@@ -277,28 +277,17 @@
     renderSvgMap(route);
   }
 
-  /* 在百度地图上绘制 RailGo 规划结果: Marker(城名) + Polyline(旅行路线示意) */
-  function drawRouteOnBaidu(ns, map, route) {
-    if (map.clearOverlays) map.clearOverlays(); // 清理旧 Marker/Polyline, 防叠加
-    const pts = [];
-    route.forEach((id, i) => {
+  /* 在百度地图上绘制 RailGo 规划结果: 仅调用地图层, 不含地图 API 细节 */
+  function drawRouteOnBaidu(BM, route) {
+    const cities = route.map((id, i) => {
       const c = C.cityById(id);
-      if (!c || typeof c.lat !== 'number') return; // 缺坐标优雅跳过
-      const pt = new ns.Point(c.lon, c.lat);
-      pts.push(pt);
-      const isStart = i === 0, isEnd = i === route.length - 1;
-      try {
-        const label = new ns.Label(c.name + (isStart ? '（出发）' : isEnd ? '（终点）' : ''), { offset: new ns.Size(0, -18) });
-        const mk = new ns.Marker(pt, { title: c.name, label });
-        map.addOverlay(mk);
-      } catch (e) { /* 单个 Marker 失败不影响其余 */ }
-    });
-    if (pts.length >= 2 && ns.Polyline) {
-      try {
-        map.addOverlay(new ns.Polyline(pts, { strokeColor: '#3a5bd9', strokeWeight: 4, strokeOpacity: 0.85, strokeStyle: 'dashed' }));
-      } catch (e) { /* 忽略 */ }
-    }
-    if (pts.length && map.setViewport) { try { map.setViewport(pts); } catch (e) {} }
+      if (!c || typeof c.lat !== 'number') return null; // 缺坐标优雅跳过
+      return { id: c.id, name: c.name, lat: c.lat, lon: c.lon, role: i === 0 ? 'start' : (i === route.length - 1 ? 'end' : 'mid') };
+    }).filter(Boolean);
+    BM.clearOverlays();                 // 清旧 Marker/Polyline, 防叠加
+    BM.addMarkers(cities);
+    BM.drawPolyline(cities);            // 旅行路线示意(非铁路轨道)
+    BM.fitView(cities);                 // 自动视野
   }
 
   /* SVG 演示地图(保留为 fallback) */

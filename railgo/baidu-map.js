@@ -19,6 +19,8 @@
 
   let sdkPromise = null;   // 单次加载承诺(模块级单例, 防重复插入 script)
   let mapInstance = null;  // 当前地图实例
+  let markerMap = null;    // cityId → Marker, 用于去重
+  let currentPolyline = null; // 当前路线, 用于清理
 
   function getAK() {
     const cfg = root.RAILGO_CONFIG;
@@ -115,14 +117,98 @@
       if (mapInstance && mapInstance.destroy) mapInstance.destroy();
     } catch (e) { /* 忽略销毁异常 */ }
     mapInstance = null;
+    markerMap = null;
+    currentPolyline = null;
   }
 
   function getMap() { return mapInstance; }
 
-  /* 测试用: 重置单例状态(不影响生产逻辑) */
+  /* ==================== 阶段 3: 铁路旅行方案可视化 API ====================
+   * 全部基于已初始化地图; 未初始化/缺坐标均安全返回, 不抛异常。
+   * 注意: 这些是"RailGo 旅行路线示意", 不是铁路真实轨道; 不调用百度驾车/步行。
+   */
+
+  /**
+   * 添加城市 Marker(去重: 同 key 的城市只更新不重复添加)
+   * @param {Array<{id:string,name:string,lat:number,lon:number,role:'start'|'mid'|'end'}>} cities
+   */
+  function addMarkers(cities) {
+    const map = mapInstance, ns = detectNS();
+    if (!map || !ns) return { ok: false, code: 'NO_MAP' };
+    if (!markerMap) markerMap = {};
+    const labels = { start: '（出发）', mid: '', end: '（终点）' };
+    const colors = { start: '#1a1f2e', mid: '#3a5bd9', end: '#129a5f' };
+    for (const c of cities || []) {
+      if (!c || typeof c.lat !== 'number' || typeof c.lon !== 'number') continue; // 缺坐标跳过
+      try {
+        const pt = new ns.Point(c.lon, c.lat);
+        const cfg = { title: c.name };
+        if (c.role === 'start' || c.role === 'end') cfg.label = { text: c.name + (labels[c.role] || ''), position: 'top' };
+        if (c.role === 'mid') cfg.label = { text: c.name, position: 'top' };
+        const mk = new ns.Marker(pt, cfg);
+        if (mk.setLabel) mk.setLabel(new ns.Label(c.name + (labels[c.role] || ''), { offset: new ns.Size(0, -20) }));
+        map.addOverlay(mk);
+        // 去重: 若已有同 cityId 的旧 marker 先移除
+        if (markerMap[c.id]) { try { map.removeOverlay(markerMap[c.id]); } catch (e) {} }
+        markerMap[c.id] = mk;
+        // 点击显示城市名
+        if (mk.addEventListener) mk.addEventListener('click', () => {
+          const info = new ns.InfoWindow('<b>' + c.name + '</b>（' + (labels[c.role] || '途经城市') + '）');
+          map.openInfoWindow(info, pt);
+        });
+      } catch (e) { /* 单个 Marker 失败不影响其余 */ }
+    }
+    return { ok: true, count: Object.keys(markerMap).length };
+  }
+
+  /**
+   * 绘制旅行路线(Polyline, 虚线示意)
+   * @param {Array<{lat,lon}>} pts 有序坐标
+   */
+  function drawPolyline(pts) {
+    const map = mapInstance, ns = detectNS();
+    if (!map || !ns) return { ok: false, code: 'NO_MAP' };
+    clearPolyline();
+    const valid = (pts || []).filter(p => p && typeof p.lat === 'number' && typeof p.lon === 'number');
+    if (valid.length < 2) return { ok: true, count: 0 };
+    try {
+      const line = new ns.Polyline(valid.map(p => new ns.Point(p.lon, p.lat)), {
+        strokeColor: '#3a5bd9', strokeWeight: 4, strokeOpacity: 0.85, strokeStyle: 'dashed',
+      });
+      map.addOverlay(line);
+      currentPolyline = line;
+      return { ok: true, count: 1 };
+    } catch (e) {
+      return { ok: false, code: 'DRAW_ERROR', message: (e && e.message) || '绘制失败' };
+    }
+  }
+
+  /** 清除全部覆盖物(Marker + Polyline), 防止切换方案时叠加 */
+  function clearOverlays() {
+    try { if (mapInstance && mapInstance.clearOverlays) mapInstance.clearOverlays(); } catch (e) {}
+    markerMap = {}; currentPolyline = null;
+  }
+  function clearPolyline() {
+    try { if (mapInstance && currentPolyline && mapInstance.removeOverlay) mapInstance.removeOverlay(currentPolyline); } catch (e) {}
+    currentPolyline = null;
+  }
+
+  /** 自动调整视野使全部点可见 */
+  function fitView(pts) {
+    const map = mapInstance, ns = detectNS();
+    if (!map) return false;
+    const valid = (pts || []).filter(p => p && typeof p.lat === 'number' && typeof p.lon === 'number');
+    if (!valid.length) return false;
+    if (valid.length === 1) {
+      try { map.setCenter(new ns.Point(valid[0].lon, valid[0].lat)); map.setZoom(12); return true; } catch (e) { return false; }
+    }
+    try { map.setViewport(valid.map(p => new ns.Point(p.lon, p.lat))); return true; } catch (e) { return false; }
+  }
+
+  /** 测试用: 重置单例状态(不影响生产逻辑) */
   function _reset() { sdkPromise = null; destroyMap(); }
 
-  const API = { getAK, isAvailable, loadSdk, initMap, destroyMap, getMap, detectNS, _reset, SCRIPT_ID };
+  const API = { getAK, isAvailable, loadSdk, initMap, destroyMap, getMap, detectNS, addMarkers, drawPolyline, clearOverlays, clearPolyline, fitView, _reset, SCRIPT_ID };
   if (typeof module === 'object' && module.exports) module.exports = API;
   root.RailGoBaiduMap = API;
 })();
