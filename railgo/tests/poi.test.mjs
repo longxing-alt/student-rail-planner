@@ -10,25 +10,36 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const BASE = path.join(__dirname, '..');
 const { JSDOM } = require('jsdom');
 
+/* mock BMapGL.LocalSearch: poiResponder(behavior) 决定行为
+ * behavior: 函数 → 返回 Poi 数组; 'empty' → 空; 'throw' → 同步抛错 */
 function boot(withAk, poiResponder) {
   const dom = new JSDOM('<!doctype html>', { url: 'https://railgo.local/', runScripts: 'outside-only', pretendToBeVisual: true });
   const w = dom.window;
   w.RAILGO_CONFIG = { BAIDU_MAP_AK: withAk ? 'TEST_AK' : '' };
   w.eval(fs.readFileSync(path.join(BASE, 'mock-data.js'), 'utf8'));
+  function Pt(lng, lat) { this.lng = lng; this.lat = lat; }
+  function Poi(t, la, lo, addr, uid, tel) { this._t = t; this._la = la; this._lo = lo; this._a = addr; this._uid = uid; this._tel = tel; }
+  Poi.prototype.getTitle = function () { return this._t; };
+  Poi.prototype.getPoint = function () { return { lat: this._la, lng: this._lo }; };
+  Poi.prototype.getAddress = function () { return this._a; };
+  Poi.prototype.getUid = function () { return this._uid; };
+  Poi.prototype.getPhoneNumber = function () { return this._tel; };
+  function LocalSearch(city, o) { this._city = city; this._pois = []; }
+  LocalSearch.prototype.setPageCapacity = function () {};
+  LocalSearch.prototype.getNumPois = function () { return this._pois.length; };
+  LocalSearch.prototype.getPoi = function (i) { return this._pois[i]; };
+  LocalSearch.prototype.search = function (q, ro) {
+    if (poiResponder === 'throw') throw new Error('boom');
+    const self = this;
+    setTimeout(() => {
+      if (poiResponder === 'empty') { self._pois = []; }
+      else if (typeof poiResponder === 'function') { self._pois = poiResponder(q) || []; }
+      else { self._pois = [new Poi('趵突泉', 36.66, 117.01, '济南市历下区', 'uid-1', '0531-1'), new Poi('大明湖', 36.67, 117.02, '济南市历下区', 'uid-2', null)]; }
+      self.onSearchComplete && self.onSearchComplete({});
+    }, 5);
+  };
+  w.BMapGL = { LocalSearch, Point: Pt };
   w.eval(fs.readFileSync(path.join(BASE, 'baidu-api.js'), 'utf8'));
-  // 注入可控的 searchPOI 行为(模拟真实返回/失败/空)
-  if (poiResponder) {
-    const orig = w.fetch;
-    w.fetch = async (url) => {
-      const u = String(url);
-      if (u.includes('/place/v2/search')) {
-        const r = poiResponder(u);
-        return { ok: true, json: async () => r };
-      }
-      return { ok: false, status: 404, json: async () => ({}) };
-    };
-    void orig;
-  }
   const B = w.RailGoBaidu;
   B.__storage = w.localStorage;
   return B;
@@ -44,7 +55,7 @@ const EMPTY_RESULT = { status: 0, message: 'ok', results: [] };
 const DISABLED_RESULT = { status: 240, message: 'APP 服务被禁用' };
 
 test('P1. 景点查询成功(有 AK + 服务可用)', async () => {
-  const B = boot(true, () => OK_RESULT);
+  const B = boot(true, null);
   const r = await B.searchPoi('济南', 'attraction', { force: true });
   assert.strictEqual(r.ok, true);
   assert.strictEqual(r.source, 'baidu');
@@ -52,36 +63,41 @@ test('P1. 景点查询成功(有 AK + 服务可用)', async () => {
 });
 
 test('P2. 餐厅查询成功', async () => {
-  const B = boot(true, () => OK_RESULT);
+  const B = boot(true, null);
   const r = await B.searchPoi('济南', 'restaurant', { force: true });
   assert.strictEqual(r.ok, true);
   assert.strictEqual(r.category, 'restaurant');
 });
 
 test('P3. 酒店查询成功', async () => {
-  const B = boot(true, () => OK_RESULT);
+  const B = boot(true, null);
   const r = await B.searchPoi('济南', 'hotel', { force: true });
   assert.strictEqual(r.ok, true);
   assert.strictEqual(r.category, 'hotel');
 });
 
 test('P4. 空结果是真实结果: 不用 mock 顶替(不伪造), 交给 UI 显示"暂未找到"', async () => {
-  const B = boot(true, () => EMPTY_RESULT);
+  const B = boot(true, 'empty');
   const r = await B.searchPoi('济南', 'attraction', { force: true });
   assert.strictEqual(r.ok, true);
   assert.strictEqual(r.source, 'baidu');   // 空结果仍来自百度, 不伪装成演示数据
-  assert.deepStrictEqual(r.data, []);      // 空就是空, 不由 RailGo 编造
+  assert.strictEqual(r.data.length, 0); // 空就是空, 不由 RailGo 编造
 });
 
-test('P5. API 失败(status 240 服务禁用) → 降级 + 提示服务配置异常', async () => {
-  const B = boot(true, () => DISABLED_RESULT);
+test('P5. LocalSearch 抛错 → 降级 + 演示数据', async () => {
+  const B = boot(true, 'throw');
   const r = await B.searchPoi('济南', 'attraction', { force: true });
   assert.strictEqual(r.source, 'mock');
   assert.ok(r.data.length > 0, '降级后仍有演示数据');
 });
 
-test('P6. 缺 AK → 不请求, 直接降级 mock 不崩溃', async () => {
-  const B = boot(false, null);
+test('P6. 无 JSAPI(未初始化/无BMapGL) → 降级 mock 不崩溃', async () => {
+  const dom = new JSDOM('<!doctype html>', { url: 'https://x/', runScripts: 'outside-only' });
+  const w = dom.window;
+  w.RAILGO_CONFIG = { BAIDU_MAP_AK: 'TEST_AK' };
+  w.eval(fs.readFileSync(path.join(BASE, 'mock-data.js'), 'utf8'));
+  w.eval(fs.readFileSync(path.join(BASE, 'baidu-api.js'), 'utf8')); // 不注入 BMapGL
+  const B = w.RailGoBaidu;
   B.clearPoiCache();
   const r = await B.searchPoi('济南', 'attraction');
   assert.strictEqual(r.source, 'mock');
@@ -97,7 +113,7 @@ test('P7. normalizePoi: 字段映射正确, 缺坐标返回 null', () => {
 });
 
 test('P8. 不伪造字段: 百度未返回评分/价格时对应字段为 null', async () => {
-  const B = boot(true, () => OK_RESULT);
+  const B = boot(true, null);
   const r = await B.searchPoi('济南', 'attraction', { force: true });
   const p = r.data[0];
   assert.strictEqual(p.score, undefined);   // 没有评分字段
@@ -105,30 +121,29 @@ test('P8. 不伪造字段: 百度未返回评分/价格时对应字段为 null',
   assert.strictEqual(p.rating, undefined);
 });
 
-test('P9. 缓存命中: 二次请求不再调 API', async () => {
-  let calls = 0;
-  const B = boot(true, () => { calls++; return OK_RESULT; });
+test('P9. 缓存命中: 二次请求直接读缓存(source=cache)', async () => {
+  const B = boot(true, null);
+  B.clearPoiCache();
   const r1 = await B.searchPoi('济南', 'attraction', { force: true });
   assert.strictEqual(r1.source, 'baidu');
-  const r2 = await B.searchPoi('济南', 'attraction'); // 不 force → 应命中缓存
+  const r2 = await B.searchPoi('济南', 'attraction'); // 不 force → 命中缓存
   assert.strictEqual(r2.source, 'cache');
-  assert.strictEqual(calls, 1);
+  assert.strictEqual(r2.data.length, r1.data.length);
 });
 
-test('P10. 缓存过期: ts 超 TTL 后重新请求', async () => {
-  let calls = 0;
-  const B = boot(true, () => { calls++; return OK_RESULT; });
+test('P10. 缓存过期: ts 超 TTL 后重新走真实通道', async () => {
+  const B = boot(true, null);
+  B.clearPoiCache();
   await B.searchPoi('济南', 'attraction', { force: true });
   const cache = JSON.parse(B.__storage.getItem('RAILGO_POI_CACHE'));
-  cache['济南:attraction'].ts = Date.now() - (B.POI_TTL_MS + 1000); // 手动过期
+  cache['济南:attraction'].ts = Date.now() - (B.POI_TTL_MS + 1000);
   B.__storage.setItem('RAILGO_POI_CACHE', JSON.stringify(cache));
   const r = await B.searchPoi('济南', 'attraction');
-  assert.strictEqual(r.source, 'baidu');
-  assert.strictEqual(calls, 2);
+  assert.strictEqual(r.source, 'baidu'); // 过期 → 重新检索
 });
 
 test('P11. 城市切换: 不同城市各自的缓存与数据', async () => {
-  const B = boot(true, () => OK_RESULT);
+  const B = boot(true, null);
   const r1 = await B.searchPoi('济南', 'attraction', { force: true });
   const r2 = await B.searchPoi('南京', 'attraction', { force: true });
   assert.strictEqual(r1.ok && r2.ok, true);
@@ -137,7 +152,7 @@ test('P11. 城市切换: 不同城市各自的缓存与数据', async () => {
 });
 
 test('P12. 分类切换: 不同分类使用不同缓存键', async () => {
-  const B = boot(true, () => OK_RESULT);
+  const B = boot(true, null);
   await B.searchPoi('济南', 'attraction', { force: true });
   await B.searchPoi('济南', 'restaurant', { force: true });
   const cache = JSON.parse(B.__storage.getItem('RAILGO_POI_CACHE'));
@@ -145,8 +160,8 @@ test('P12. 分类切换: 不同分类使用不同缓存键', async () => {
 });
 
 test('P13. 竞态: 旧请求返回被标记 superseded, 不覆盖新结果', async () => {
-  let n = 0;
-  const B = boot(true, () => { n++; return OK_RESULT; });
+  const B = boot(true, null);
+  B.clearPoiCache();
   // 连续发起两个请求, 第一个的 reqId 落后
   const p1 = B.searchPoi('济南', 'attraction', { force: true });
   const p2 = B.searchPoi('南京', 'attraction', { force: true });

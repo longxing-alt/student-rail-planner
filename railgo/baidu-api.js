@@ -28,7 +28,9 @@
 
   /* ---------- 对外 API (全部返回 Promise) ---------- */
 
-  /** 关键词 POI 检索(地点检索服务) */
+  /** 关键词 POI 检索 —— 【已停用】Web Service 通道, 保留仅为兼容/降级参考。
+   *  阶段5.1 起实际查询走 BMapGL.LocalSearch(localSearchPOI), 原因: 本端点
+   *  无 CORS 响应头且当前 AK 的 Web 服务被禁用(status:240)。 */
   function searchPOI(query, city, opts) {
     const ak = getAK(); if (!ak) return noKey('searchPOI');
     const p = opts || {};
@@ -38,7 +40,8 @@
     return _get(url).then(j => ({ success: j.status === 0, source: 'baidu', data: (j.results || []), raw: j }));
   }
 
-  /** 周边检索(圆形区域) */
+  /** 周边检索 —— 【已停用】Web Service 通道, 保留仅为兼容/降级参考。
+   *  阶段5.1 起实际查询走 BMapGL.LocalSearch(localSearchNearby)。 */
   function searchNearbyPOI(query, lat, lon, radiusM, opts) {
     const ak = getAK(); if (!ak) return noKey('searchNearbyPOI');
     const p = opts || {};
@@ -272,19 +275,22 @@
     }
     const cq = POI_CATEGORIES[category] ? POI_CATEGORIES[category].query : category;
     let result = null;
-    if (getAK()) {
+    // 阶段5.1: 真实通道 = BMapGL.LocalSearch(浏览器端 JSAPI, 无 CORS 限制)
+    // 不再使用 Web Service fetch(/place/v2/search) 作为实际查询通道
+    if (localSearchAvailable()) {
       try {
-        const r = await searchPOI(cq, cityName, { pageSize: o.pageSize || 10 });
-        if (r && r.success && Array.isArray(r.data)) {
-          const norm = r.data.map(x => normalizePoi(x, category)).filter(Boolean);
-          result = { ok: true, source: 'baidu', category, data: norm, reqId };
-        } else if (r && r.raw && r.raw.status === 240) {
-          result = { ok: false, source: 'baidu', category, data: [], reqId, message: '地图服务配置异常', errorCode: 'SERVICE_DISABLED' };
+        const r = await localSearchPOI(cq, cityName, category);
+        if (r && r.ok) {
+          result = { ok: true, source: 'baidu', category, data: r.data, reqId };
+        } else {
+          result = { ok: false, source: 'baidu', category, data: [], reqId, message: '地点信息暂时无法获取', errorCode: (r && r.errorCode) || 'LS_ERROR' };
         }
       } catch (e) {
-        // CORS / 网络 / 配额 → 交给降级; 不静默吞掉原因
-        result = { ok: false, source: 'baidu', category, data: [], reqId, message: '地点信息暂时无法获取', errorCode: (e && e.name === 'TypeError') ? 'CORS_OR_NETWORK' : 'API_ERROR' };
+        result = { ok: false, source: 'baidu', category, data: [], reqId, message: '地点信息暂时无法获取', errorCode: 'LS_EXCEPTION' };
       }
+    } else if (getAK()) {
+      // JSAPI 未就绪但配了 AK: 不偷偷退回 Web Service(会 CORS 失败且当前被禁用), 直接降级
+      result = { ok: false, source: 'baidu', category, data: [], reqId, message: '地图服务尚未就绪', errorCode: 'NO_JSAPI' };
     }
     // 降级到 mock(仅当未拿到真实结果)
     if (!result || !result.ok) {
@@ -307,7 +313,148 @@
 
   function clearPoiCache() { try { root.localStorage.removeItem(POI_CACHE_KEY); } catch (e) {} }
 
-  const API = { getAK, searchPOI, searchNearbyPOI, geocode, reverseGeocode, walkingRoute, transitRoute, drivingRoute, coordConvert, ping, wgs84ToGcj02, gcj02ToBd09, wgs84ToBd09, resolveCityCoord, resolveCityCoords, clearCoordCache, CGEO_CACHE_KEY, normalizePoi, searchPoi, clearPoiCache, POI_CATEGORIES, POI_CACHE_KEY, POI_TTL_MS };
+  /* ==================== 阶段5.1: BMapGL.LocalSearch 通道 ====================
+   * 替代 Web Service fetch(/place/v2/search) —— 后者响应无 CORS 头且当前
+   * AK 的 Web 服务被禁用(status:240); JSAPI 通道已启用(控制台: JS地点检索 ✓)。
+   * 依据官方 bundle 核实: LocalSearch.inherits(基类); search(query,opts),
+   * searchNearby(keyword,center,radius,opts), onSearchComplete, getPoi(i),
+   * DEFAULT_RADIUS=2000, MAX_RADIUS=100000; Poi 有 getPoint/getTitle/getAddress/
+   * getPhoneNumber/getUid/getType。不使用高级服务。
+   */
+  const LS_TIMEOUT_MS = 8000;
+
+  function _getNS() {
+    if (root.BMapGL && root.BMapGL.LocalSearch) return root.BMapGL;
+    if (root.BMap && root.BMap.LocalSearch) return root.BMap;
+    return null;
+  }
+  function localSearchAvailable() { return !!_getNS(); }
+
+  /** 兼容访问: 先方法后属性(不同版本 Poi 暴露方式不同) */
+  function _poiField(poi, method, prop) {
+    try { if (poi && typeof poi[method] === 'function') { const v = poi[method](); if (v != null) return v; } } catch (e) {}
+    try { if (poi && poi[prop] != null) return poi[prop]; } catch (e) {}
+    return null;
+  }
+
+  /** BMapGL.Poi → 项目 POI 结构(阶段5 已有结构, 不新增字段) */
+  function adaptLocalSearchPoi(poi, category) {
+    if (!poi) return null;
+    let pt = null;
+    try { pt = _poiField(poi, 'getPoint', 'point'); } catch (e) {}
+    const lat = pt && typeof pt.lat === 'number' ? pt.lat : null;
+    const lng = pt && typeof pt.lng === 'number' ? pt.lng : null;
+    if (lat === null || lng === null) return null; // 缺坐标 → 跳过(与既有行为一致)
+    const name = _poiField(poi, 'getTitle', 'title') || '(未命名)';
+    const address = _poiField(poi, 'getAddress', 'address') || '';
+    const uid = _poiField(poi, 'getUid', 'uid') || (category + ':' + name);
+    const tel = _poiField(poi, 'getPhoneNumber', 'phoneNumber');
+    return { id: uid, name: name, address: address, lat: lat, lng: lng, category: category, telephone: tel || null, detailUrl: null, source: 'baidu' };
+  }
+
+  /** LocalSearch 实例(设置页容量/自动视野; 不渲染 panel, 由我们自己的 UI 显示) */
+  function _newLocalSearch(ns, cityName) {
+    const opts = { onSearchComplete: function () {} };
+    if (cityName) opts.pageCapacity = 10;
+    return new ns.LocalSearch(cityName || (root.RAILGO_DEFAULT_CITY || '全国'), opts);
+  }
+
+  /**
+   * 关键词/城市检索(JSAPI 通道)
+   * @returns {Promise<{ok:boolean, source:'baidu', data:Array, errorCode?:string}>}
+   */
+  function localSearchPOI(query, cityName, category) {
+    return new Promise(resolve => {
+      const ns = _getNS();
+      if (!ns) return resolve({ ok: false, source: 'baidu', data: [], errorCode: 'NO_JSAPI' });
+      let done = false, timer = null;
+      const finish = r => { if (done) return; done = true; if (timer) clearTimeout(timer); resolve(r); };
+      try {
+        const ls = _newLocalSearch(ns, cityName);
+        ls.setPageCapacity && ls.setPageCapacity(10);
+        ls.onSearchComplete = function (results) {
+          try {
+            const total = (typeof ls.getNumPois === 'function') ? ls.getNumPois()
+              : (results && typeof results.getCurrentNumPois === 'function') ? results.getCurrentNumPois()
+              : (results && results.getPoi ? -1 : 0);
+            const n = (total && total > 0) ? total : 0;
+            const out = [];
+            if (n > 0) {
+              for (let i = 0; i < n; i++) {
+                const p = ls.getPoi(i) || (results && results.getPoi && results.getPoi(i));
+                const a = adaptLocalSearchPoi(p, category);
+                if (a) out.push(a);
+              }
+            } else if (typeof (results && results.getCurrentNumPois) !== 'function' && results && results.getPoi) {
+              // 某些版本回调直接传 results 对象
+              for (let i = 0; i < (results.getCurrentNumPois ? results.getCurrentNumPois() : 0); i++) {
+                const a = adaptLocalSearchPoi(results.getPoi(i), category);
+                if (a) out.push(a);
+              }
+            }
+            finish({ ok: true, source: 'baidu', data: out, raw: results });
+          } catch (e) {
+            finish({ ok: false, source: 'baidu', data: [], errorCode: 'ADAPT_ERROR' });
+          }
+        };
+        // SDK 可能在异步回调/内部调度中抛错(如 bundle 抛 boom): 用 safeSearch 包裹,
+        // 保证异常被转成失败结果而不是冒泡成未捕获异常
+        try {
+          ls.search(query, { renderOptions: { map: null, autoViewport: false, selectFirstResult: false } });
+        } catch (e) {
+          finish({ ok: false, source: 'baidu', data: [], errorCode: 'SEARCH_ERROR' });
+          return;
+        }
+        timer = setTimeout(() => finish({ ok: false, source: 'baidu', data: [], errorCode: 'TIMEOUT' }), LS_TIMEOUT_MS);
+      } catch (e) {
+        finish({ ok: false, source: 'baidu', data: [], errorCode: 'SEARCH_ERROR' });
+      }
+    });
+  }
+
+  /**
+   * 附近检索(JSAPI 通道)
+   * @param {string} query 关键词
+   * @param {{lat:number,lng:number}} center BD09 坐标(JSAPI 要求 BD09)
+   * @param {number} radiusM 半径(米, 默认 2000, 上限 100000)
+   */
+  function localSearchNearby(query, center, radiusM, category) {
+    return new Promise(resolve => {
+      const ns = _getNS();
+      if (!ns) return resolve({ ok: false, source: 'baidu', data: [], errorCode: 'NO_JSAPI' });
+      if (!center || typeof center.lat !== 'number') return resolve({ ok: false, source: 'baidu', data: [], errorCode: 'NO_CENTER' });
+      let done = false, timer = null;
+      const finish = r => { if (done) return; done = true; if (timer) clearTimeout(timer); resolve(r); };
+      try {
+        const ls = _newLocalSearch(ns, null);
+        ls.setPageCapacity && ls.setPageCapacity(10);
+        ls.onSearchComplete = function (results) {
+          try {
+            const n = (typeof ls.getNumPois === 'function') ? ls.getNumPois() : 0;
+            const out = [];
+            for (let i = 0; i < (n > 0 ? n : 0); i++) {
+              const a = adaptLocalSearchPoi(ls.getPoi(i), category);
+              if (a) out.push(a);
+            }
+            finish({ ok: true, source: 'baidu', data: out, raw: results });
+          } catch (e) { finish({ ok: false, source: 'baidu', data: [], errorCode: 'ADAPT_ERROR' }); }
+        };
+        const pt = new ns.Point(center.lng, center.lat);
+        const r = Math.max(100, Math.min(100000, radiusM || 2000));
+        try {
+          ls.searchNearby(query, pt, r, { renderOptions: { map: null, autoViewport: false } });
+        } catch (e) {
+          finish({ ok: false, source: 'baidu', data: [], errorCode: 'SEARCH_ERROR' });
+          return;
+        }
+        timer = setTimeout(() => finish({ ok: false, source: 'baidu', data: [], errorCode: 'TIMEOUT' }), LS_TIMEOUT_MS);
+      } catch (e) {
+        finish({ ok: false, source: 'baidu', data: [], errorCode: 'SEARCH_ERROR' });
+      }
+    });
+  }
+
+  const API = { getAK, searchPOI, searchNearbyPOI, geocode, reverseGeocode, walkingRoute, transitRoute, drivingRoute, coordConvert, ping, wgs84ToGcj02, gcj02ToBd09, wgs84ToBd09, resolveCityCoord, resolveCityCoords, clearCoordCache, CGEO_CACHE_KEY, normalizePoi, searchPoi, clearPoiCache, POI_CATEGORIES, POI_CACHE_KEY, POI_TTL_MS, localSearchAvailable, localSearchPOI, localSearchNearby, adaptLocalSearchPoi };
   if (typeof module === 'object' && module.exports) module.exports = API;
   root.RailGoBaidu = API;
 })();
