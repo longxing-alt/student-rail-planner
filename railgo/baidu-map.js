@@ -19,8 +19,9 @@
 
   let sdkPromise = null;   // 单次加载承诺(模块级单例, 防重复插入 script)
   let mapInstance = null;  // 当前地图实例
-  let markerMap = null;    // cityId → Marker, 用于去重
-  let currentPolyline = null; // 当前路线, 用于清理
+  let markerMap = null;    // cityId → Marker, 用于去重(铁路层)
+  let currentPolyline = null; // 当前路线, 用于清理(铁路层)
+  let poiMarkers = [];     // 阶段5: POI Marker 独立数组, 与铁路层彻底隔离
 
   function getAK() {
     const cfg = root.RAILGO_CONFIG;
@@ -119,6 +120,7 @@
     mapInstance = null;
     markerMap = null;
     currentPolyline = null;
+    poiMarkers = [];
   }
 
   function getMap() { return mapInstance; }
@@ -187,6 +189,7 @@
   function clearOverlays() {
     try { if (mapInstance && mapInstance.clearOverlays) mapInstance.clearOverlays(); } catch (e) {}
     markerMap = {}; currentPolyline = null;
+    poiMarkers = []; // 铁路层清理时同步重置 POI 引用(覆盖物已被 clearOverlays 清空)
   }
   function clearPolyline() {
     try { if (mapInstance && currentPolyline && mapInstance.removeOverlay) mapInstance.removeOverlay(currentPolyline); } catch (e) {}
@@ -208,7 +211,73 @@
   /** 测试用: 重置单例状态(不影响生产逻辑) */
   function _reset() { sdkPromise = null; destroyMap(); }
 
-  const API = { getAK, isAvailable, loadSdk, initMap, destroyMap, getMap, detectNS, addMarkers, drawPolyline, clearOverlays, clearPolyline, fitView, _reset, SCRIPT_ID };
+  /* ==================== 阶段5: POI 覆盖物(与铁路层分组隔离) ====================
+   * 关键: clearPoiOverlays 只删 POI, 不动铁路 Marker/Polyline; 反之亦然。
+   * POI 数据由调用方(railgo.js)经 baidu-api.searchPoi 取得并标准化。
+   */
+
+  /** 渲染 POI Marker(先清旧 POI, 再画新的, 避免无限叠加) */
+  function addPoiMarkers(pois, opts) {
+    const map = mapInstance, ns = detectNS();
+    if (!map || !ns) return { ok: false, code: 'NO_MAP', count: 0 };
+    clearPoiOverlays();
+    const o = opts || {};
+    let n = 0;
+    for (const p of pois || []) {
+      if (!p || typeof p.lat !== 'number' || typeof p.lng !== 'number') continue; // 缺坐标跳过
+      try {
+        const pt = new ns.Point(p.lng, p.lat);
+        const mk = new ns.Marker(pt, { title: p.name });
+        if (mk.setLabel) mk.setLabel(new ns.Label(p.name, { offset: new ns.Size(0, -18) }));
+        if (mk.addEventListener) mk.addEventListener('click', () => {
+          try {
+            const html = '<b>' + p.name + '</b><br>' + (p.address || '') +
+              (p.telephone ? '<br>电话: ' + p.telephone : '') +
+              '<div style="color:#888;font-size:11px">来源: ' + (p.source === 'baidu' ? '百度地图' : '演示数据') + '</div>';
+            map.openInfoWindow(new ns.InfoWindow(html), pt);
+          } catch (e) {}
+          if (o.onPoiClick) o.onPoiClick(p);
+        });
+        map.addOverlay(mk);
+        poiMarkers.push(mk);
+        n++;
+      } catch (e) { /* 单个失败不影响其余 */ }
+    }
+    return { ok: true, count: n };
+  }
+
+  /** 只清除 POI 覆盖物 —— 铁路 Marker/Polyline 保持不动 */
+  function clearPoiOverlays() {
+    const map = mapInstance;
+    if (map && map.removeOverlay) {
+      poiMarkers.forEach(m => { try { map.removeOverlay(m); } catch (e) {} });
+    }
+    poiMarkers = [];
+  }
+
+  /** 定位到某个 POI(仅平移, 不反复改 zoom) */
+  function panToPoi(poi) {
+    const map = mapInstance, ns = detectNS();
+    if (!map || !ns || !poi || typeof poi.lat !== 'number') return false;
+    try { map.panTo(new ns.Point(poi.lng, poi.lat)); if (map.setZoom) map.setZoom(Math.max(14, map.getZoom ? map.getZoom() : 14)); return true; } catch (e) { return false; }
+  }
+
+  /** 首次展示某城 POI 时, 让 POI 大致可见(不因单点点击反复跳) */
+  function fitPoiView(pois) {
+    const map = mapInstance, ns = detectNS();
+    if (!map || !ns) return false;
+    const valid = (pois || []).filter(p => p && typeof p.lat === 'number' && typeof p.lng === 'number');
+    if (!valid.length) return false;
+    try {
+      if (valid.length === 1) { map.setCenter(new ns.Point(valid[0].lng, valid[0].lat)); map.setZoom(14); return true; }
+      map.setViewport(valid.map(p => new ns.Point(p.lng, p.lat)));
+      return true;
+    } catch (e) { return false; }
+  }
+
+  function getPoiMarkerCount() { return poiMarkers.length; }
+
+  const API = { getAK, isAvailable, loadSdk, initMap, destroyMap, getMap, detectNS, addMarkers, drawPolyline, clearOverlays, clearPolyline, fitView, addPoiMarkers, clearPoiOverlays, panToPoi, fitPoiView, getPoiMarkerCount, _reset, SCRIPT_ID };
   if (typeof module === 'object' && module.exports) module.exports = API;
   root.RailGoBaiduMap = API;
 })();

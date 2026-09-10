@@ -190,7 +190,124 @@
 
   function clearCoordCache() { try { root.localStorage.removeItem(CGEO_CACHE_KEY); } catch (e) {} }
 
-  const API = { getAK, searchPOI, searchNearbyPOI, geocode, reverseGeocode, walkingRoute, transitRoute, drivingRoute, coordConvert, ping, wgs84ToGcj02, gcj02ToBd09, wgs84ToBd09, resolveCityCoord, resolveCityCoords, clearCoordCache, CGEO_CACHE_KEY };
+  /* ==================== 阶段5: POI 地点检索层 ====================
+   * 官方接口(已核实): https://api.map.baidu.com/place/v2/search
+   *   - 行政区划检索: query + region + ak; 返回 {status,message,results[]}
+   *   - results[]: {name, location:{lat,lng}, address, uid, province, city, area, telephone, detail_info?}
+   * 实测重要限制(见阶段5报告):
+   *   1) 该端点响应头不含 Access-Control-Allow-Origin → 浏览器 fetch 直连被 CORS 拦截
+   *   2) 当前 AK 访问 Web 服务返回 status:240(APP 服务被禁用)
+   * 因此本层: 有可用 AK 且未被 CORS 拦截时走真实 API; 否则降级到 mock(明确标注 source),
+   * 不伪造评分/价格/评论等字段。UI 只消费 normalizePoi() 的统一结构。
+   */
+  const POI_CACHE_KEY = 'RAILGO_POI_CACHE';
+  const POI_TTL_MS = 24 * 60 * 60 * 1000; // RailGo 自定义客户端缓存策略(非官方推荐值)
+  const POI_CATEGORIES = {
+    attraction: { label: '景点', query: '景点' },
+    restaurant: { label: '餐厅', query: '美食' },
+    hotel: { label: '酒店', query: '酒店' },
+  };
+
+  /** 百度 POI 原始对象 → RailGo 统一结构(仅映射真实存在的字段, 不造数据) */
+  function normalizePoi(raw, category) {
+    if (!raw) return null;
+    const loc = raw.location || {};
+    const lat = typeof loc.lat === 'number' ? loc.lat : (typeof raw.lat === 'number' ? raw.lat : null);
+    const lng = typeof loc.lng === 'number' ? loc.lng : (typeof raw.lng === 'number' ? raw.lng : null);
+    if (lat === null || lng === null) return null;
+    return {
+      id: raw.uid || raw.id || (category + ':' + raw.name),
+      name: raw.name || '(未命名)',
+      address: raw.address || (raw.area ? (raw.city || '') + raw.area : ''),
+      lat, lng,
+      category: category,
+      // 以下字段仅当百度真实返回时才有值(不伪造)
+      telephone: raw.telephone || null,
+      detailUrl: (raw.detail_info && raw.detail_info.detail_url) || null,
+      source: 'baidu',
+    };
+  }
+
+  /* mock 降级数据(取自 mock-data 的景点/餐饮, 酒店为演示补充; 明确标注 source:'mock') */
+  function _mockPoi(cityName, category) {
+    const M = root.RailGoMock;
+    const cat = POI_CATEGORIES[category] ? POI_CATEGORIES[category].label : category;
+    const out = [];
+    if (M) {
+      const city = M.CITIES.find(c => c.name === cityName || c.id === cityName);
+      if (city) {
+        if (category === 'attraction') {
+          M.ATTRACTIONS.filter(a => a.cityId === city.id).forEach(a => out.push({ id: a.id, name: a.name, address: city.name + '（演示数据）', lat: a.lat, lng: a.lon, category, source: 'mock' }));
+        } else if (category === 'restaurant') {
+          M.FOOD.filter(f => f.cityId === city.id).forEach((f, i) => out.push({ id: city.id + '-food-' + i, name: f.name, address: f.address || city.name, lat: city.lat + (i + 1) * 0.004, lng: city.lon + (i + 1) * 0.003, category, source: 'mock' }));
+        } else if (category === 'hotel') {
+          M.STAY.filter(s => s.cityId === city.id).forEach((s, i) => out.push({ id: city.id + '-stay-' + i, name: s.name + '（住宿区域）', address: s.note || city.name, lat: city.lat - (i + 1) * 0.004, lng: city.lon - (i + 1) * 0.003, category, source: 'mock' }));
+        }
+      }
+    }
+    return out.slice(0, 8);
+  }
+
+  function _poiCacheRead() { try { return JSON.parse(root.localStorage.getItem(POI_CACHE_KEY)) || {}; } catch (e) { return {}; } }
+  function _poiCacheWrite(o) { try { root.localStorage.setItem(POI_CACHE_KEY, JSON.stringify(o)); } catch (e) {} }
+
+  /* 竞态保护: 全局递增 requestId, 只有最新请求的结果才被接受 */
+  let _poiReqSeq = 0;
+  function _nextReqId() { return ++_poiReqSeq; }
+  function _isLatest(id) { return id === _poiReqSeq; }
+
+  /**
+   * 查询 POI(统一入口) —— 带 TTL 缓存 + 竞态保护 + 降级
+   * @returns {Promise<{ok:boolean, source:'baidu'|'mock'|'cache', category, data:Array, message?:string, reqId:number, stale?:boolean}>}
+   */
+  async function searchPoi(cityName, category, opts) {
+    const o = opts || {};
+    const reqId = _nextReqId();
+    const key = cityName + ':' + category;
+    const cache = _poiCacheRead();
+    const hit = cache[key];
+    const now = Date.now();
+    if (!o.force && hit && Array.isArray(hit.data) && (now - (hit.ts || 0) < POI_TTL_MS)) {
+      return { ok: true, source: 'cache', category, data: hit.data, reqId, cached: true };
+    }
+    const cq = POI_CATEGORIES[category] ? POI_CATEGORIES[category].query : category;
+    let result = null;
+    if (getAK()) {
+      try {
+        const r = await searchPOI(cq, cityName, { pageSize: o.pageSize || 10 });
+        if (r && r.success && Array.isArray(r.data)) {
+          const norm = r.data.map(x => normalizePoi(x, category)).filter(Boolean);
+          result = { ok: true, source: 'baidu', category, data: norm, reqId };
+        } else if (r && r.raw && r.raw.status === 240) {
+          result = { ok: false, source: 'baidu', category, data: [], reqId, message: '地图服务配置异常', errorCode: 'SERVICE_DISABLED' };
+        }
+      } catch (e) {
+        // CORS / 网络 / 配额 → 交给降级; 不静默吞掉原因
+        result = { ok: false, source: 'baidu', category, data: [], reqId, message: '地点信息暂时无法获取', errorCode: (e && e.name === 'TypeError') ? 'CORS_OR_NETWORK' : 'API_ERROR' };
+      }
+    }
+    // 降级到 mock(仅当未拿到真实结果)
+    if (!result || !result.ok) {
+      const mock = _mockPoi(cityName, category);
+      const fallback = {
+        ok: true, source: 'mock', category, data: mock, reqId,
+        stale: true,
+        message: (result && result.message) || '使用演示数据',
+        errorCode: result && result.errorCode,
+      };
+      return _isLatest(reqId) ? fallback : { ...fallback, superseded: true };
+    }
+    // 写入缓存(只缓存真实结果, mock 不污染缓存)
+    if (category && result.source === 'baidu') {
+      cache[key] = { data: result.data, ts: Date.now() };
+      _poiCacheWrite(cache);
+    }
+    return _isLatest(reqId) ? result : { ...result, superseded: true };
+  }
+
+  function clearPoiCache() { try { root.localStorage.removeItem(POI_CACHE_KEY); } catch (e) {} }
+
+  const API = { getAK, searchPOI, searchNearbyPOI, geocode, reverseGeocode, walkingRoute, transitRoute, drivingRoute, coordConvert, ping, wgs84ToGcj02, gcj02ToBd09, wgs84ToBd09, resolveCityCoord, resolveCityCoords, clearCoordCache, CGEO_CACHE_KEY, normalizePoi, searchPoi, clearPoiCache, POI_CATEGORIES, POI_CACHE_KEY, POI_TTL_MS };
   if (typeof module === 'object' && module.exports) module.exports = API;
   root.RailGoBaidu = API;
 })();

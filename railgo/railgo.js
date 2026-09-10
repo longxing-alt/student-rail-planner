@@ -10,7 +10,7 @@
     return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   }
 
-  let state = { dests: [], mode: 'smart', pref: 'play', stopSuggest: true, candidates: [], active: 0 };
+  let state = { dests: [], mode: 'smart', pref: 'play', stopSuggest: true, candidates: [], active: 0, poiCity: null, poiCat: 'attraction' };
 
   /* ---------- 城市解析 ---------- */
   function resolveCity(q) { return q ? C.cityByName(String(q).trim()) : null; }
@@ -206,7 +206,97 @@
         '<div class="hint">接入百度 POI 后显示真实名称/坐标/分类；评分与人均以官方实际返回为准。</div></div>';
     }
     $('detailBody').innerHTML = html;
+    // 阶段5: 载入该城 POI(景点默认分类), 与地图 Marker 同步
+    state.poiCity = { id: cityId, name: c.name };
+    state.poiCat = state.poiCat || 'attraction';
+    bindPoiTabs();
+    loadPoi(cityId, c.name, state.poiCat, true);
     $('detailSection').scrollIntoView({ behavior: 'smooth' });
+  }
+
+  /* ---------- 阶段5: POI 列表 + Marker 同步 ---------- */
+  let poiReqSeq = 0;
+  function bindPoiTabs() {
+    const tabs = $('poiTabs');
+    if (!tabs || tabs._bound) return;
+    tabs._bound = true;
+    tabs.querySelectorAll('[data-cat]').forEach(el => el.addEventListener('click', () => {
+      tabs.querySelectorAll('[data-cat]').forEach(x => x.classList.remove('on'));
+      el.classList.add('on');
+      state.poiCat = el.dataset.cat;
+      if (state.poiCity) loadPoi(state.poiCity.id, state.poiCity.name, state.poiCat, true);
+    }));
+    if (state.poiCat) {
+      tabs.querySelectorAll('[data-cat]').forEach(x => x.classList.toggle('on', x.dataset.cat === state.poiCat));
+    }
+  }
+
+  async function loadPoi(cityId, cityName, category, fitView) {
+    const box = $('poiBox');
+    if (!box) return;
+    const myReq = ++poiReqSeq;
+    box.innerHTML = '<div class="poi-loading">正在获取' + (BAIDU.POI_CATEGORIES[category] || {}).label + '…</div>';
+    let r;
+    try {
+      r = await BAIDU.searchPoi(cityName, category);
+    } catch (e) {
+      if (myReq === poiReqSeq) box.innerHTML = '<div class="poi-empty">网络异常，请稍后重试</div>';
+      return;
+    }
+    // 竞态: 旧请求晚返回 → 丢弃, 不覆盖新结果
+    if (myReq !== poiReqSeq || r.superseded) return;
+    if (state.poiCity && state.poiCity.id !== cityId) return; // 城市已切换
+    const list = (r && r.data) || [];
+    if (!r || !r.ok) {
+      box.innerHTML = '<div class="poi-empty">' + esc((r && r.message) || '地点信息暂时无法获取') + '</div>';
+      return;
+    }
+    if (!list.length) { box.innerHTML = '<div class="poi-empty">暂未找到相关地点</div>'; return; }
+    const label = (BAIDU.POI_CATEGORIES[category] || {}).label || category;
+    const srcTag = r.source === 'baidu' ? '<span class="badge ok">百度地图</span>' : '<span class="badge mock">演示数据</span>';
+    let html = '<div class="hint" style="margin-bottom:6px">' + cityName + ' · ' + label + ' ' + list.length + ' 项 ' + srcTag +
+      (r.stale && r.message ? '　<span style="color:var(--warn)">' + esc(r.message) + '</span>' : '') + '</div>';
+    list.forEach((p, i) => {
+      html += '<div class="poi-item" data-i="' + i + '">' +
+        '<b>' + esc(p.name) + '</b>' +
+        '<div class="poi-meta">' + esc(p.address || '') + (p.telephone ? ' · ' + esc(p.telephone) : '') + '</div>' +
+        '</div>';
+    });
+    box.innerHTML = html;
+    // 列表 ↔ Marker 同步: 点击列表项定位
+    box.querySelectorAll('.poi-item').forEach(el => el.addEventListener('click', () => {
+      const p = list[+el.dataset.i];
+      box.querySelectorAll('.poi-item').forEach(x => x.classList.remove('on'));
+      el.classList.add('on');
+      const BM = window.RailGoBaiduMap;
+      if (BM && BM.panToPoi) BM.panToPoi(p);
+    }));
+    // 地图 Marker(与铁路层隔离); 首次展示该城 POI 时适应视野
+    const BM = window.RailGoBaiduMap;
+    if (BM && BM.getMap && BM.getMap()) {
+      BM.addPoiMarkers(list, {});
+      if (fitView) BM.fitPoiView(list);
+    } else {
+      // 无百度地图(演示模式) → 用 SVG 叠加简示
+      renderPoiOnSvg(list);
+    }
+  }
+
+  /* 演示模式(SVG)下的 POI 点位简示 */
+  function renderPoiOnSvg(list) {
+    const svg = $('mapSvg');
+    if (!svg) return;
+    svg.querySelectorAll('.poi-dot').forEach(n => n.remove());
+    const pts = list.filter(p => typeof p.lat === 'number');
+    if (!pts.length) return;
+    const lats = pts.map(p => p.lat), lons = pts.map(p => p.lng);
+    const minLat = Math.min.apply(null, lats) - 0.02, maxLat = Math.max.apply(null, lats) + 0.02;
+    const minLon = Math.min.apply(null, lons) - 0.03, maxLon = Math.max.apply(null, lons) + 0.03;
+    const px = lon => (lon - minLon) / (maxLon - minLon) * 800 + 100;
+    const py = lat => (maxLat - lat) / (maxLat - minLat) * 240 + 50;
+    let g = '';
+    pts.forEach(p => { g += '<circle class="poi-dot" cx="' + px(p.lng) + '" cy="' + py(p.lat) + '" r="5" fill="#d97706"><title>' + esc(p.name) + '</title></circle>'; });
+    svg.insertAdjacentHTML('beforeend', g);
   }
 
   function renderBudget(bud, budget) {
@@ -295,10 +385,16 @@
         coords = raw.map(r => (map[r.id] ? { id: r.id, name: r.name, lat: map[r.id].lat, lon: map[r.id].lng, role: r.role } : r));
       }
     } catch (e) { /* 转换失败保留原坐标 */ }
-    BM.clearOverlays();                 // 清旧 Marker/Polyline, 防叠加
+    BM.clearOverlays();                 // 清旧 Marker/Polyline(含旧 POI), 防叠加
     BM.addMarkers(coords);
     BM.drawPolyline(coords);            // 旅行路线示意(非铁路轨道)
     BM.fitView(coords);                 // 自动视野
+    // 方案切换后重建 POI: 城市仍在路线中→重载(列表与 Marker 保持同步); 否则清空
+    const pc = state.poiCity;
+    if (pc) {
+      if (coords.some(c => c.id === pc.id)) loadPoi(pc.id, pc.name, state.poiCat, false);
+      else { state.poiCity = null; const pb = $('poiBox'); if (pb) pb.innerHTML = ''; }
+    }
   }
 
   /* SVG 演示地图(保留为 fallback) */
