@@ -442,7 +442,183 @@
     });
   }
 
-  const API = { getAK, searchPOI, searchNearbyPOI, geocode, reverseGeocode, walkingRoute, transitRoute, drivingRoute, coordConvert, ping, wgs84ToGcj02, gcj02ToBd09, wgs84ToBd09, resolveCityCoord, resolveCityCoords, clearCoordCache, CGEO_CACHE_KEY, normalizePoi, searchPoi, clearPoiCache, POI_CATEGORIES, POI_CACHE_KEY, POI_TTL_MS, localSearchAvailable, localSearchPOI, localSearchNearby, adaptLocalSearchPoi };
+  /* ==================== 阶段6.1: 单段步行路线基础层 ====================
+   * 通道: BMapGL.WalkingRoute(浏览器端 JSAPI), 不使用 Web Service direction/v2/*。
+   * 本地 bundle + 惰性模块 route 确证:
+   *  - new BMapGL.WalkingRoute(container, { onSearchComplete, renderOptions })
+   *  - search(startPoint, endPoint, opts?)   (start/end 为 BMapGL.Point)
+   *  - 回调经 this._opts.onSearchComplete(构造参数传入)
+   *  - 结果: 实例 getResults() → { getStatus(), getNumPlans(), getPlan(i) }
+   *  - plan: getDistance(false) → 原始数值(米); getDuration(false) → 原始数值(秒)
+   *  - 状态: BMAP_STATUS_SUCCESS=0 / UNKNOWN_ROUTE=3 / INVALID_REQUEST=5
+   *
+   * 硬性坐标分流: 仅 source==='baidu' 的 POI(BD09) 才允许送入真实 WalkingRoute;
+   * mock(WGS84 近似) 一律本地估算 —— 该判断在代码内完成, 不依赖调用方。
+   * 缓存 RAILGO_ROUTE_CACHE 只写真实成功结果; mock 永不污染缓存。
+   * 竞态 _routeReqSeq 独立于 POI; 超时 8s; 不自动重试。
+   */
+  const ROUTE_CACHE_KEY = 'RAILGO_ROUTE_CACHE';
+  const ROUTE_TTL_MS = 24 * 60 * 60 * 1000; // RailGo 自定义客户端缓存策略
+  const ROUTE_TIMEOUT_MS = 8000;
+  const WALK_SPEED_MPS = 5000 / 3600; // 5 km/h
+
+  let _routeReqSeq = 0;
+  function _nextRouteReqId() { return ++_routeReqSeq; }
+  function _isLatestRoute(id) { return id === _routeReqSeq; }
+
+  function _getRouteNS() {
+    if (root.BMapGL && root.BMapGL.WalkingRoute) return root.BMapGL;
+    if (root.BMap && root.BMap.WalkingRoute) return root.BMap;
+    return null;
+  }
+  function localRouteAvailable() { return !!_getRouteNS(); }
+
+  /** 路线类需要一个真实存在的容器元素(经典 JSAPI 语义); 惰性创建一个隐藏容器复用 */
+  function _ensureRouteContainer() {
+    const ROUTE_CONTAINER_ID = 'railgo-route-container';
+    try {
+      if (typeof root.document === 'undefined') return ROUTE_CONTAINER_ID;
+      if (!root.document.getElementById(ROUTE_CONTAINER_ID)) {
+        const div = root.document.createElement('div');
+        div.id = ROUTE_CONTAINER_ID;
+        div.style.display = 'none';
+        (root.document.body || root.document.documentElement).appendChild(div);
+      }
+    } catch (e) { /* 容器创建失败不阻断: 保持原 id */ }
+    return ROUTE_CONTAINER_ID;
+  }
+
+  function _haversineKm(a, b) {
+    const R = 6371;
+    const dLat = (b.lat - a.lat) * Math.PI / 180, dLon = (b.lng - a.lng) * Math.PI / 180;
+    const s = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos(a.lat * Math.PI / 180) * Math.cos(b.lat * Math.PI / 180) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    return 2 * R * Math.atan2(Math.sqrt(s), Math.sqrt(1 - s));
+  }
+
+  function _normEnd(p) {
+    if (!p) return { id: null, name: '', lat: null, lng: null, source: null };
+    return {
+      id: p.id != null ? p.id : null,
+      name: p.name || '',
+      lat: typeof p.lat === 'number' ? p.lat : null,
+      lng: typeof p.lng === 'number' ? p.lng : null,
+      source: p.source || null,
+    };
+  }
+
+  function _routeCacheRead() { try { return JSON.parse(root.localStorage.getItem(ROUTE_CACHE_KEY)) || {}; } catch (e) { return {}; } }
+  function _routeCacheWrite(o) { try { root.localStorage.setItem(ROUTE_CACHE_KEY, JSON.stringify(o)); } catch (e) {} }
+  function clearRouteCache() { try { root.localStorage.removeItem(ROUTE_CACHE_KEY); } catch (e) {} }
+
+  /** 本地估算(唯一 mock 路径): Haversine × 1.3, 步行 5 km/h */
+  function _mockRoute(mode, from, to, errorCode) {
+    let distanceM = null, durationS = null;
+    if (from.lat != null && from.lng != null && to.lat != null && to.lng != null) {
+      distanceM = Math.round(_haversineKm(from, to) * 1.3 * 1000);
+      durationS = Math.round(distanceM / WALK_SPEED_MPS);
+    }
+    return {
+      from: { id: from.id, name: from.name, lat: from.lat, lng: from.lng },
+      to: { id: to.id, name: to.name, lat: to.lat, lng: to.lng },
+      mode: mode, distanceM: distanceM, durationS: durationS,
+      source: 'mock', est: true, status: 'ok', errorCode: errorCode || null,
+      // 6.2 追加: 直线示意 path(仅两端点), 供地图 overlay; mock 不写缓存
+      path: (from.lat != null && from.lng != null && to.lat != null && to.lng != null)
+        ? [{ lat: from.lat, lng: from.lng }, { lat: to.lat, lng: to.lng }] : null,
+    };
+  }
+
+  /**
+   * 单段步行路线(统一入口)
+   * @param {'walking'} mode 6.1 仅步行; 其他模式明确返回不支持
+   * @param {{id,name,lat,lng,source}} from POI(source 决定能否走真实通道)
+   * @param {{id,name,lat,lng,source}} to
+   * @param {{cityId?:string, force?:boolean}} [opts]
+   */
+  async function localRoute(mode, from, to, opts) {
+    const o = opts || {};
+    const reqId = _nextRouteReqId();
+    const nFrom = _normEnd(from), nTo = _normEnd(to);
+    const base = { from: { id: nFrom.id, name: nFrom.name, lat: nFrom.lat, lng: nFrom.lng }, to: { id: nTo.id, name: nTo.name, lat: nTo.lat, lng: nTo.lng }, mode: mode };
+    const wrap = r => (_isLatestRoute(reqId) ? Object.assign({ reqId: reqId }, r) : Object.assign({ reqId: reqId, superseded: true }, r));
+
+    // 仅步行
+    if (mode !== 'walking') {
+      return wrap(Object.assign({}, base, { distanceM: null, durationS: null, source: 'mock', est: true, status: 'failed', errorCode: 'UNSUPPORTED_MODE', path: null }));
+    }
+    // 同点: 0 距离, 不发请求
+    if (nFrom.id != null && nFrom.id === nTo.id) {
+      return wrap(Object.assign({}, base, { distanceM: 0, durationS: 0, source: 'mock', est: true, status: 'ok', errorCode: null, path: null }));
+    }
+    // 缓存(只可能有真实结果)
+    const key = (o.cityId ? o.cityId + ':' : '') + mode + ':' + nFrom.id + '->' + nTo.id;
+    if (!o.force) {
+      const hit = _routeCacheRead()[key];
+      if (hit && typeof hit.distanceM === 'number' && (Date.now() - (hit.ts || 0) < ROUTE_TTL_MS)) {
+        return wrap(Object.assign({}, base, { distanceM: hit.distanceM, durationS: hit.durationS, source: 'baidu', est: false, status: 'ok', errorCode: null, cached: true, path: hit.path || null }));
+      }
+    }
+    // 坐标分流(硬性): 非真实来源 → 只本地估算
+    const bothReal = nFrom.source === 'baidu' && nTo.source === 'baidu';
+    if (!bothReal) return wrap(_mockRoute(mode, nFrom, nTo, null));
+    // 真实通道
+    const ns = _getRouteNS();
+    if (!ns) return wrap(_mockRoute(mode, nFrom, nTo, 'NO_JSAPI'));
+    const real = await new Promise(resolve => {
+      let done = false;
+      const finish = r => { if (!done) { done = true; resolve(r); } };
+      try {
+        const wr = new ns.WalkingRoute(_ensureRouteContainer(), {
+          renderOptions: { map: null, autoViewport: false },
+          onSearchComplete: function (results) {
+            try {
+              // 真实结果类(bundle 确证): es => getNumPlans/getPlan/getStart/getEnd,
+              // 无 getStatus; 因此不以 getStatus 为前提判断成败
+              const res = (results && typeof results.getNumPlans === 'function') ? results
+                : (typeof wr.getResults === 'function' ? wr.getResults() : null);
+              if (!res || typeof res.getNumPlans !== 'function') return finish(_mockRoute(mode, nFrom, nTo, 'EMPTY'));
+              const n = res.getNumPlans();
+              if (!n) return finish(_mockRoute(mode, nFrom, nTo, 'EMPTY'));
+              const plan = res.getPlan(0);
+              const dist = plan && typeof plan.getDistance === 'function' ? plan.getDistance(false) : null;
+              const dur = plan && typeof plan.getDuration === 'function' ? plan.getDuration(false) : null;
+              if (typeof dist !== 'number' || !isFinite(dist)) return finish(_mockRoute(mode, nFrom, nTo, 'EMPTY'));
+              // 6.2 追加: 捕获真实路线几何(plan.getPath(), bundle 确证; GL 返回已转换点集)
+              let path = null;
+              try {
+                if (plan && typeof plan.getPath === 'function') {
+                  const pts = plan.getPath();
+                  if (Array.isArray(pts) && pts.length >= 2) {
+                    path = pts.map(p => ({ lat: p.lat, lng: p.lng }))
+                      .filter(p => typeof p.lat === 'number' && typeof p.lng === 'number');
+                    if (path.length < 2) path = null;
+                  }
+                }
+              } catch (e) { path = null; }
+              finish({ distanceM: Math.round(dist), durationS: (typeof dur === 'number' && isFinite(dur)) ? Math.round(dur) : null, source: 'baidu', est: false, status: 'ok', errorCode: null, path: path });
+            } catch (e) { finish(_mockRoute(mode, nFrom, nTo, 'SEARCH_ERROR')); }
+          },
+        });
+        const s = new ns.Point(nFrom.lng, nFrom.lat);
+        const e2 = new ns.Point(nTo.lng, nTo.lat);
+        wr.search(s, e2);
+        setTimeout(() => finish(_mockRoute(mode, nFrom, nTo, 'TIMEOUT')), ROUTE_TIMEOUT_MS);
+      } catch (err) {
+        finish(_mockRoute(mode, nFrom, nTo, 'SEARCH_ERROR'));
+      }
+    });
+    const out = wrap(Object.assign({}, base, real));
+    // 只缓存真实成功结果 —— mock 永不写入
+    if (real.source === 'baidu' && real.status === 'ok') {
+      const cache = _routeCacheRead();
+      cache[key] = { distanceM: real.distanceM, durationS: real.durationS, ts: Date.now(), path: real.path || null };
+      _routeCacheWrite(cache);
+    }
+    return out;
+  }
+
+  const API = { getAK, searchPOI, searchNearbyPOI, geocode, reverseGeocode, walkingRoute, transitRoute, drivingRoute, coordConvert, ping, wgs84ToGcj02, gcj02ToBd09, wgs84ToBd09, resolveCityCoord, resolveCityCoords, clearCoordCache, CGEO_CACHE_KEY, normalizePoi, searchPoi, clearPoiCache, POI_CATEGORIES, POI_CACHE_KEY, POI_TTL_MS, localSearchAvailable, localSearchPOI, localSearchNearby, adaptLocalSearchPoi, localRoute, localRouteAvailable, clearRouteCache, ROUTE_CACHE_KEY, ROUTE_TTL_MS };
   if (typeof module === 'object' && module.exports) module.exports = API;
   root.RailGoBaidu = API;
 })();

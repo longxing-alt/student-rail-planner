@@ -10,7 +10,7 @@
     return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   }
 
-  let state = { dests: [], mode: 'smart', pref: 'play', stopSuggest: true, candidates: [], active: 0, poiCity: null, poiCat: 'attraction', mockPlanHTML: '', planSource: 'mock' };
+  let state = { dests: [], mode: 'smart', pref: 'play', stopSuggest: true, candidates: [], active: 0, poiCity: null, poiCat: 'attraction', mockPlanHTML: '', planSource: 'mock', dayPlans: [] };
 
   /* ---------- 城市解析 ---------- */
   function resolveCity(q) { return q ? C.cityByName(String(q).trim()) : null; }
@@ -174,6 +174,100 @@
   }
 
   /* ---------- 城市详情 ---------- */
+  /* ==================== 阶段6.2: DayPlan 数据结构 ====================
+   * 5.2 的"POI → HTML 字符串"升级为"POI → DayPlan → (路线) → HTML"。
+   * 顺序保持 5.2 既定逻辑: LocalSearch 相关度顺序取前 6 条, 每 3 条一天; 不重排。
+   * 约束: routes.length === spots.length - 1 (0 景点 0 段 / 1 景点 0 段 / 3 景点 2 段)。
+   */
+  const DAY_SPOTS = 3;   // 与 5.2 一致
+  const DAY_MAX_SPOTS = 6;
+
+  function buildDayPlans(list) {
+    const ats = (list || []).slice(0, DAY_MAX_SPOTS);
+    const days = [];
+    for (let d = 0; d < Math.ceil(ats.length / DAY_SPOTS); d++) {
+      const spots = ats.slice(d * DAY_SPOTS, (d + 1) * DAY_SPOTS);
+      days.push({ day: d + 1, spots: spots, routes: new Array(Math.max(0, spots.length - 1)).fill(null) });
+    }
+    return days;
+  }
+
+  /* 同一 Day 内相邻景点路线: 串行(低请求量优先), 单段失败不影响整天 */
+  async function computeRoutes(days, cityId) {
+    const BM = window.RailGoBaidu;
+    if (!BM || typeof BM.localRoute !== 'function') return days;
+    for (const dp of days) {
+      for (let i = 0; i < dp.spots.length - 1; i++) {
+        if (dp.routes[i]) continue; // 已有结果不重复请求
+        try {
+          dp.routes[i] = await BM.localRoute('walking', dp.spots[i], dp.spots[i + 1], { cityId: cityId });
+        } catch (e) {
+          dp.routes[i] = { from: dp.spots[i], to: dp.spots[i + 1], mode: 'walking', distanceM: null, durationS: null, source: 'mock', est: true, status: 'failed', errorCode: 'EXCEPTION', path: null };
+        }
+      }
+    }
+    return days;
+  }
+
+  /* 距离/时间格式化(项目内唯一实现) */
+  function fmtDist(m) {
+    if (typeof m !== 'number' || !isFinite(m)) return '—';
+    return m < 1000 ? Math.round(m) + ' 米' : (Math.round(m / 100) / 10) + ' 公里';
+  }
+  function fmtDur(s) {
+    if (typeof s !== 'number' || !isFinite(s)) return '—';
+    const min = Math.round(s / 60);
+    if (min < 60) return min + ' 分钟';
+    const h = Math.floor(min / 60), m2 = min % 60;
+    return h + ' 小时' + (m2 ? ' ' + m2 + ' 分钟' : '');
+  }
+
+  /* 路线小节 HTML: 真实(百度地图) vs 估算(预计)明确区分, 不混淆 */
+  function routeLineHTML(r) {
+    if (!r || r.status === 'failed') {
+      return '<div class="route-line failed">🚶 步行 · 路线暂不可用</div>';
+    }
+    const tag = r.source === 'baidu'
+      ? '<span class="badge ok">百度地图</span>'
+      : '<span class="badge mock">预计</span>';
+    return '<div class="route-line">🚶 步行 · 约 ' + fmtDur(r.durationS) + ' · ' + fmtDist(r.distanceM) + ' ' + tag + '</div>';
+  }
+
+  /* DayPlan[] → HTML(纯渲染, 不含任何网络请求) */
+  function buildDayPlanHTML(days, isReal) {
+    let html = '';
+    days.forEach(dp => {
+      html += '<div class="day-card"><h4>Day ' + dp.day +
+        (isReal ? ' <span class="badge ok">百度地图</span>' : '') + '</h4><div class="step-line">';
+      let t = 9;
+      dp.spots.forEach((s, i) => {
+        html += '<div><span class="time">' + (t < 12 ? '0' + t : t) + ':00</span> <b>' + esc(s.name) + '</b> <span class="trans">' +
+          (isReal ? '预计游玩 2 h' : '游玩 ' + (s.visitMinutes ? Math.round(s.visitMinutes / 60 * 10) / 10 + ' h' : '—')) + '</span></div>';
+        t = Math.min(20, t + 3);
+        if (i < dp.spots.length - 1) {
+          html += routeLineHTML(dp.routes[i]);
+          t = Math.min(20, t + 1);
+        }
+      });
+      html += '<div><span class="time">18:00</span> 晚餐 → 返回住宿区域</div></div></div>';
+    });
+    return html;
+  }
+
+  /* 按 DayPlan 渲染当前城市行程(渲染入口, 供 applyPoiToPlan / 路线回来后调用) */
+  function renderCityPlan(days, isReal) {
+    const box = $('cityPlanBox');
+    if (!box) return;
+    box.innerHTML = buildDayPlanHTML(days, isReal);
+    if (isReal && days.length) {
+      const extra = '<div class="info-panel"><h4>🗺️ 景点（百度地图）</h4>' +
+        days.reduce((a, d) => a.concat(d.spots), []).map(a =>
+          '<div class="it">· ' + esc(a.name) + ' <small>' + esc(a.address || '') + '</small></div>').join('') +
+        '<div class="hint">名称/地址来自百度地图；游玩时长与步行时间为预计，开放时间与票价以官方为准。</div></div>';
+      box.innerHTML += extra;
+    }
+  }
+
   /* 阶段5.2: mock 版行程(真实 POI 不可用时的回退, 与原行为一致) */
   function buildMockPlanHTML(plan, ats) {
     let html = '';
@@ -195,43 +289,49 @@
     return html;
   }
 
-  /* 阶段5.2: 真实 POI 版行程 —— 用百度返回的真实景点名称/地址驱动 Day 计划;
-   * 游玩时长为预计(百度不提供该字段), 明确标注, 不伪造开放时间/票价 */
-  function buildPoiPlanHTML(list) {
-    const ats = list.slice(0, 6);
-    const perDay = 3;
-    let html = '';
-    for (let d = 0; d < Math.ceil(ats.length / perDay); d++) {
-      const spots = ats.slice(d * perDay, (d + 1) * perDay);
-      html += '<div class="day-card"><h4>Day ' + (d + 1) + ' <span class="badge ok">百度地图</span></h4><div class="step-line">';
-      let t = 9;
-      spots.forEach(s => {
-        html += '<div><span class="time">' + (t < 12 ? '0' + t : t) + ':00</span> <b>' + esc(s.name) + '</b> <span class="trans">预计游玩 2 h</span></div>';
-        t = Math.min(20, t + 3);
-        html += '<div><span class="time">' + (t < 12 ? '0' + t : t) + ':00</span> <span class="trans">🚌 城市交通 / 🚶 步行 约 40 min【预计】</span></div>';
-        t = Math.min(20, t + 1);
-      });
-      html += '<div><span class="time">18:00</span> 晚餐 → 返回住宿区域</div></div></div>';
-    }
-    html += '<div class="info-panel"><h4>🗺️ 景点（百度地图）</h4>' +
-      ats.map(a => '<div class="it">· ' + esc(a.name) + ' <small>' + esc(a.address || '') + '</small></div>').join('') +
-      '<div class="hint">名称/地址来自百度地图；游玩时长为预计，开放时间与票价以官方为准。</div></div>';
-    return html;
-  }
-
-  /* 把 POI 结果应用到行程区: 真实结果 → 真实行程; 否则回退 mock 行程(保持原行为) */
-  function applyPoiToPlan(r) {
+  /* 把 POI 结果应用到行程区: 真实结果 → DayPlan(+路线) → 渲染; 否则回退 mock 行程 */
+  let cityPlanSeq = 0;
+  async function applyPoiToPlan(r) {
     const box = $('cityPlanBox');
     if (!box || !state.poiCity) return;
     const list = (r && r.data) || [];
     const isReal = !!(r && r.source === 'baidu' && list.length);
-    box.innerHTML = isReal ? buildPoiPlanHTML(list) : (state.mockPlanHTML || box.innerHTML);
-    state.planSource = isReal ? 'baidu' : 'mock';
-    const t = $('detailTitle');
-    if (t) {
-      t.innerHTML = '📍 ' + esc(state.poiCity.name) + ' · 游玩规划 ' +
-        (isReal ? '<span class="badge ok">百度地图</span><span class="badge mock">时长为预计</span>' : '<span class="badge mock">模拟</span>');
+    if (!isReal) {
+      box.innerHTML = state.mockPlanHTML || box.innerHTML;
+      state.planSource = 'mock';
+      setDetailTitle(false);
+      return;
     }
+    // 1) 数据准备(顺序不重排)
+    const cityId = state.poiCity.id;
+    const days = buildDayPlans(list);
+    state.dayPlans = days;
+    state.planSource = 'baidu';
+    setDetailTitle(true);
+    // 2) 先渲染(路线占位), 再异步计算路线后重渲染 —— 渲染不触发请求
+    renderCityPlan(days, true);
+    const mySeq = ++cityPlanSeq;
+    const BM = window.RailGoBaiduMap;
+    if (BM && BM.getMap && BM.getMap()) BM.clearRouteOverlays(); // 清旧城路线
+    await computeRoutes(days, cityId);                            // 串行, 自带缓存/竞态(6.1)
+    // 3) 城市级竞态: 旧城市的路线结果不得渲染到当前城市
+    if (mySeq !== cityPlanSeq) return;
+    if (!state.poiCity || state.poiCity.id !== cityId) return;
+    renderCityPlan(days, true);
+    // 4) 地图: 第三组 overlay(真机 path / mock 直线)
+    if (BM && BM.addRouteOverlays && BM.getMap && BM.getMap()) {
+      const segs = [];
+      days.forEach(dp => dp.routes.forEach(x => { if (x && x.status !== 'failed') segs.push(x); }));
+      BM.addRouteOverlays(segs);
+      if (segs.length) BM.fitPoiView(segs.map(s => ({ lat: s.from.lat, lng: s.from.lng })).concat(days[days.length - 1].spots));
+    }
+  }
+
+  function setDetailTitle(isReal) {
+    const t = $('detailTitle');
+    if (!t || !state.poiCity) return;
+    t.innerHTML = '📍 ' + esc(state.poiCity.name) + ' · 游玩规划 ' +
+      (isReal ? '<span class="badge ok">百度地图</span><span class="badge mock">时长为预计</span>' : '<span class="badge mock">模拟</span>');
   }
 
   function showCity(cityId) {
@@ -300,7 +400,10 @@
     }
     if (!list.length) { box.innerHTML = '<div class="poi-empty">暂未找到相关地点</div>'; return; }
     // 阶段5.2: 景点分类的真实 POI 同时驱动本城行程(Day/景点列表) —— POI 融入旅行方案
-    if (category === 'attraction') applyPoiToPlan(r);
+    if (category === 'attraction') {
+      // 异步路线流程: 捕获异常, 避免未处理的 Promise 拒绝(行程已先行渲染, 失败不影响页面)
+      Promise.resolve(applyPoiToPlan(r)).catch(() => {});
+    }
     const label = (BAIDU.POI_CATEGORIES[category] || {}).label || category;
     const srcTag = r.source === 'baidu' ? '<span class="badge ok">百度地图</span>' : '<span class="badge mock">演示数据</span>';
     let html = '<div class="hint" style="margin-bottom:6px">' + cityName + ' · ' + label + ' ' + list.length + ' 项 ' + srcTag +
@@ -434,10 +537,11 @@
         coords = raw.map(r => (map[r.id] ? { id: r.id, name: r.name, lat: map[r.id].lat, lon: map[r.id].lng, role: r.role } : r));
       }
     } catch (e) { /* 转换失败保留原坐标 */ }
-    BM.clearOverlays();                 // 清旧 Marker/Polyline(含旧 POI), 防叠加
+    BM.clearOverlays();                 // 清旧 Marker/Polyline(含旧 POI/旧路线), 防叠加
     BM.addMarkers(coords);
     BM.drawPolyline(coords);            // 旅行路线示意(非铁路轨道)
     BM.fitView(coords);                 // 自动视野
+    state.dayPlans = [];                // 6.2: 方案切换后旧 DayPlan 失效
     // 方案切换后重建 POI: 城市仍在路线中→重载(列表与 Marker 保持同步); 否则清空
     const pc = state.poiCity;
     if (pc) {

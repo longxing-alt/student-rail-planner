@@ -22,6 +22,7 @@
   let markerMap = null;    // cityId → Marker, 用于去重(铁路层)
   let currentPolyline = null; // 当前路线, 用于清理(铁路层)
   let poiMarkers = [];     // 阶段5: POI Marker 独立数组, 与铁路层彻底隔离
+  let routeOverlays = [];  // 阶段6.2: 城市内路线 Polyline 独立数组(第三组)
 
   function getAK() {
     const cfg = root.RAILGO_CONFIG;
@@ -194,6 +195,7 @@
     try { if (mapInstance && mapInstance.clearOverlays) mapInstance.clearOverlays(); } catch (e) {}
     markerMap = {}; currentPolyline = null;
     poiMarkers = []; // 铁路层清理时同步重置 POI 引用(覆盖物已被 clearOverlays 清空)
+    routeOverlays = []; // 6.2: 路线引用同步重置(同上)
   }
   function clearPolyline() {
     try { if (mapInstance && currentPolyline && mapInstance.removeOverlay) mapInstance.removeOverlay(currentPolyline); } catch (e) {}
@@ -281,7 +283,55 @@
 
   function getPoiMarkerCount() { return poiMarkers.length; }
 
-  const API = { getAK, isAvailable, loadSdk, initMap, destroyMap, getMap, detectNS, addMarkers, drawPolyline, clearOverlays, clearPolyline, fitView, addPoiMarkers, clearPoiOverlays, panToPoi, fitPoiView, getPoiMarkerCount, _reset, SCRIPT_ID };
+  /* ==================== 阶段6.2: 城市内路线覆盖物(第三组, 独立生命周期) ====================
+   * 铁路(markerMap/currentPolyline) / POI(poiMarkers) / 路线(routeOverlays) 三组互不干扰:
+   * clearRouteOverlays 只删路线; clearPoiOverlays 只删 POI; clearOverlays 为"全清"语义
+   * (方案切换用), 会同时重置三组引用(覆盖物已被 clearOverlays 清空)。
+   */
+  /** 绘制路线覆盖物(每个 RouteSegment 一条 Polyline, 真机路线用其 path; mock 用两端点直线)
+   * @param {Array<{path?:Array<{lat,lng}>, from?:Object, to?:Object, source?:string}>} segments */
+  function addRouteOverlays(segments) {
+    const map = mapInstance, ns = detectNS();
+    if (!map || !ns || !ns.Polyline) return { ok: false, code: 'NO_MAP', count: 0 };
+    clearRouteOverlays();
+    let n = 0;
+    for (const seg of segments || []) {
+      if (!seg) continue;
+      let pts = Array.isArray(seg.path) && seg.path.length >= 2 ? seg.path : null;
+      if (!pts && seg.from && seg.to &&
+        typeof seg.from.lat === 'number' && typeof seg.from.lng === 'number' &&
+        typeof seg.to.lat === 'number' && typeof seg.to.lng === 'number') {
+        pts = [{ lat: seg.from.lat, lng: seg.from.lng }, { lat: seg.to.lat, lng: seg.to.lng }];
+      }
+      if (!pts) continue;
+      try {
+        const real = seg.source === 'baidu';
+        const line = new ns.Polyline(pts.map(p => new ns.Point(p.lng, p.lat)), {
+          strokeColor: real ? '#0f9d58' : '#9aa4b2',
+          strokeWeight: 5,
+          strokeOpacity: real ? 0.9 : 0.7,
+          strokeStyle: real ? 'solid' : 'dashed',
+        });
+        map.addOverlay(line);
+        routeOverlays.push(line);
+        n++;
+      } catch (e) { /* 单条失败不影响其余 */ }
+    }
+    return { ok: true, count: n };
+  }
+
+  /** 只清除路线覆盖物 —— 铁路与 POI 保持不动 */
+  function clearRouteOverlays() {
+    const map = mapInstance;
+    if (map && map.removeOverlay) {
+      routeOverlays.forEach(l => { try { map.removeOverlay(l); } catch (e) {} });
+    }
+    routeOverlays = [];
+  }
+
+  function getRouteOverlayCount() { return routeOverlays.length; }
+
+  const API = { getAK, isAvailable, loadSdk, initMap, destroyMap, getMap, detectNS, addMarkers, drawPolyline, clearOverlays, clearPolyline, fitView, addPoiMarkers, clearPoiOverlays, panToPoi, fitPoiView, getPoiMarkerCount, addRouteOverlays, clearRouteOverlays, getRouteOverlayCount, _reset, SCRIPT_ID };
   if (typeof module === 'object' && module.exports) module.exports = API;
   root.RailGoBaiduMap = API;
 })();
