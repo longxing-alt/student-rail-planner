@@ -215,5 +215,168 @@
     return { suggestable: true, candidates: out };
   }
 
-  return { cityById, cityByName, distKm, railBetween, planCity, estimateBudget, timeFeasible, routeScore, planRoute, suggestStop, CITIES: MOCK.CITIES, ATTRACTIONS: MOCK.ATTRACTIONS, FOOD: MOCK.FOOD, STAY: MOCK.STAY };
+/* ==================== 阶段1: 三方案候选系统 ====================
+ * generateRouteCandidates(): 综合/省钱/轻松 三套 RouteCandidate
+ * 评分维度归一化 0..1, 按模式权重加权 → 0..100, 可解释 breakdown
+ * 全部为本地计算 + 模拟估算; source:"computed" */
+const MODES = {
+  balanced: { icon: '⭐', title: '综合推荐', desc: '在时间、预算和游玩价值之间取得平衡',
+    weights: { tourism: 30, time: 25, budget: 20, rail: 15, transfer: 10 } },
+  money: { icon: '💰', title: '省钱优先', desc: '尽可能降低旅行总成本',
+    weights: { budget: 45, rail: 25, tourism: 10, time: 20, transfer: 0 } },
+  relax: { icon: '🌿', title: '轻松旅行', desc: '少赶路、少换乘、每个城市多停留',
+    weights: { time: 30, transfer: 25, budget: 10, rail: 15, tourism: 20 } },
+};
+
+function dimsOf(route, days, budget) {
+  let km = 0, h = 0, fare = 0, tr = 0;
+  const legs = [];
+  for (let i = 0; i < route.length - 1; i++) {
+    const r = railBetween(route[i], route[i + 1]);
+    km += r.km; h += r.durationMin / 60; fare += r.fare; tr += (r.path.length > 1 ? 1 : 0);
+    legs.push({ from: cityById(route[i]).name, to: cityById(route[i + 1]).name, km: r.km, durationMin: r.durationMin, fare: r.fare, transfers: r.path.length > 1 ? 1 : 0, source: 'computed' });
+  }
+  const direct = railBetween(route[0], route[route.length - 1]).km;
+  const detour = Math.max(0, (km - direct) / Math.max(1, direct));
+  const value = MOCK.ATTRACTIONS.filter(a => route.slice(1).includes(a.cityId)).reduce((s, a) => s + a.value, 0);
+  const fe = timeFeasible(route, days);
+  return {
+    km: Math.round(km), h: Math.round(h * 10) / 10, fare: Math.round(fare), tr, detour: Math.round(detour * 100) / 100,
+    value, fe,
+    tourismDim: Math.min(1, value / 40),
+    timeDim: fe.ok === 'ok' ? 1 : fe.ok === 'tight' ? 0.65 : 0.25,
+    transferDim: Math.max(0, 1 - tr / 3),
+    railDim: Math.max(0, 1 - detour / 0.6),
+    railCostDim: Math.max(0, 1 - fare / (fare + 600)),
+    legs, direct: Math.round(direct),
+  };
+}
+
+function modeScore(route, days, budget, mode, d) {
+  const w = MODES[mode].weights;
+  const vals = {
+    tourism: d.tourismDim, time: d.timeDim, budget: d.budgetDim,
+    rail: mode === 'money' ? d.railCostDim : d.railDim, transfer: d.transferDim,
+  };
+  let s = 0;
+  for (const k in w) s += w[k] * vals[k];
+  return Math.round(s);
+}
+
+function allocateDays(cities, days, mode) {
+  const n = cities.length;
+  if (days <= n) return cities.map(() => 1);
+  const arr = cities.map(() => 1);
+  let left = days - n;
+  if (mode === 'money') { arr[n - 1] += left; return arr; }
+  if (mode === 'relax') {
+    const idx = cities.map((c, i) => ({ i, v: MOCK.ATTRACTIONS.filter(a => a.cityId === c).reduce((s, a) => s + a.value, 0) })).sort((a, b) => b.v - a.v);
+    while (left > 0) { const t = idx.shift(); if (!t) break; arr[t.i]++; left--; }
+    if (left > 0) arr[n - 1] += left;
+    return arr;
+  }
+  let i = 0;
+  while (left > 0) { arr[i % n]++; i++; left--; }
+  return arr;
+}
+
+function buildCandidate(type, startId, fixed, days, budget) {
+  const scorer = m => r => {
+    const d = dimsOf(r, days, budget);
+    const bud = estimateBudget(r, { days, stayPerNight: 70, foodPerDay: 50 });
+    d.budgetDim = Math.min(1, budget / Math.max(1, bud.total));
+    return modeScore(r, days, budget, m, d);
+  };
+  const bestPerm = scorerFn => {
+    let best = null, br = null;
+    const cands = fixed.length <= 7 ? permute(fixed) : null;
+    if (cands) {
+      for (const order of cands) {
+        const r = [startId].concat(order);
+        const s = scorerFn(r);
+        if (!best || s > best) { best = s; br = r; }
+      }
+      return br;
+    }
+    let cur = startId, rest = fixed.slice(), r = [startId];
+    while (rest.length) {
+      rest.sort((a, b) => railBetween(cur, a).km - railBetween(cur, b).km);
+      const nxt = rest.shift(); r.push(nxt); cur = nxt;
+    }
+    let improved = true;
+    while (improved) {
+      improved = false;
+      for (let i = 1; i < r.length - 2; i++) {
+        const a = r.slice(); [a[i], a[i + 1]] = [a[i + 1], a[i]];
+        if (scorerFn(a) > scorerFn(r)) { r = a; improved = true; }
+      }
+    }
+    return r;
+  };
+  let route;
+  if (type === 'money') {
+    route = bestPerm(scorer('money'));
+    // 省钱: 若超预算, 循环删掉一城(保留最有价值的前缀顺序), 直到预算内或只剩1城
+    let cur = fixed.slice();
+    let curRoute = route;
+    let curTotal = estimateBudget(curRoute, { days, stayPerNight: 70, foodPerDay: 50 }).total;
+    while (curTotal > budget && cur.length > 1) {
+      let bestAlt = null, bestTotal = Infinity;
+      for (let i = 0; i < cur.length; i++) {
+        const sub = cur.slice(0, i).concat(cur.slice(i + 1));
+        if (!sub.length) continue;
+        const r = [startId].concat(sub);
+        const b = estimateBudget(r, { days, stayPerNight: 70, foodPerDay: 50 });
+        if (b.total < bestTotal) { bestTotal = b.total; bestAlt = r; }
+      }
+      if (!bestAlt || bestTotal >= curTotal) break;
+      curRoute = bestAlt; curTotal = bestTotal; cur = curRoute.slice(1);
+    }
+    route = curRoute;
+  } else {
+    route = bestPerm(scorer(type));
+  }
+  if (!route) route = [startId].concat(fixed);
+
+  const opts = { days, stayPerNight: type === 'money' ? 70 : type === 'relax' ? 110 : 90, foodPerDay: type === 'money' ? 50 : type === 'relax' ? 70 : 60 };
+  const d = dimsOf(route, days, budget);
+  const bud = estimateBudget(route, opts);
+  d.budgetDim = Math.min(1, budget / Math.max(1, bud.total));
+  const w = MODES[type].weights;
+  const score = modeScore(route, days, budget, type, d);
+  const daysArr = allocateDays(route.slice(1), days, type);
+  const breakdown = {
+    tourism: Math.round(w.tourism * d.tourismDim),
+    time: Math.round(w.time * d.timeDim),
+    budget: Math.round(w.budget * d.budgetDim),
+    rail: Math.round(w.rail * (type === 'money' ? d.railCostDim : d.railDim)),
+    transfer: Math.round(w.transfer * d.transferDim),
+  };
+  const reasons = [], warnings = [];
+  if (d.tourismDim >= 0.6) reasons.push('游玩价值充足');
+  if (d.timeDim >= 1) reasons.push('时间安排合理'); else if (d.timeDim > 0.25) warnings.push('行程偏紧');
+  if (d.budgetDim >= 1) reasons.push('预算充足'); else warnings.push('预计超预算 ¥' + Math.max(0, bud.total - budget));
+  if (type !== 'money' && d.detour <= 0.15) reasons.push('铁路路线顺畅');
+  if (d.tr === 0) reasons.push('全程直达, 换乘少'); else if (d.tr > 1) warnings.push('存在 ' + d.tr + ' 次换乘');
+  if (type === 'relax') reasons.push('每个城市停留充裕, 强度较低');
+  if (type === 'money' && route.length - 1 < fixed.length) reasons.push('减少城市以控制成本');
+  return {
+    id: type + '-' + Math.random().toString(36).slice(2, 6),
+    type, title: MODES[type].title, icon: MODES[type].icon, description: MODES[type].desc,
+    cities: route, cityNames: route.map(id => cityById(id).name),
+    segments: d.legs, days, daysPerCity: daysArr,
+    transport: { distanceKm: d.km, travelHours: d.h, transferCount: d.tr, detourRatio: d.detour, directKm: d.direct },
+    budget: { rail: bud.rail, hotel: bud.stay, food: bud.food, attraction: bud.ticket, localTransport: bud.cityTrans, other: 0, total: bud.total },
+    score, scoreBreakdown: breakdown, breakdownDenom: w,
+    reasons, warnings, source: 'computed',
+  };
+}
+
+function generateRouteCandidates(startId, destIds, days, budget) {
+  const fixed = destIds.filter((d, i) => d !== startId && destIds.indexOf(d) === i);
+  if (!fixed.length) return { candidates: [], source: 'computed' };
+  return { candidates: ['balanced', 'money', 'relax'].map(t => buildCandidate(t, startId, fixed, days, budget)), source: 'computed' };
+}
+
+  return { cityById, cityByName, distKm, railBetween, planCity, estimateBudget, timeFeasible, routeScore, planRoute, suggestStop, generateRouteCandidates, MODES, CITIES: MOCK.CITIES, ATTRACTIONS: MOCK.ATTRACTIONS, FOOD: MOCK.FOOD, STAY: MOCK.STAY };
 });

@@ -1,3 +1,17 @@
+/* 三方案候选卡片 */
+.candidate-card { border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; margin: 8px 0; cursor: pointer; background: #fff; transition: border-color .15s, box-shadow .15s; }
+.candidate-card:hover { border-color: var(--accent2); }
+.candidate-card.on { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(58,91,217,.12); }
+.candidate-card .cc-head { display: flex; align-items: center; gap: 8px; font-size: 15px; }
+.candidate-card .cc-icon { font-size: 17px; }
+.candidate-card .cc-score { margin-left: auto; background: var(--ink); color: #fff; border-radius: 99px; padding: 2px 12px; font-size: 13px; font-weight: 800; }
+.candidate-card .cc-route { font-size: 14.5px; font-weight: 700; margin-top: 6px; }
+.candidate-card .cc-meta { font-size: 12.5px; color: var(--mut); margin-top: 3px; }
+.candidate-card .cc-tags { margin-top: 6px; display: flex; gap: 6px; flex-wrap: wrap; }
+.tag { font-size: 11px; border-radius: 6px; padding: 2px 8px; font-weight: 600; }
+.tag.ok { background: var(--ok-soft); color: var(--ok); }
+.tag.warn { background: var(--warn-soft); color: var(--warn); }
+
 /* RailGo — 学生铁路出游智能规划 · 演示地图/UI 样式 */
 :root {
   --ink: #1a1f2e; --mut: #5c6470; --line: #e3e6ee; --bg: #f6f7fb;
