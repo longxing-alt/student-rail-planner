@@ -352,15 +352,27 @@
     return { id: uid, name: name, address: address, lat: lat, lng: lng, category: category, telephone: tel || null, detailUrl: null, source: 'baidu' };
   }
 
-  /** LocalSearch 实例(设置页容量/自动视野; 不渲染 panel, 由我们自己的 UI 显示) */
-  function _newLocalSearch(ns, cityName) {
-    const opts = { onSearchComplete: function () {} };
-    if (cityName) opts.pageCapacity = 10;
-    return new ns.LocalSearch(cityName || (root.RAILGO_DEFAULT_CITY || '全国'), opts);
+  /** 从 results 对象收集 POI 并适配(真实 SDK 验证: 结果对象为回调参数 results,
+   *  方法为 results.getCurrentNumPois() / results.getPoi(i);
+   *  LocalSearch 实例上不存在 getNumPois/getPoi) */
+  function _collectLocalSearchPois(results, category) {
+    const out = [];
+    if (!results) return out;
+    let n = 0;
+    try { n = (typeof results.getCurrentNumPois === 'function') ? results.getCurrentNumPois() : 0; } catch (e) { n = 0; }
+    for (let i = 0; i < n; i++) {
+      let p = null;
+      try { p = results.getPoi(i); } catch (e) { p = null; }
+      const a = adaptLocalSearchPoi(p, category);
+      if (a) out.push(a);
+    }
+    return out;
   }
 
   /**
    * 关键词/城市检索(JSAPI 通道)
+   * 回调注册: SDK 源码从构造参数 this._opts.onSearchComplete 读取 → 必须放进
+   * new LocalSearch(city, { onSearchComplete: fn }) 构造参数(构造后赋值不生效)。
    * @returns {Promise<{ok:boolean, source:'baidu', data:Array, errorCode?:string}>}
    */
   function localSearchPOI(query, cityName, category) {
@@ -370,35 +382,16 @@
       let done = false, timer = null;
       const finish = r => { if (done) return; done = true; if (timer) clearTimeout(timer); resolve(r); };
       try {
-        const ls = _newLocalSearch(ns, cityName);
-        ls.setPageCapacity && ls.setPageCapacity(10);
-        ls.onSearchComplete = function (results) {
-          try {
-            const total = (typeof ls.getNumPois === 'function') ? ls.getNumPois()
-              : (results && typeof results.getCurrentNumPois === 'function') ? results.getCurrentNumPois()
-              : (results && results.getPoi ? -1 : 0);
-            const n = (total && total > 0) ? total : 0;
-            const out = [];
-            if (n > 0) {
-              for (let i = 0; i < n; i++) {
-                const p = ls.getPoi(i) || (results && results.getPoi && results.getPoi(i));
-                const a = adaptLocalSearchPoi(p, category);
-                if (a) out.push(a);
-              }
-            } else if (typeof (results && results.getCurrentNumPois) !== 'function' && results && results.getPoi) {
-              // 某些版本回调直接传 results 对象
-              for (let i = 0; i < (results.getCurrentNumPois ? results.getCurrentNumPois() : 0); i++) {
-                const a = adaptLocalSearchPoi(results.getPoi(i), category);
-                if (a) out.push(a);
-              }
+        const ls = new ns.LocalSearch(cityName || (root.RAILGO_DEFAULT_CITY || '全国'), {
+          pageCapacity: 10,
+          onSearchComplete: function (results) {
+            try {
+              finish({ ok: true, source: 'baidu', data: _collectLocalSearchPois(results, category), raw: results });
+            } catch (e) {
+              finish({ ok: false, source: 'baidu', data: [], errorCode: 'ADAPT_ERROR' });
             }
-            finish({ ok: true, source: 'baidu', data: out, raw: results });
-          } catch (e) {
-            finish({ ok: false, source: 'baidu', data: [], errorCode: 'ADAPT_ERROR' });
-          }
-        };
-        // SDK 可能在异步回调/内部调度中抛错(如 bundle 抛 boom): 用 safeSearch 包裹,
-        // 保证异常被转成失败结果而不是冒泡成未捕获异常
+          },
+        });
         try {
           ls.search(query, { renderOptions: { map: null, autoViewport: false, selectFirstResult: false } });
         } catch (e) {
@@ -426,19 +419,14 @@
       let done = false, timer = null;
       const finish = r => { if (done) return; done = true; if (timer) clearTimeout(timer); resolve(r); };
       try {
-        const ls = _newLocalSearch(ns, null);
-        ls.setPageCapacity && ls.setPageCapacity(10);
-        ls.onSearchComplete = function (results) {
-          try {
-            const n = (typeof ls.getNumPois === 'function') ? ls.getNumPois() : 0;
-            const out = [];
-            for (let i = 0; i < (n > 0 ? n : 0); i++) {
-              const a = adaptLocalSearchPoi(ls.getPoi(i), category);
-              if (a) out.push(a);
-            }
-            finish({ ok: true, source: 'baidu', data: out, raw: results });
-          } catch (e) { finish({ ok: false, source: 'baidu', data: [], errorCode: 'ADAPT_ERROR' }); }
-        };
+        const ls = new ns.LocalSearch(root.RAILGO_DEFAULT_CITY || '全国', {
+          pageCapacity: 10,
+          onSearchComplete: function (results) {
+            try {
+              finish({ ok: true, source: 'baidu', data: _collectLocalSearchPois(results, category), raw: results });
+            } catch (e) { finish({ ok: false, source: 'baidu', data: [], errorCode: 'ADAPT_ERROR' }); }
+          },
+        });
         const pt = new ns.Point(center.lng, center.lat);
         const r = Math.max(100, Math.min(100000, radiusM || 2000));
         try {

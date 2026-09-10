@@ -23,30 +23,38 @@ function makeMockNS(opts) {
   Poi.prototype.getAddress = function () { return this._a; };
   Poi.prototype.getUid = function () { return this._uid; };
   Poi.prototype.getPhoneNumber = function () { return this._tel; };
-  function LocalSearch(city, o2) { this._city = city; this._opts = o2 || {}; this._pois = []; calls.push({ type: 'new', city }); }
+  function LocalSearch(city, o2) {
+    // 真实 SDK 协议: 回调从构造参数 opts.onSearchComplete 读取
+    this._city = city; this._opts = o2 || {};
+    this.onSearchComplete = this._opts.onSearchComplete || null;
+    this._pois = []; calls.push({ type: 'new', city });
+  }
   LocalSearch.prototype.setPageCapacity = function (n) { this._cap = n; };
-  LocalSearch.prototype.getNumPois = function () { return this._pois.length; };
-  LocalSearch.prototype.getPoi = function (i) { return this._pois[i]; };
   LocalSearch.prototype.search = function (query, ro) {
     calls.push({ type: 'search', query, ro });
     if (o.behavior === 'throw') throw new Error('boom'); // 同步抛出 → 实现侧必须捕获
     const self = this;
     setTimeout(() => {
       if (o.behavior === 'timeout') return; // 不回调 → 触发超时
-      if (o.behavior === 'fail') { self.onSearchComplete && self.onSearchComplete({}); return; }
-      self._pois = o.pois || [
+      let pois;
+      if (o.behavior === 'fail') pois = [];
+      else if (o.pois) pois = o.pois;
+      else pois = [
         new Poi('趵突泉', 36.66, 117.01, '济南市历下区', 'uid-1', '0531-123'),
         new Poi('大明湖', 36.67, 117.02, '济南市历下区', 'uid-2', null),
       ];
-      self.onSearchComplete && self.onSearchComplete({ getCurrentNumPois: () => self._pois.length, getPoi: i => self._pois[i] });
+      // 真实协议: results 对象提供 getCurrentNumPois/getPoi
+      const results = { getCurrentNumPois: () => pois.length, getPoi: i => pois[i] };
+      self.onSearchComplete && self.onSearchComplete(results);
     }, 5);
   };
   LocalSearch.prototype.searchNearby = function (query, center, radius, ro) {
     calls.push({ type: 'nearby', query, center: { lat: center.lat, lng: center.lng }, radius, ro });
     const self = this;
     setTimeout(() => {
-      self._pois = o.pois || [new Poi('附近景点A', center.lat + 0.001, center.lng + 0.001, 'addr', 'uid-n1', null)];
-      self.onSearchComplete && self.onSearchComplete({});
+      const pois = o.pois || [new Poi('附近景点A', center.lat + 0.001, center.lng + 0.001, 'addr', 'uid-n1', null)];
+      const results = { getCurrentNumPois: () => pois.length, getPoi: i => pois[i] };
+      self.onSearchComplete && self.onSearchComplete(results);
     }, 5);
   };
   return { ns: { LocalSearch, Point }, calls };

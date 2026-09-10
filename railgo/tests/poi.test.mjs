@@ -24,7 +24,11 @@ function boot(withAk, poiResponder) {
   Poi.prototype.getAddress = function () { return this._a; };
   Poi.prototype.getUid = function () { return this._uid; };
   Poi.prototype.getPhoneNumber = function () { return this._tel; };
-  function LocalSearch(city, o) { this._city = city; this._pois = []; }
+  function LocalSearch(city, o) {
+    this._city = city; this._opts = o || {};
+    this.onSearchComplete = this._opts.onSearchComplete || null; // 真实协议: 构造参数
+    this._pois = [];
+  }
   LocalSearch.prototype.setPageCapacity = function () {};
   LocalSearch.prototype.getNumPois = function () { return this._pois.length; };
   LocalSearch.prototype.getPoi = function (i) { return this._pois[i]; };
@@ -35,7 +39,9 @@ function boot(withAk, poiResponder) {
       if (poiResponder === 'empty') { self._pois = []; }
       else if (typeof poiResponder === 'function') { self._pois = poiResponder(q) || []; }
       else { self._pois = [new Poi('趵突泉', 36.66, 117.01, '济南市历下区', 'uid-1', '0531-1'), new Poi('大明湖', 36.67, 117.02, '济南市历下区', 'uid-2', null)]; }
-      self.onSearchComplete && self.onSearchComplete({});
+      const pois = self._pois;
+      const results = { getCurrentNumPois: () => pois.length, getPoi: i => pois[i] };
+      self.onSearchComplete && self.onSearchComplete(results);
     }, 5);
   };
   w.BMapGL = { LocalSearch, Point: Pt };

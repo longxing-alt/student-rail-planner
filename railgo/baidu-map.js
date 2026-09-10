@@ -62,8 +62,12 @@
         el.id = SCRIPT_ID;
         el.type = 'text/javascript';
         el.async = true;
-        // 官方加载形式; 经典 4.0 与 GL(v=1.0&type=webgl) 均适用此 URL 结构
-        el.src = 'https://api.map.baidu.com/api?v=' + (root.RAILGO_MAP_VER || '4.0') + '&ak=' + encodeURIComponent(ak);
+        // 直接加载 getscript(而非 api?v=4.0): api 端点内部用 document.write 注入
+        // getscript, 而 Chromium 会忽略"异步动态插入脚本"的 document.write →
+        // BMapGL 永不定义(真实浏览器已验证)。直连 getscript 实测 BMapGL/
+        // LocalSearch 均立即可用, 故直接使用该方式。
+        el.src = 'https://api.map.baidu.com/getscript?v=' + (root.RAILGO_MAP_VER || '4.0') +
+          '&ak=' + encodeURIComponent(ak) + '&services=&t=' + Date.now();
         el.onerror = () => done({ ok: false, code: 'NETWORK_ERROR', message: '百度地图 SDK 加载失败(网络或 AK/Referer 限制)' });
         root.document.head.appendChild(el);
       }
