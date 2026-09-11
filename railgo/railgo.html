@@ -47,13 +47,21 @@
           <span class="seg on" id="segSmart">智能优化</span>
         </div>
       </div>
-      <div class="field"><label>偏好</label>
-        <select id="inPref">
-          <option value="play">游玩优先</option>
-          <option value="time">时间优先</option>
-          <option value="money">省钱优先</option>
-          <option value="comfort">舒适优先</option>
-        </select>
+      <div class="field"><label>旅行偏好（快捷）</label>
+        <div class="chip-row" id="prefChips">
+          <span class="seg on" data-pref="balanced">大众默认</span>
+          <span class="seg" data-pref="play">游玩优先</span>
+          <span class="seg" data-pref="time">时间优先</span>
+          <span class="seg" data-pref="money">省钱优先</span>
+          <span class="seg" data-pref="comfort">舒适优先</span>
+        </div>
+      </div>
+    </div>
+    <div class="row">
+      <div class="field" style="flex:1;min-width:260px">
+        <label>旅行节奏 <span class="hint" id="paceLabel">省钱 ←→ 舒适</span></label>
+        <input type="range" id="inPace" min="0" max="100" step="5" value="50" class="pace-range">
+        <div class="pace-scale"><span>省钱 · 少花钱</span><span id="paceValue">50</span><span>舒适 · 少折腾</span></div>
       </div>
     </div>
     <div class="row">

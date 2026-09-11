@@ -10,7 +10,7 @@
     return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   }
 
-  let state = { dests: [], mode: 'smart', pref: 'play', stopSuggest: true, candidates: [], active: 0, poiCity: null, poiCat: 'attraction', mockPlanHTML: '', planSource: 'mock', dayPlans: [] };
+  let state = { dests: [], mode: 'smart', pref: 'balanced', pace: 0.5, stopSuggest: true, candidates: [], active: 0, poiCity: null, poiCat: 'attraction', mockPlanHTML: '', planSource: 'mock', dayPlans: [] };
 
   /* ---------- 城市解析 ---------- */
   function resolveCity(q) { return q ? C.cityByName(String(q).trim()) : null; }
@@ -361,6 +361,51 @@
     $('detailSection').scrollIntoView({ behavior: 'smooth' });
   }
 
+  /* ---------- 阶段7.2: 旅行偏好 → TravelPreference ---------- */
+  function currentPreference() {
+    try { return C.paceToPreference(state.pace, state.pref); }
+    catch (e) { return C.normalizePreference(null); }   // 异常回落大众默认
+  }
+
+  function bindPreferenceControls() {
+    const chips = $('prefChips');
+    if (chips && !chips._bound) {
+      chips._bound = true;
+      chips.querySelectorAll('[data-pref]').forEach(el => el.addEventListener('click', () => {
+        chips.querySelectorAll('[data-pref]').forEach(x => x.classList.remove('on'));
+        el.classList.add('on');
+        state.pref = el.dataset.pref;
+        replanAfterPrefChange();
+      }));
+    }
+    const pace = $('inPace');
+    if (pace && !pace._bound) {
+      pace._bound = true;
+      const onPace = () => {
+        const pv = Number(pace.value);            // 注意: 不能用 x || 50, 滑块 0 是合法值(会因 falsy 被误回退)
+        state.pace = Math.max(0, Math.min(1, (isFinite(pv) ? pv : 50) / 100));
+        const lab = $('paceValue'); if (lab) lab.textContent = pace.value;
+        replanAfterPrefChange();
+      };
+      pace.addEventListener('input', onPace);
+      pace.addEventListener('change', onPace);
+    }
+  }
+
+  /* 偏好变化: 重算沿途价值(若已有规划结果), 不重置用户输入、不发任何网络请求 */
+  function replanAfterPrefChange() {
+    state.candidates = state.candidates || [];
+    if (!state.candidates.length) return;
+    const c = state.candidates[state.active];
+    if (!c) return;
+    // 偏好变化只影响价值评估, 不应影响主流程: 单点失败不阻断页面
+    try {
+      maybeSuggestStop(c.cities[0], c.cities, +$('inDays').value, +$('inBudget').value);
+    } catch (e) {
+      if (window.console && console.warn) console.warn('[RailGo] 偏好重算失败:', e && e.message);
+    }
+  }
+
   /* ---------- 阶段5: POI 列表 + Marker 同步 ---------- */
   let poiReqSeq = 0;
   function bindPoiTabs() {
@@ -468,22 +513,39 @@
     if (!state.stopSuggest) return;
     const endId = route[route.length - 1];
     if (endId === startId || route.length > 3) return;
-    const sug = C.suggestStop(startId, endId, days);
+    const sug = C.suggestStop(startId, endId, days, { budget: budget, preference: currentPreference() });
     if (!sug.suggestable) {
       box.innerHTML = '<div class="stop-card">💡 ' + sug.reason + '</div>';
       return;
     }
-    let html = '<div class="stop-card" style="background:#eef4ff;border-color:#bcd4ff">💡 你的行程时间较充裕，发现 ' + sug.candidates.length + ' 个适合中途停留的城市：</div>';
+    // 阶段7.2: 展示 Value Engine 的判断(值得去程度 + 成本明细 + 理由), 而非旧"推荐指数"
+    const REC_TXT = { high: '强烈推荐', medium: '值得考虑', low: '慎重考虑', avoid: '不建议' };
+    const recCls = { high: 'ok', medium: '', low: 'warn', avoid: 'warn' };
+    const pref = currentPreference();
+    let html = '<div class="stop-card" style="background:#eef4ff;border-color:#bcd4ff">💡 在当前行程下，发现 ' +
+      sug.candidates.length + ' 个值得考虑的中途停留城市：' +
+      '<span class="hint">（偏好：' + esc(pref.profile) + ' · 节奏 ' + Math.round(state.pace * 100) + '）</span></div>';
     sug.candidates.forEach(cd => {
+      const e = cd.tripEvaluation || {};
+      const pos = (e.reasonCodes || []).filter(k => /HIGH_EXPERIENCE|UNIQUENESS|REPRESENTATIVENESS|ON_ROUTE|LOW_TIME_COST|LOW_BUDGET_COST/.test(k));
+      const neg = (e.reasonCodes || []).filter(k => /HIGH_TIME_COST|HIGH_BUDGET_COST|HIGH_FATIGUE|HIGH_OPPORTUNITY_COST|MANY_TRANSFERS|HIGH_DETOUR/.test(k));
+      const txt = k => ({ HIGH_EXPERIENCE_VALUE: '体验价值较高', HIGH_UNIQUENESS: '体验独特', HIGH_REPRESENTATIVENESS: '城市代表性较强',
+        RAILWAY_ON_ROUTE: '铁路基本顺路', LOW_TIME_COST: '增加时间较少', LOW_BUDGET_COST: '额外预算少',
+        HIGH_TIME_COST: '明显增加旅行时间', HIGH_BUDGET_COST: '额外预算偏高', HIGH_FATIGUE: '会增加旅途疲劳',
+        HIGH_OPPORTUNITY_COST: '会压缩后续城市游玩时间', MANY_TRANSFERS: '需要多次换乘', HIGH_DETOUR: '需要绕行' }[k] || k);
       html += '<div class="stop-card">' +
-        '<span class="tt">📍 ' + cd.name + '</span> <span class="badge">推荐指数 ' + cd.score + '</span>' +
+        '<span class="tt">📍 ' + esc(cd.name) + '</span> ' +
+        '<span class="badge ' + (recCls[cd.recommendation] || '') + '">值得去 ' + cd.score + ' · ' + (REC_TXT[cd.recommendation] || cd.recommendation) + '</span>' +
         '<div class="row-m">' +
         '<span>建议停留 ' + cd.stopDays + ' 天</span>' +
-        '<span>铁路绕行：' + (cd.detour <= 60 ? '低' : cd.detour <= 150 ? '中' : '高') + '（+' + cd.detour + ' km）</span>' +
-        '<span>旅游价值：' + (cd.value >= 20 ? '高' : '中高') + '</span>' +
-        '<span>预算影响：+¥' + cd.addFare + '【模拟】</span>' +
+        '<span>增加时间 约 ' + (e.timeCostHours != null ? e.timeCostHours : '—') + ' h</span>' +
+        '<span>增加预算 约 ¥' + (e.addedFare != null ? e.addedFare : cd.addFare) + '【模拟】</span>' +
+        '<span>换乘 ' + (e.transfers != null ? e.transfers : '—') + ' 次</span>' +
+        '<span>铁路绕行 ' + (cd.detour <= 60 ? '低' : cd.detour <= 150 ? '中' : '高') + '（+' + cd.detour + ' km）</span>' +
         '</div>' +
-        '<button class="btn small ghost" data-add="' + cd.cityId + '" style="margin-top:8px">加入 ' + cd.name + ' 并重新规划</button>' +
+        (pos.length ? '<div class="reason-line pos">✓ ' + pos.map(txt).join(' · ') + '</div>' : '') +
+        (neg.length ? '<div class="reason-line neg">⚠ ' + neg.map(txt).join(' · ') + '</div>' : '') +
+        '<button class="btn small ghost" data-add="' + cd.cityId + '" style="margin-top:8px">加入 ' + esc(cd.name) + ' 并重新规划</button>' +
         '</div>';
     });
     html += '<button class="btn small ghost" id="btnNoStop">暂不增加</button>';
@@ -651,7 +713,7 @@
   }
 
   function init() {
-    fillCityList(); renderChips(); bind(); initAk(); demos();
+    fillCityList(); renderChips(); bind(); bindPreferenceControls(); initAk(); demos();
     $('inStart').value = '石家庄';
     state.dests = [{ id: 'sh', name: '上海' }];
     $('inDays').value = 5; $('inBudget').value = 1600;

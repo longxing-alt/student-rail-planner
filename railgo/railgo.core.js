@@ -197,22 +197,38 @@
     return { route: bestRoute, score: sc.score, reason: '智能优化(枚举/贪心+局部交换, 按评分)', detail: sc };
   }
 
-  /* ---------- 中途城市推荐 ---------- */
+  /* ---------- 中途城市推荐 ----------
+   * 阶段7.1: 评分改由 Value Engine(evaluateStop) 产出 —— 不再使用临时公式 80+value/3-addFare/30。
+   * 对外字段保持兼容(cityId/name/score/stopDays/detour/value/addFare/est), 供现有 UI 与测试使用。 */
   function suggestStop(startId, endId, days, opts) {
+    const o = opts || {};
     const fixedDays = Math.max(0, days - Math.ceil(railBetween(startId, endId).durationMin / 60 / 10) - 1);
     if (fixedDays < 1) return { suggestable: false, reason: '时间不足, 不建议增加中途城市' };
-    // 沿途候选 = 与起终点都有铁路边的城市(主轴上), 排除起终点
-    const onPath = MOCK.CITIES.filter(c => c.id !== startId && c.id !== endId &&
-      railBetween(startId, c.id).path.length && railBetween(c.id, endId).path.length);
-    const out = onPath.map(c => {
-      const add = railBetween(startId, c.id).fare + railBetween(c.id, endId).fare - railBetween(startId, endId).fare;
-      const value = MOCK.ATTRACTIONS.filter(a => a.cityId === c.id).reduce((s, a) => s + a.value, 0);
-      return { cityId: c.id, name: c.name, score: Math.round(80 + value / 3 - Math.max(0, add) / 30), stopDays: 1,
-        detour: Math.round(railBetween(startId, c.id).km + railBetween(c.id, endId).km - railBetween(startId, endId).km),
-        value, addFare: Math.round(add), est: true };
-    }).sort((a, b) => b.score - a.score).slice(0, 3);
-    if (!out.length) return { suggestable: false, reason: '没有合适的顺路城市' };
-    return { suggestable: true, candidates: out };
+    // 未提供预算时, 按"仅直达行程花费的 1.6 倍"作为可接受上限(数据推导, 非编造)
+    const budget = (typeof o.budget === 'number' && o.budget > 0)
+      ? o.budget
+      : Math.max(800, Math.round(estimateBudget([startId, endId], { days: days }).total * 1.6));
+    const evals = evaluateStops(startId, endId, days, budget, o.preference);
+    const ok = evals.filter(e => e.feasible);
+    if (!ok.length) {
+      const why = evals.length ? '沿途城市在当前时间/预算下均不建议插入' : '没有合适的顺路城市';
+      return { suggestable: false, reason: why, evaluations: evals };
+    }
+    const candidates = ok.slice(0, 3).map(e => {
+      const sumValue = MOCK.ATTRACTIONS.filter(a => a.cityId === e.candidateId).reduce((s, a) => s + (a.value || 0), 0);
+      const stopDays = Math.max(1, Math.ceil((e.placeValue.timeRequired || 4) / VALUE_THRESHOLDS.activeHoursPerDay));
+      return {
+        cityId: e.candidateId, name: e.candidateName,
+        score: e.score,                       // 旅行价值(Value Engine)
+        recommendation: e.recommendation,
+        stopDays: stopDays,
+        detour: e.addedKm, value: sumValue, addFare: e.addedFare,
+        reasonCodes: e.reasonCodes, reasons: e.reasons,
+        tripEvaluation: e,
+        est: true,
+      };
+    });
+    return { suggestable: true, candidates, evaluations: evals, budgetUsed: budget };
   }
 
 /* ==================== 阶段1: 三方案候选系统 ====================
@@ -378,5 +394,366 @@ function generateRouteCandidates(startId, destIds, days, budget) {
   return { candidates: ['balanced', 'money', 'relax'].map(t => buildCandidate(t, startId, fixed, days, budget)), source: 'computed' };
 }
 
-  return { cityById, cityByName, distKm, railBetween, planCity, estimateBudget, timeFeasible, routeScore, planRoute, suggestStop, generateRouteCandidates, MODES, CITIES: MOCK.CITIES, ATTRACTIONS: MOCK.ATTRACTIONS, FOOD: MOCK.FOOD, STAY: MOCK.STAY };
+/* ==================== 阶段7.1: 旅行价值评价引擎 (Value Engine) ====================
+ * 回答的问题与"方案匹配度"(dimsOf/modeScore)不同:
+ *   方案匹配度 → 三个方案里哪个更符合用户偏好
+ *   旅行价值   → 某个城市/地点, 在当前铁路旅行里到底值不值得去
+ * 纯计算: 无 DOM / 无网络 / 无百度 SDK; 只复用 railBetween/estimateBudget/timeFeasible。
+ * 数据诚实性: 主观维度均为启发式基线, 结果带 baselineType:'heuristic' 与 confidence,
+ *            不伪装成用户行为统计; 缺失数据降低 confidence 而非编造。
+ */
+
+/* ---- 集中配置(可调工程参数, 非统计结论; 阈值集中在此便于校准) ---- */
+const VALUE_THRESHOLDS = {
+  // 成本维度高低阈值(0..1 归一化后)
+  timeCostHigh: 0.50, timeCostLow: 0.20,
+  budgetCostHigh: 0.35, budgetCostLow: 0.12,
+  fatigueHigh: 0.55, fatigueLow: 0.25,
+  opportunityHigh: 0.45, opportunityLow: 0.15,
+  // 铁路/体验
+  detourOnRoute: 0.15, detourHigh: 0.45,
+  experienceHigh: 0.60, experienceLow: 0.35,
+  uniquenessHigh: 0.60, representativenessHigh: 0.70,
+  // 硬约束: 加入后总花费超过预算的该比例 → 不可行
+  budgetHardRatio: 1.25,
+  // 推荐等级阈值(score)
+  rec: { high: 80, medium: 65, low: 50 },
+  // 每天有效活动小时(工程假设, 非统计值)
+  activeHoursPerDay: 8,
+};
+
+/* ---- 大众默认偏好: 启发式基线(非统计结论) ---- */
+const DEFAULT_TRAVEL_PREFERENCE = {
+  budgetSensitivity: 0.5,        // 高=在意花钱
+  timeSensitivity: 0.5,          // 高=在意总时长
+  walkingTolerance: 0.5,         // 高=能走
+  transferTolerance: 0.5,        // 高=不怕换乘
+  earlyDepartureTolerance: 0.5,  // 高=能早起
+  experiencePreference: 0.5,     // 高=愿意为体验多付出
+  destinationDepthPreference: 0.5, // 高=在意主目的地深度(反对被切碎)
+  profile: 'balanced',
+  baselineType: 'heuristic',
+};
+
+/* ---- 预设画像(供 7.2 UI 使用; 当前仅算法层) ---- */
+const TRAVEL_PRESETS = {
+  budget: { profile: 'budget', budgetSensitivity: 0.85, timeSensitivity: 0.40, walkingTolerance: 0.65, transferTolerance: 0.60, earlyDepartureTolerance: 0.65, experiencePreference: 0.45, destinationDepthPreference: 0.45 },
+  comfort: { profile: 'comfort', budgetSensitivity: 0.35, timeSensitivity: 0.70, walkingTolerance: 0.35, transferTolerance: 0.25, earlyDepartureTolerance: 0.30, experiencePreference: 0.55, destinationDepthPreference: 0.60 },
+  depth: { profile: 'depth', budgetSensitivity: 0.45, timeSensitivity: 0.50, walkingTolerance: 0.60, transferTolerance: 0.50, earlyDepartureTolerance: 0.45, experiencePreference: 0.85, destinationDepthPreference: 0.85 },
+};
+
+function _clamp01(v) { return !isFinite(v) ? 0 : Math.max(0, Math.min(1, v)); }
+
+/**
+ * 阶段7.2: 节奏滑块(0=省钱 … 1=舒适) → 连续 TravelPreference
+ * 以 TRAVEL_PRESETS.budget ↔ TRAVEL_PRESETS.comfort 线性插值, 中间值产生渐进差异
+ * (而非在离散预设间跳变); 结果过 normalizePreference 保证合法。
+ * @param {number} pace 0..1
+ * @param {string} [quickPref] 快捷偏好: balanced|play|time|money|comfort
+ */
+const QUICK_PREF_MODS = {
+  balanced: {},
+  play:    { experiencePreference: +0.25, destinationDepthPreference: +0.15 },
+  time:    { timeSensitivity: +0.25, transferTolerance: -0.10 },
+  money:   { budgetSensitivity: +0.30 },
+  comfort: { transferTolerance: -0.25, walkingTolerance: -0.15, earlyDepartureTolerance: -0.15, timeSensitivity: +0.10 },
+};
+
+function paceToPreference(pace, quickPref) {
+  const p = (typeof pace === 'number' && isFinite(pace)) ? _clamp01(pace) : 0.5;
+  const a = TRAVEL_PRESETS.budget, b = TRAVEL_PRESETS.comfort;
+  const out = {};
+  for (const k of ['budgetSensitivity', 'timeSensitivity', 'walkingTolerance', 'transferTolerance',
+    'earlyDepartureTolerance', 'experiencePreference', 'destinationDepthPreference']) {
+    out[k] = _clamp01(a[k] + (b[k] - a[k]) * p);
+  }
+  const mod = QUICK_PREF_MODS[quickPref] || {};
+  for (const k of Object.keys(mod)) out[k] = _clamp01((out[k] || 0.5) + mod[k]);
+  // profile 语义: 选了快捷偏好则用它; 否则节奏明显偏某一端才标该端, 中点视为大众默认
+  out.profile = (quickPref && quickPref !== 'balanced') ? quickPref
+    : (Math.abs(p - 0.5) < 0.1 ? 'balanced' : (p < 0.5 ? 'budget' : 'comfort'));
+  out.baselineType = 'heuristic';
+  return normalizePreference(out);
+}
+
+/** 偏好归一化: 缺失字段用大众默认补齐, 越界裁剪, 不修改入参 */
+function normalizePreference(p) {
+  const out = Object.assign({}, DEFAULT_TRAVEL_PREFERENCE);
+  if (p && typeof p === 'object') {
+    for (const k of Object.keys(DEFAULT_TRAVEL_PREFERENCE)) {
+      if (k === 'profile' || k === 'baselineType') { if (typeof p[k] === 'string') out[k] = p[k]; continue; }
+      if (typeof p[k] === 'number' && isFinite(p[k])) out[k] = _clamp01(p[k]);
+    }
+  }
+  return out;
+}
+
+/** 铁路邻接度(城市级, 来自现有 RAIL_LINES 图, 非编造) */
+function _railDegree(cityId) {
+  const adj = GRAPH[cityId] || [];
+  return new Set(adj.map(e => e.to)).size;
+}
+const _MAX_DEGREE = Math.max(1, ...MOCK.CITIES.map(c => _railDegree(c.id)));
+
+/**
+ * PlaceValue: 地点本身的价值(与"是否当前值得去"无关)
+ * 来源: experience/popularity/representativeness/uniqueness 基于 mock 景点数据推导(heuristic);
+ *       accessibility 基于铁路图邻接度; timeRequired/cost 来自景点 visitMinutes/ticket。
+ */
+function placeValueOf(cityOrId) {
+  const id = (cityOrId && typeof cityOrId === 'object') ? cityOrId.id : cityOrId;
+  const city = cityById(id);
+  if (!city) {
+    return { cityId: null, experience: 0, popularity: 0, representativeness: 0, uniqueness: 0,
+      accessibility: 0, timeRequired: null, cost: null, confidence: 'unknown', baselineType: 'unknown',
+      sampleAttractions: 0 };
+  }
+  const ats = MOCK.ATTRACTIONS.filter(a => a.cityId === id);
+  const sorted = ats.slice().sort((a, b) => b.value - a.value);
+  const top3 = sorted.slice(0, 3);
+  const sumAll = ats.reduce((s, a) => s + (a.value || 0), 0);
+  const top1 = sorted.length ? (sorted[0].value || 0) : 0;
+  const types = new Set(ats.map(a => a.type)).size;
+  const ticketSum = ats.reduce((s, a) => s + (a.ticket || 0), 0);
+  const visitTop3 = top3.reduce((s, a) => s + (a.visitMinutes || 0), 0);
+
+  const experience = _clamp01(sumAll / 30);              // mock value 合计归一(8 城实测范围 13~35)
+  const representativeness = _clamp01(top1 / 10);        // 最强单点的代表性
+  const uniqueness = _clamp01((top1 / 10) * 0.6 + (types / 6) * 0.4); // 高价值 + 类型多样性
+  const popularity = _clamp01((ats.length / 6) * 0.5 + (sumAll / 30) * 0.5); // 启发式代理, 非客流统计
+  const accessibility = _clamp01(_railDegree(id) / _MAX_DEGREE);
+  // 时间: 前 3 个景点游玩 + 每点 40min 市内移动 + 90min 车站/接驳缓冲
+  const timeRequired = ats.length ? Math.round(((visitTop3 + 40 * top3.length + 90) / 60) * 10) / 10 : null;
+  const cost = ats.length ? ticketSum : null;
+  return {
+    cityId: id, experience, popularity, representativeness, uniqueness, accessibility,
+    timeRequired, cost,
+    confidence: ats.length ? 'medium' : 'low',   // 有景点数据=中; 无数据=低(不编造)
+    baselineType: 'heuristic',
+    sampleAttractions: ats.length,
+  };
+}
+
+/* reasonCode → 可读理由(由实际计算值生成, 保证解释与算法一致) */
+const REASON_TEXT = {
+  HIGH_EXPERIENCE_VALUE: '城市体验价值较高',
+  LOW_EXPERIENCE_VALUE: '可体验内容较少',
+  HIGH_UNIQUENESS: '体验具有独特性',
+  HIGH_REPRESENTATIVENESS: '城市代表性较强',
+  RAILWAY_ON_ROUTE: '铁路基本顺路，无需明显绕行',
+  HIGH_DETOUR: '需要明显绕行',
+  LOW_TIME_COST: '预计只增加较少时间',
+  HIGH_TIME_COST: '明显增加总旅行时间',
+  LOW_BUDGET_COST: '额外预算很少',
+  HIGH_BUDGET_COST: '额外预算偏高',
+  HIGH_FATIGUE: '会明显增加旅途疲劳',
+  HIGH_OPPORTUNITY_COST: '会压缩后续城市的有效游玩时间',
+  MANY_TRANSFERS: '需要多次换乘',
+  RAILWAY_UNREACHABLE: '铁路无法顺路衔接',
+  TIME_INFEASIBLE: '加入后整体时间不可行',
+  BUDGET_EXCEEDED: '加入后总预算明显超出',
+  SAME_AS_ENDPOINT: '与起点或终点相同',
+  PLACE_DATA_MISSING: '缺少该城市的体验数据',
+};
+
+/**
+ * TripEvaluation: 某候选城市/地点"在当前行程中值不值得去"
+ * @param {string} candidateId 候选城市
+ * @param {{startId:string, endId:string, days:number, budget:number, preference?:object}} ctx
+ */
+function evaluateStop(candidateId, ctx) {
+  const c = ctx || {};
+  const startId = c.startId, endId = c.endId;
+  const days = (typeof c.days === 'number' && isFinite(c.days) && c.days > 0) ? c.days : 0;
+  const budget = (typeof c.budget === 'number' && isFinite(c.budget) && c.budget > 0) ? c.budget : 0;
+  const pref = normalizePreference(c.preference);
+  const pv = placeValueOf(candidateId);
+  const codes = [];
+
+  const base = {
+    candidateId: candidateId || null,
+    candidateName: pv.cityId ? cityById(pv.cityId).name : null,
+    placeValue: pv, preferenceProfile: pref.profile, baselineType: 'heuristic',
+  };
+
+  // ---- 硬约束 1: 候选非法 ----
+  if (!pv.cityId || !startId || !endId) {
+    codes.push('PLACE_DATA_MISSING');
+    return Object.assign(base, {
+      feasible: false, score: 0, recommendation: 'avoid',
+      timeCost: 1, budgetCost: 1, fatigueCost: 1, opportunityCost: 1,
+      railwayFit: 0, userMatch: 0, confidence: 'unknown',
+      timeCostHours: 0, addedFare: 0, addedKm: 0, transfers: 0, detour: 0,
+      reasonCodes: codes, reasons: codes.map(k => REASON_TEXT[k]),
+    });
+  }
+  if (candidateId === startId || candidateId === endId) {
+    codes.push('SAME_AS_ENDPOINT');
+    return Object.assign(base, {
+      feasible: false, score: 0, recommendation: 'avoid',
+      timeCost: 0, budgetCost: 0, fatigueCost: 0, opportunityCost: 0,
+      railwayFit: 0, userMatch: 0, confidence: pv.confidence,
+      timeCostHours: 0, addedFare: 0, addedKm: 0, transfers: 0, detour: 0,
+      reasonCodes: codes, reasons: codes.map(k => REASON_TEXT[k]),
+    });
+  }
+
+  // ---- 铁路指标(复用现有图, 不改算法) ----
+  const direct = railBetween(startId, endId);
+  const leg1 = railBetween(startId, candidateId);
+  const leg2 = railBetween(candidateId, endId);
+  const railReachable = leg1.path.length > 0 && leg2.path.length > 0;
+
+  // ---- 硬约束 2: 铁路无法顺路衔接 ----
+  if (!railReachable) {
+    codes.push('RAILWAY_UNREACHABLE');
+    return Object.assign(base, {
+      feasible: false, score: 0, recommendation: 'avoid',
+      timeCost: 1, budgetCost: 1, fatigueCost: 1, opportunityCost: 1,
+      railwayFit: 0, userMatch: 0, confidence: pv.confidence,
+      timeCostHours: 0, addedFare: 0, addedKm: 0, transfers: 0, detour: 0,
+      reasonCodes: codes, reasons: codes.map(k => REASON_TEXT[k]),
+    });
+  }
+
+  const addedKm = leg1.km + leg2.km - direct.km;
+  const addedRailH = Math.max(0, (leg1.durationMin + leg2.durationMin - direct.durationMin) / 60);
+  const addedFare = Math.max(0, leg1.fare + leg2.fare - direct.fare);
+  const transfers = (leg1.path.length > 1 ? 1 : 0) + (leg2.path.length > 1 ? 1 : 0);
+  const detour = Math.max(0, addedKm / Math.max(1, direct.km));
+  const stationBufferH = 0.5 * 2; // 每新增一段约 0.5h 车站/衔接缓冲(两段)
+
+  // ---- 时间成本 ----
+  const stopHours = (pv.timeRequired != null) ? pv.timeRequired : 0;
+  const timeCostH = addedRailH + stationBufferH + stopHours;
+  const availableH = Math.max(1, days * VALUE_THRESHOLDS.activeHoursPerDay);
+  const timeCost = _clamp01(timeCostH / availableH);
+
+  // ---- 预算成本 ----
+  const extraDays = Math.max(0, Math.ceil(stopHours / VALUE_THRESHOLDS.activeHoursPerDay));
+  const perNight = pref.budgetSensitivity > 0.5 ? 70 : 100;
+  const addedLiving = extraDays * (perNight + 60);
+  const addedCost = addedFare + addedLiving;
+  const budgetCost = _clamp01(addedCost / Math.max(1, budget));
+
+  // ---- 疲劳成本(粗粒度: 铁路时长 + 换乘 + 城市切换) ----
+  const fatigueCost = _clamp01((addedRailH / 8) * 0.5 + transfers * 0.15 + 0.10);
+
+  // ---- 机会成本: 插入该城占用天数 → 压缩主目的地有效时间 ----
+  const occupiedDays = Math.max(1, Math.ceil((addedRailH + stationBufferH + stopHours) / VALUE_THRESHOLDS.activeHoursPerDay));
+  const opportunityCost = _clamp01((occupiedDays * VALUE_THRESHOLDS.activeHoursPerDay * 0.6) / availableH);
+
+  // ---- 铁路适配 ----
+  const railwayFit = _clamp01(1 - detour / 0.6);
+
+  // ---- 便利性(换乘与市内接驳代理) ----
+  const convenience = _clamp01(1 - transfers * 0.25 - 0.10);
+
+  // ---- 用户匹配(偏好 × 地点特征) ----
+  const expMatch = 1 - Math.abs(pref.experiencePreference - pv.experience);
+  const budgetMatch = 1 - Math.abs(pref.budgetSensitivity - (1 - _clamp01((pv.cost != null ? pv.cost : 60) / 200)));
+  const depthMatch = pref.destinationDepthPreference > 0.5
+    ? _clamp01((pv.timeRequired || 0) / 6)          // 求深度: 停留时长充足是加分
+    : _clamp01(1 - (pv.timeRequired || 0) / 10);    // 不求深度: 短平快更好
+  const transferMatch = 1 - transfers * (1 - pref.transferTolerance) * 0.5;
+  const userMatch = _clamp01(0.35 * expMatch + 0.25 * budgetMatch + 0.25 * depthMatch + 0.15 * transferMatch);
+
+  // ---- 硬约束 3/4: 时间不可行 / 预算明显超出 ----
+  const routeAfter = [startId, candidateId, endId];
+  const tf = timeFeasible(routeAfter, days);
+  const totalAfter = estimateBudget(routeAfter, { days: days, stayPerNight: perNight, foodPerDay: 60 }).total;
+  let feasible = true;
+  if (!days || tf.ok === 'no') { feasible = false; codes.push('TIME_INFEASIBLE'); }
+  if (!budget || totalAfter > budget * VALUE_THRESHOLDS.budgetHardRatio) { feasible = false; codes.push('BUDGET_EXCEEDED'); }
+  const experienceDensity = Math.round((pv.experience * 100) / Math.max(0.5, timeCostH) * 10) / 10; // 每小时可获得的体验强度(内部指标, 不单独作为推荐依据)
+  if (!feasible) {
+    return Object.assign(base, {
+      feasible: false, score: 0, recommendation: 'avoid',
+      timeCost, budgetCost, fatigueCost, opportunityCost, railwayFit, userMatch,
+      timeCostHours: Math.round(timeCostH * 10) / 10, addedFare: Math.round(addedFare),
+      addedKm: Math.round(addedKm), transfers, detour: Math.round(detour * 100) / 100,
+      experienceDensity,
+      confidence: pv.confidence, reasonCodes: codes, reasons: codes.map(k => REASON_TEXT[k]),
+    });
+  }
+
+  // ---- 偏好重加权(省钱型: 钱权重↑/时间权重↓; 舒适型: 时间与换乘权重↑; 深度型: 体验权重↑) ----
+  const bS = pref.budgetSensitivity, tS = pref.timeSensitivity, eP = pref.experiencePreference;
+  const w = {
+    time: 0.30 * (0.6 + 0.8 * tS) * (1.20 - 0.40 * bS),
+    experience: 0.25 * (0.7 + 0.6 * eP),
+    rail: 0.15,
+    budget: 0.15 * (0.6 + 0.8 * bS),
+    convenience: 0.10 * (0.6 + 0.8 * (1 - pref.transferTolerance)),
+    representation: 0.05,
+  };
+  const wSum = Object.values(w).reduce((s, x) => s + x, 0) || 1;
+  for (const k of Object.keys(w)) w[k] = w[k] / wSum; // 归一, 保证 base ≤ 100
+
+  const dims = {
+    timeEfficiency: 1 - timeCost,
+    experience: pv.experience,
+    railwayFit: railwayFit,
+    budgetFit: 1 - budgetCost,
+    convenience: convenience,
+    representation: pv.representativeness,
+  };
+  const baseScore = 100 * (
+    w.time * dims.timeEfficiency + w.experience * dims.experience + w.rail * dims.railwayFit +
+    w.budget * dims.budgetFit + w.convenience * dims.convenience + w.representation * dims.representation
+  );
+  // 惩罚(疲劳/机会成本/换乘), 随偏好缩放
+  const fatigueScale = 0.6 + 0.8 * (1 - pref.walkingTolerance);
+  const oppScale = 0.6 + 0.8 * pref.destinationDepthPreference;
+  const penalty = 25 * fatigueCost * fatigueScale + 25 * opportunityCost * oppScale +
+    transfers * 6 * (1 - pref.transferTolerance);
+  const score = Math.max(0, Math.min(100, Math.round(baseScore - penalty)));
+
+  // ---- reasonCodes: 与实际计算值一一对应 ----
+  if (pv.experience >= VALUE_THRESHOLDS.experienceHigh) codes.push('HIGH_EXPERIENCE_VALUE');
+  if (pv.experience < VALUE_THRESHOLDS.experienceLow) codes.push('LOW_EXPERIENCE_VALUE');
+  if (pv.uniqueness >= VALUE_THRESHOLDS.uniquenessHigh) codes.push('HIGH_UNIQUENESS');
+  if (pv.representativeness >= VALUE_THRESHOLDS.representativenessHigh) codes.push('HIGH_REPRESENTATIVENESS');
+  if (detour <= VALUE_THRESHOLDS.detourOnRoute) codes.push('RAILWAY_ON_ROUTE');
+  if (detour >= VALUE_THRESHOLDS.detourHigh) codes.push('HIGH_DETOUR');
+  if (timeCost <= VALUE_THRESHOLDS.timeCostLow) codes.push('LOW_TIME_COST');
+  if (timeCost >= VALUE_THRESHOLDS.timeCostHigh) codes.push('HIGH_TIME_COST');
+  if (budgetCost <= VALUE_THRESHOLDS.budgetCostLow) codes.push('LOW_BUDGET_COST');
+  if (budgetCost >= VALUE_THRESHOLDS.budgetCostHigh) codes.push('HIGH_BUDGET_COST');
+  if (fatigueCost >= VALUE_THRESHOLDS.fatigueHigh) codes.push('HIGH_FATIGUE');
+  if (opportunityCost >= VALUE_THRESHOLDS.opportunityHigh) codes.push('HIGH_OPPORTUNITY_COST');
+  if (transfers >= 2) codes.push('MANY_TRANSFERS');
+
+  const R = VALUE_THRESHOLDS.rec;
+  const recommendation = score >= R.high ? 'high' : score >= R.medium ? 'medium' : score >= R.low ? 'low' : 'avoid';
+
+  return Object.assign(base, {
+    feasible: true, score, recommendation,
+    timeCost, budgetCost, fatigueCost, opportunityCost, railwayFit, userMatch,
+    dims, weights: w,
+    timeCostHours: Math.round(timeCostH * 10) / 10,
+    addedFare: Math.round(addedFare), addedKm: Math.round(addedKm),
+    transfers, detour: Math.round(detour * 100) / 100,
+    experienceDensity,
+    totalAfter: Math.round(totalAfter),
+    confidence: pv.confidence,
+    reasonCodes: codes, reasons: codes.map(k => REASON_TEXT[k]),
+  });
+}
+
+/**
+ * 批量评估: 起点→终点 沿途可插入城市(与 suggestStop 同一候选口径)
+ * @returns {Array<TripEvaluation>} 按 score 降序
+ */
+function evaluateStops(startId, endId, days, budget, preference) {
+  // 端点必须存在, 否则返回空(避免在缺少该节点的图上执行 Dijkstra 而崩溃)
+  if (!cityById(startId) || !cityById(endId)) return [];
+  const onPath = MOCK.CITIES.filter(c => c.id !== startId && c.id !== endId &&
+    railBetween(startId, c.id).path.length && railBetween(c.id, endId).path.length);
+  return onPath
+    .map(c => evaluateStop(c.id, { startId, endId, days, budget, preference }))
+    .sort((a, b) => (b.feasible ? b.score : -1) - (a.feasible ? a.score : -1));
+}
+
+  return { cityById, cityByName, distKm, railBetween, planCity, estimateBudget, timeFeasible, routeScore, planRoute, suggestStop, generateRouteCandidates, MODES, CITIES: MOCK.CITIES, ATTRACTIONS: MOCK.ATTRACTIONS, FOOD: MOCK.FOOD, STAY: MOCK.STAY, VALUE_THRESHOLDS, DEFAULT_TRAVEL_PREFERENCE, TRAVEL_PRESETS, normalizePreference, placeValueOf, evaluateStop, evaluateStops, paceToPreference, QUICK_PREF_MODS };
 });
