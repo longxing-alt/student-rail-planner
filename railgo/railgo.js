@@ -740,6 +740,34 @@
       $('inDest').value = '';
       renderChips();
     });
+    $('btnOptimize').addEventListener('click', () => {
+      const st = resolveCity($('inStart').value);
+      const days = +$('inDays').value, budget = +$('inBudget').value;
+      if (!st) return;
+      const box = $('optBox');
+      if (!box) return;
+      const startId = st.id;
+      const endId = state.dests.length ? state.dests[state.dests.length - 1].id : startId;
+      const cands = state.dests.map(d => d.id).filter(id => id !== startId && id !== endId);
+      if (!cands.length) { box.innerHTML = '<div class="reason-line">未提供候选目的地</div>'; return; }
+      const r = C.optimizeStopSelection(startId, endId, days, budget, cands, currentPreference());
+      const lines = [];
+      lines.push('<div class="dest-card"><div class="dt">⚡ 智能筛选结果 <span class="badge mock">推荐加入</span></div><div class="dmeta">');
+      lines.push('<span>候选: ' + cands.length + ' 个</span><span>推荐: ' + r.selected.length + ' 个</span><span>剩余: ' + r.remainingDays + ' 天 / ¥' + r.remainingBudget + '</span></div>');
+      if (!r.selected.length) {
+        lines.push('<div class="reason-line neg">当前天数/预算不足以增加中途站点</div>');
+      } else {
+        r.selected.forEach(x => {
+          const name = C.cityById(x.id)?.name || x.id;
+          lines.push('<div class="reason-line pos">✓ ' + esc(name) + ' · 价值 ' + x.score + ' · ' + (x.reasons && x.reasons[0]) + '</div>');
+        });
+      }
+      if (r.rejected.length) {
+        lines.push('<div class="reason-line neg">未入选: ' + r.rejected.map(x => C.cityById(x.id)?.name || x.id).join('、') + '</div>');
+      }
+      lines.push('</div>');
+      box.innerHTML = lines.join('');
+    });
     $('inDest').addEventListener('keydown', e => { if (e.key === 'Enter') $('btnAddDest').click(); });
     $('btnPlan').addEventListener('click', plan);
     bindSeg('segUser', 'user'); bindSeg('segSmart', 'smart');

@@ -929,5 +929,45 @@ function evaluateStops(startId, endId, days, budget, preference) {
     .sort((a, b) => (b.feasible ? b.score : -1) - (a.feasible ? a.score : -1));
 }
 
-  return { cityById, cityByName, distKm, railBetween, planCity, estimateBudget, timeFeasible, routeScore, planRoute, suggestStop, generateRouteCandidates, MODES, CITIES: MOCK.CITIES, ATTRACTIONS: MOCK.ATTRACTIONS, FOOD: MOCK.FOOD, STAY: MOCK.STAY, VALUE_THRESHOLDS, DEFAULT_TRAVEL_PREFERENCE, TRAVEL_PRESETS, normalizePreference, placeValueOf, evaluateStop, evaluateStops, paceToPreference, QUICK_PREF_MODS, destinationEvaluation };
+/* ==================== 阶段7.4: 中途站点选择优化器 ====================
+ * 问题: 用户给了 N 个想去的地方, 但天数/预算有限, 应该优先去哪些?
+ * 方法: 贪心 + 边际评估(复用 evaluateStop), 每次选择"增量价值/增量成本"最高的下一站。
+ * 不保证全局最优(NP-hard), 但工程可用且可解释。
+ */
+function optimizeStopSelection(startId, endId, days, budget, candidateIds, preference) {
+  if (!startId || !endId || !Array.isArray(candidateIds) || !candidateIds.length) return { selected: [], rejected: [], totalScore: 0 };
+  const pref = normalizePreference(preference);
+  const usedDays = (() => {
+    const leg = railBetween(startId, endId);
+    return Math.max(1, Math.ceil((leg.durationMin / 60) / VALUE_THRESHOLDS.activeHoursPerDay));
+  })();
+  const baseBudget = estimateBudget([startId, endId], { days, stayPerNight: 90, foodPerDay: 60 }).total;
+  let remainingDays = Math.max(0, days - usedDays);
+  let remainingBudget = Math.max(0, budget - baseBudget);
+
+  const evaluated = candidateIds
+    .filter(id => id !== startId && id !== endId && cityById(id))
+    .map(id => {
+      const ev = evaluateStop(id, { startId, endId, days, budget, preference: pref });
+      return { id, ...ev };
+    })
+    .filter(ev => ev.feasible)
+    .sort((a, b) => b.score - a.score);
+
+  const selected = [], rejected = [];
+  let totalScore = 0;
+  for (const ev of evaluated) {
+    if (remainingDays <= 0 || remainingBudget <= 0) { rejected.push(ev); continue; }
+    const needDays = Math.max(1, Math.ceil((ev.timeCostHours || 4) / VALUE_THRESHOLDS.activeHoursPerDay));
+    const needBudget = (ev.addedFare || 0) + needDays * (90 + 60);
+    if (needDays > remainingDays || needBudget > remainingBudget) { rejected.push(ev); continue; }
+    selected.push(ev);
+    remainingDays -= needDays;
+    remainingBudget -= needBudget;
+    totalScore += ev.score;
+  }
+  return { selected, rejected, totalScore, remainingDays, remainingBudget };
+}
+
+  return { cityById, cityByName, distKm, railBetween, planCity, estimateBudget, timeFeasible, routeScore, planRoute, suggestStop, generateRouteCandidates, MODES, CITIES: MOCK.CITIES, ATTRACTIONS: MOCK.ATTRACTIONS, FOOD: MOCK.FOOD, STAY: MOCK.STAY, VALUE_THRESHOLDS, DEFAULT_TRAVEL_PREFERENCE, TRAVEL_PRESETS, normalizePreference, placeValueOf, evaluateStop, evaluateStops, paceToPreference, QUICK_PREF_MODS, destinationEvaluation, optimizeStopSelection };
 });

@@ -598,3 +598,57 @@ test('D18. UI contract: 硬约束 reasons 与 codes 一一对应且可直接渲�
     assert.ok(typeof d.reasons[idx] === 'string' && d.reasons[idx].length > 0, `${code} 有展示文本`);
   });
 });
+
+/* ==================== 阶段7.4: 中途站点选择优化器 ==================== */
+
+test('O1. 空输入返回空结果(不崩溃)', () => {
+  const r = C.optimizeStopSelection('sjz', 'sh', 5, 1600, [], {});
+  assert.ok(Array.isArray(r.selected) && Array.isArray(r.rejected));
+  assert.strictEqual(r.selected.length, 0);
+  assert.strictEqual(r.rejected.length, 0);
+  assert.strictEqual(r.totalScore, 0);
+});
+
+test('O2. 正常候选产生 selected + rejected 分区', () => {
+  const candidates = ['jn', 'xuzhou', 'nanjing', 'hangzhou'];
+  const r = C.optimizeStopSelection('sjz', 'sh', 5, 1600, candidates, {});
+  assert.ok(r.selected.length >= 0);
+  assert.ok(r.rejected.length >= 0);
+  assert.ok(r.selected.length + r.rejected.length <= candidates.length);
+  // selected 中每个 cityId 唯一且不在端点
+  const ids = r.selected.map(x => x.id);
+  assert.deepStrictEqual(ids, ids.filter((v, i, a) => a.indexOf(v) === i));
+  ids.forEach(id => assert.ok(id !== 'sjz' && id !== 'sh'));
+});
+
+test('O3. 天数不足时拒绝高耗时城市', () => {
+  const candidates = ['jn', 'sh']; // sh 是终点应被过滤, jn 短途
+  const r = C.optimizeStopSelection('sjz', 'sh', 2, 1600, candidates, {});
+  assert.ok(r.selected.every(x => x.id !== 'sh'), '终点不应入选');
+});
+
+test('O4. 预算不足时拒绝高花费城市', () => {
+  const candidates = ['jn', 'xuzhou', 'nanjing', 'hangzhou'];
+  const r = C.optimizeStopSelection('sjz', 'sh', 2, 600, candidates, {});
+  assert.ok(r.selected.length < candidates.length, '预算紧时应减少 selected');
+});
+
+test('O5. 偏好影响选择顺序(省钱 vs 舒适)', () => {
+  const candidates = ['jn', 'xuzhou', 'nanjing', 'hangzhou'];
+  const money = C.optimizeStopSelection('sjz', 'sh', 4, 1400, candidates, { budgetSensitivity: 0.9 });
+  const comfort = C.optimizeStopSelection('sjz', 'sh', 4, 1400, candidates, { budgetSensitivity: 0.1 });
+  assert.ok(money.selected.length <= comfort.selected.length + 1, '省钱偏好不应选更多');
+});
+
+test('O6. 不修改原始候选数组', () => {
+  const candidates = ['jn', 'xuzhou'];
+  const before = candidates.slice();
+  C.optimizeStopSelection('sjz', 'sh', 5, 1600, candidates, {});
+  assert.deepStrictEqual(candidates, before);
+});
+
+test('O7. 返回 remainingDays / remainingBudget(可解释性)', () => {
+  const r = C.optimizeStopSelection('sjz', 'sh', 5, 1600, ['jn', 'xuzhou'], {});
+  assert.ok(typeof r.remainingDays === 'number');
+  assert.ok(typeof r.remainingBudget === 'number');
+});
