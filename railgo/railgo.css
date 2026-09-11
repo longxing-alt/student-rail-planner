@@ -1,3 +1,7 @@
+.dest-card { background:#fff; border:1px solid var(--line); border-left:4px solid var(--accent); border-radius:12px; padding:12px 14px; margin-top:12px; }
+.dest-card .dt { font-size:14.5px; font-weight:800; }
+.dest-card .dscore { font-size:20px; font-weight:900; color:var(--accent); }
+.dest-card .dmeta { font-size:12.5px; color:var(--mut); margin-top:4px; display:flex; gap:12px; flex-wrap:wrap; }
 .reason-line { font-size: 12px; margin-top: 5px; }
 .reason-line.pos { color: var(--ok); }
 .reason-line.neg { color: var(--warn); }

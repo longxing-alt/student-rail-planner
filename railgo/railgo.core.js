@@ -554,6 +554,14 @@ const REASON_TEXT = {
   BUDGET_EXCEEDED: '加入后总预算明显超出',
   SAME_AS_ENDPOINT: '与起点或终点相同',
   PLACE_DATA_MISSING: '缺少该城市的体验数据',
+  // 阶段7.3: 目的地(终点)专用
+  RAILWAY_DIRECT: '铁路可从起点直达',
+  RAILWAY_NEEDS_TRANSFER: '铁路需中转到达',
+  HIGH_RAIL_TIME: '铁路耗时占比较高',
+  LOW_RAIL_TIME: '铁路耗时较短',
+  HIGH_RAIL_COST: '铁路票价占预算比例较高',
+  DEST_DEPTH_ENOUGH: '停留天数足以深入体验',
+  DEST_DEPTH_THIN: '停留天数偏少，体验可能不足',
 };
 
 /**
@@ -741,6 +749,172 @@ function evaluateStop(candidateId, ctx) {
   });
 }
 
+/* ==================== 阶段7.3: 目的地(终点)评价 ====================
+ * 语义边界(与沿途 TripEvaluation 严格区分):
+ *   DestinationEvaluation = 终点城市的【绝对】旅行价值
+ *     - railAccess: 起点→终点的绝对铁路可达质量(可达/直达/时长/里程/票价/换乘)
+ *     - 无 detour / addedKm / addedRailH / addedFare (终点不存在"绕行"概念)
+ *     - 无 opportunityCost (终点不是被插入的可选项, 没有"替代方案"可比)
+ *   TripEvaluation(未改动) = 沿途城市的【增量】价值
+ * 两者共享 placeValueOf() 与偏好/阈值/理由机制, 但不混为一个分数。
+ */
+
+/** 起点→终点的绝对铁路可达信息(复用 railBetween, 不新增算法) */
+function _railAccess(startId, destId) {
+  const leg = railBetween(startId, destId);
+  const reachable = leg.path.length > 0;
+  const from = cityById(startId), to = cityById(destId);
+  const straightKm = (from && to) ? Math.round(distKm(from, to)) : null;
+  const detourRatio = (straightKm && straightKm > 0) ? Math.round((leg.km / straightKm) * 100) / 100 : null;
+  return {
+    reachable: reachable,
+    direct: reachable && leg.path.length === 1,
+    railHours: Math.round((leg.durationMin / 60) * 10) / 10,
+    railKm: leg.km,
+    railFare: leg.fare,
+    transfers: reachable ? Math.max(0, leg.path.length - 1) : null,
+    detourRatio: detourRatio,
+    est: !!leg.est,
+  };
+}
+
+/**
+ * 目的地(终点)绝对旅行价值评价
+ * @param {string} destId 目标城市
+ * @param {{startId:string, days:number, budget:number, preference?:object}} ctx
+ *   budget = 用户整趟旅行总预算(与 plan() 中 +$('inBudget').value 同义)
+ */
+function destinationEvaluation(destId, ctx) {
+  const c = ctx || {};
+  const startId = c.startId;
+  const days = (typeof c.days === 'number' && isFinite(c.days) && c.days > 0) ? c.days : 0;
+  const budget = (typeof c.budget === 'number' && isFinite(c.budget) && c.budget > 0) ? c.budget : 0;
+  const pref = normalizePreference(c.preference);
+  const pv = placeValueOf(destId);
+  const codes = [];
+
+  const base = {
+    destId: destId || null,
+    destName: pv.cityId ? cityById(pv.cityId).name : null,
+    placeValue: pv,
+    preferenceProfile: pref.profile,
+    baselineType: 'heuristic',
+  };
+  const emptyRail = { reachable: false, direct: false, railHours: null, railKm: null, railFare: null, transfers: null, detourRatio: null, est: true };
+
+  if (!pv.cityId || !startId) {
+    codes.push('PLACE_DATA_MISSING');
+    return Object.assign(base, {
+      feasible: false, score: 0, recommendation: 'avoid', railAccess: emptyRail,
+      timeCost: 1, budgetCost: 1, fatigueCost: 1, userMatch: 0, confidence: 'unknown',
+      reasonCodes: codes, reasons: codes.map(k => REASON_TEXT[k]),
+    });
+  }
+  if (destId === startId) {
+    codes.push('SAME_AS_ENDPOINT');
+    return Object.assign(base, {
+      feasible: false, score: 0, recommendation: 'avoid', railAccess: _railAccess(startId, destId),
+      timeCost: 0, budgetCost: 0, fatigueCost: 0, userMatch: 0, confidence: pv.confidence,
+      reasonCodes: codes, reasons: codes.map(k => REASON_TEXT[k]),
+    });
+  }
+
+  const ra = _railAccess(startId, destId);
+  if (!ra.reachable) {
+    codes.push('RAILWAY_UNREACHABLE');
+    return Object.assign(base, {
+      feasible: false, score: 0, recommendation: 'avoid', railAccess: ra,
+      timeCost: 1, budgetCost: 1, fatigueCost: 1, userMatch: 0, confidence: pv.confidence,
+      reasonCodes: codes, reasons: codes.map(k => REASON_TEXT[k]),
+    });
+  }
+
+  const stationBufferH = 0.5;
+  const railH = ra.railHours || 0;
+  const stayHours = (pv.timeRequired != null) ? pv.timeRequired : 0;
+  const timeCostH = railH + stationBufferH + stayHours;
+  const availableH = Math.max(1, days * VALUE_THRESHOLDS.activeHoursPerDay);
+  const timeCost = _clamp01(timeCostH / availableH);
+  const budgetCost = _clamp01((ra.railFare || 0) / Math.max(1, budget));
+  const fatigueCost = _clamp01((railH / 8) * 0.5 + (ra.transfers || 0) * 0.15);
+
+  const expMatch = 1 - Math.abs(pref.experiencePreference - pv.experience);
+  const budgetMatch = 1 - Math.abs(pref.budgetSensitivity - (1 - _clamp01((pv.cost != null ? pv.cost : 60) / 200)));
+  const stayDays = Math.max(1, Math.round(days * 0.6));
+  const depthRatio = _clamp01(stayDays * VALUE_THRESHOLDS.activeHoursPerDay / Math.max(1, (pv.timeRequired || 4) * 1.2));
+  const depthMatch = pref.destinationDepthPreference > 0.5 ? depthRatio : _clamp01(1 - depthRatio * 0.5);
+  const transferMatch = 1 - (ra.transfers || 0) * (1 - pref.transferTolerance) * 0.5;
+  const userMatch = _clamp01(0.35 * expMatch + 0.25 * budgetMatch + 0.25 * depthMatch + 0.15 * transferMatch);
+
+  const totalTrip = estimateBudget([startId, destId], { days: days, stayPerNight: pref.budgetSensitivity > 0.5 ? 70 : 100, foodPerDay: 60 }).total;
+  let feasible = true;
+  if (!days || timeCostH > availableH) { feasible = false; codes.push('TIME_INFEASIBLE'); }
+  if (!budget || totalTrip > budget * VALUE_THRESHOLDS.budgetHardRatio) { feasible = false; codes.push('BUDGET_EXCEEDED'); }
+  if (!feasible) {
+    return Object.assign(base, {
+      feasible: false, score: 0, recommendation: 'avoid', railAccess: ra,
+      timeCost, budgetCost, fatigueCost, userMatch,
+      timeCostHours: Math.round(timeCostH * 10) / 10, totalTrip: Math.round(totalTrip),
+      confidence: pv.confidence, reasonCodes: codes, reasons: codes.map(k => REASON_TEXT[k]),
+    });
+  }
+
+  const bS = pref.budgetSensitivity, tS = pref.timeSensitivity, eP = pref.experiencePreference;
+  const w = {
+    time: 0.30 * (0.6 + 0.8 * tS) * (1.20 - 0.40 * bS),
+    experience: 0.30 * (0.7 + 0.6 * eP),
+    rail: 0.15,
+    budget: 0.15 * (0.6 + 0.8 * bS),
+    representation: 0.10,
+  };
+  const wSum = Object.values(w).reduce((x, y) => x + y, 0) || 1;
+  for (const k of Object.keys(w)) w[k] = w[k] / wSum;
+
+  const railQuality = _clamp01(1 - (ra.transfers || 0) * 0.3 - (railH / 12) * 0.4);
+  const dims = {
+    timeEfficiency: 1 - timeCost,
+    experience: pv.experience,
+    railAccess: railQuality,
+    budgetFit: 1 - budgetCost,
+    representation: pv.representativeness,
+  };
+  const baseScore = 100 * (
+    w.time * dims.timeEfficiency + w.experience * dims.experience + w.rail * dims.railAccess +
+    w.budget * dims.budgetFit + w.representation * dims.representation
+  );
+  const fatigueScale = 0.6 + 0.8 * (1 - pref.walkingTolerance);
+  const penalty = 22 * fatigueCost * fatigueScale + (ra.transfers || 0) * 5 * (1 - pref.transferTolerance);
+  const score = Math.max(0, Math.min(100, Math.round(baseScore - penalty)));
+
+  if (ra.direct) codes.push('RAILWAY_DIRECT');
+  else if ((ra.transfers || 0) >= 1) codes.push('RAILWAY_NEEDS_TRANSFER');
+  if (railH >= 5) codes.push('HIGH_RAIL_TIME');
+  else if (railH <= 2) codes.push('LOW_RAIL_TIME');
+  if (budgetCost >= VALUE_THRESHOLDS.budgetCostHigh) codes.push('HIGH_RAIL_COST');
+  if (pv.experience >= VALUE_THRESHOLDS.experienceHigh) codes.push('HIGH_EXPERIENCE_VALUE');
+  if (pv.experience < VALUE_THRESHOLDS.experienceLow) codes.push('LOW_EXPERIENCE_VALUE');
+  if (pv.uniqueness >= VALUE_THRESHOLDS.uniquenessHigh) codes.push('HIGH_UNIQUENESS');
+  if (pv.representativeness >= VALUE_THRESHOLDS.representativenessHigh) codes.push('HIGH_REPRESENTATIVENESS');
+  if (fatigueCost >= VALUE_THRESHOLDS.fatigueHigh) codes.push('HIGH_FATIGUE');
+  if ((ra.transfers || 0) >= 2) codes.push('MANY_TRANSFERS');
+  if (depthRatio >= 0.8) codes.push('DEST_DEPTH_ENOUGH');
+  else if (depthRatio < 0.5) codes.push('DEST_DEPTH_THIN');
+
+  const R = VALUE_THRESHOLDS.rec;
+  const recommendation = score >= R.high ? 'high' : score >= R.medium ? 'medium' : score >= R.low ? 'low' : 'avoid';
+
+  return Object.assign(base, {
+    feasible: true, score, recommendation, railAccess: ra,
+    timeCost, budgetCost, fatigueCost, userMatch,
+    dims, weights: w,
+    timeCostHours: Math.round(timeCostH * 10) / 10,
+    stayDays: stayDays, depthRatio: Math.round(depthRatio * 100) / 100,
+    totalTrip: Math.round(totalTrip),
+    confidence: pv.confidence,
+    reasonCodes: codes, reasons: codes.map(k => REASON_TEXT[k]),
+  });
+}
+
 /**
  * 批量评估: 起点→终点 沿途可插入城市(与 suggestStop 同一候选口径)
  * @returns {Array<TripEvaluation>} 按 score 降序
@@ -755,5 +929,5 @@ function evaluateStops(startId, endId, days, budget, preference) {
     .sort((a, b) => (b.feasible ? b.score : -1) - (a.feasible ? a.score : -1));
 }
 
-  return { cityById, cityByName, distKm, railBetween, planCity, estimateBudget, timeFeasible, routeScore, planRoute, suggestStop, generateRouteCandidates, MODES, CITIES: MOCK.CITIES, ATTRACTIONS: MOCK.ATTRACTIONS, FOOD: MOCK.FOOD, STAY: MOCK.STAY, VALUE_THRESHOLDS, DEFAULT_TRAVEL_PREFERENCE, TRAVEL_PRESETS, normalizePreference, placeValueOf, evaluateStop, evaluateStops, paceToPreference, QUICK_PREF_MODS };
+  return { cityById, cityByName, distKm, railBetween, planCity, estimateBudget, timeFeasible, routeScore, planRoute, suggestStop, generateRouteCandidates, MODES, CITIES: MOCK.CITIES, ATTRACTIONS: MOCK.ATTRACTIONS, FOOD: MOCK.FOOD, STAY: MOCK.STAY, VALUE_THRESHOLDS, DEFAULT_TRAVEL_PREFERENCE, TRAVEL_PRESETS, normalizePreference, placeValueOf, evaluateStop, evaluateStops, paceToPreference, QUICK_PREF_MODS, destinationEvaluation };
 });

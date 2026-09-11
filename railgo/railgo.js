@@ -94,10 +94,42 @@
   }
 
   /* ---------- 渲染选中方案 ---------- */
+  /* ---------- 阶段7.3: 目的地价值卡片(只渲染 core 结果, 不在 UI 计算) ---------- */
+  function renderDestination(startId, c, days, budget) {
+    const box = $('destBox');
+    if (!box) return;
+    const destId = c && c.cities && c.cities.length ? c.cities[c.cities.length - 1] : null;
+    if (!destId) { box.innerHTML = ''; return; }
+    let d;
+    try {
+      d = C.destinationEvaluation(destId, { startId: startId, days: days, budget: budget, preference: currentPreference() });
+    } catch (e) { box.innerHTML = ''; return; }
+    if (!d || !d.destName) { box.innerHTML = ''; return; }
+    const REC = { high: '强烈推荐', medium: '值得考虑', low: '慎重考虑', avoid: '不建议' };
+    const ra = d.railAccess || {};
+    const reasonMap = {};
+    (d.reasonCodes || []).forEach((k, i) => { reasonMap[k] = (d.reasons && d.reasons[i]) || k; });
+    const pos = (d.reasonCodes || []).filter(k => /HIGH_EXPERIENCE|UNIQUENESS|REPRESENTATIVENESS|DIRECT|LOW_RAIL_TIME|DEST_DEPTH_ENOUGH/.test(k));
+    const neg = (d.reasonCodes || []).filter(k => /HIGH_RAIL_TIME|HIGH_RAIL_COST|HIGH_FATIGUE|NEEDS_TRANSFER|MANY_TRANSFERS|DEST_DEPTH_THIN|BUDGET_EXCEEDED|TIME_INFEASIBLE|RAILWAY_UNREACHABLE|PLACE_DATA_MISSING/.test(k));
+    box.innerHTML = '<div class="dest-card">' +
+      '<div class="dt">📍 ' + esc(d.destName) + ' · 目的地价值 <span class="dscore">' + d.score + '</span> <span class="badge ' + (d.recommendation === 'high' ? 'ok' : d.recommendation === 'avoid' ? 'warn' : '') + '">' + (REC[d.recommendation] || d.recommendation) + '</span>' +
+      '<span class="badge mock">与"方案匹配度"含义不同</span></div>' +
+      '<div class="dmeta">' +
+      '<span>铁路 ' + (ra.railHours != null ? ra.railHours + ' h' : '—') + (ra.railKm != null ? ' · ' + ra.railKm + ' km' : '') + '</span>' +
+      '<span>' + (ra.direct ? '直达' : (ra.transfers != null ? '换乘 ' + ra.transfers + ' 次' : '不可达')) + '</span>' +
+      '<span>票价 ¥' + (ra.railFare != null ? ra.railFare : '—') + '【模拟】</span>' +
+      '<span>整趟预计 ¥' + (d.totalTrip != null ? d.totalTrip : '—') + ' / 预算</span>' +
+      '</div>' +
+      (pos.length ? '<div class="reason-line pos">✓ ' + pos.map(k => reasonMap[k] || k).join(' · ') + '</div>' : '') +
+      (neg.length ? '<div class="reason-line neg">⚠ ' + neg.map(k => reasonMap[k] || k).join(' · ') + '</div>' : '') +
+      '</div>';
+  }
+
   function renderActive(start, days, budget) {
     const c = state.candidates[state.active];
     if (!c) return;
     renderSum(c, budget);
+    renderDestination(start.id, c, days, budget);
     renderVerdict(c, budget, days);
     renderTimeline(c);
     Promise.resolve(renderMap(c.cities)).catch(() => { try { renderSvgMap(c.cities); } catch (e) {} });
@@ -401,6 +433,8 @@
     // 偏好变化只影响价值评估, 不应影响主流程: 单点失败不阻断页面
     try {
       maybeSuggestStop(c.cities[0], c.cities, +$('inDays').value, +$('inBudget').value);
+      const st = resolveCity($('inStart').value);
+      if (st) renderDestination(st.id, c, +$('inDays').value, +$('inBudget').value);
     } catch (e) {
       if (window.console && console.warn) console.warn('[RailGo] 偏好重算失败:', e && e.message);
     }

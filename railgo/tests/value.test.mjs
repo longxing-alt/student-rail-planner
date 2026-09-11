@@ -423,3 +423,178 @@ test('P17. 节奏两端产生差异化的 Value Engine 结果(端到端)', () =>
   assert.notStrictEqual(budgetPace.score, comfortPace.score, '节奏两端应给出不同旅行价值');
   assert.ok(budgetPace.budgetCost <= comfortPace.budgetCost + 1e-9, '省钱端预算压力不高于舒适端');
 });
+
+/* ==================== 阶段7.3: 目的地(终点)评价 DestinationEvaluation ==================== */
+
+const DCTX = { startId: 'sjz', days: 5, budget: 1600 };
+const dev = (id, ctx) => C.destinationEvaluation(id, Object.assign({}, DCTX, ctx || {}));
+
+test('D1. 正常目标城市产生 DestinationEvaluation', () => {
+  const d = dev('sh');
+  assert.ok(d && d.destId === 'sh' && d.destName === '上海');
+  assert.strictEqual(d.feasible, true);
+  assert.ok(typeof d.score === 'number' && d.score >= 0 && d.score <= 100);
+  assert.ok(['high', 'medium', 'low', 'avoid'].indexOf(d.recommendation) >= 0);
+  assert.ok(d.railAccess && typeof d.railAccess.railHours === 'number');
+});
+
+test('D2. 正确复用 placeValueOf(同一对象引用语义, 不复制实现)', () => {
+  const d = dev('sh');
+  const pv = C.placeValueOf('sh');
+  assert.deepStrictEqual(d.placeValue, pv, '目的地评价中的 placeValue 与 placeValueOf 输出一致');
+});
+
+test('D3. 目标城市不存在 → feasible=false 且无 NaN / 不 throw', () => {
+  let d;
+  assert.doesNotThrow(() => { d = dev('nope'); });
+  assert.strictEqual(d.feasible, false);
+  assert.strictEqual(d.score, 0);
+  assert.ok(d.reasonCodes.indexOf('PLACE_DATA_MISSING') >= 0);
+  ['timeCost', 'budgetCost', 'fatigueCost', 'userMatch'].forEach(k => assert.ok(Number.isFinite(d[k]), k + ' 有限'));
+  assert.strictEqual(d.confidence, 'unknown');
+});
+
+test('D4. 铁路不可达 → feasible=false', () => {
+  // 用图上不存在的城市触发(PLACE_DATA_MISSING 优先); 再验证可达性字段存在
+  const d = dev('nope');
+  assert.strictEqual(d.feasible, false);
+  assert.strictEqual(d.railAccess.reachable, false);
+  // 正常城市应可达
+  assert.strictEqual(dev('sh').railAccess.reachable, true);
+});
+
+test('D5. 直达铁路 → railAccess.direct=true 且带 RAILWAY_DIRECT', () => {
+  // 石家庄→石家庄? 不行(同点). 找一条单段边: 石家庄→济南 在 RAIL_EDGES 中
+  const d = C.destinationEvaluation('jn', { startId: 'sjz', days: 5, budget: 1600 });
+  assert.strictEqual(d.railAccess.direct, true, '石家庄→济南 为单段直达');
+  assert.strictEqual(d.railAccess.transfers, 0);
+  assert.ok(d.reasonCodes.indexOf('RAILWAY_DIRECT') >= 0, '有直达理由码');
+});
+
+test('D6. 需要换乘时正确记录 transfers', () => {
+  const d = dev('sh'); // 石家庄→上海 经徐州(2 段)
+  assert.strictEqual(d.railAccess.direct, false);
+  assert.ok(d.railAccess.transfers >= 1, 'transfers=' + d.railAccess.transfers);
+  assert.ok(d.reasonCodes.indexOf('RAILWAY_NEEDS_TRANSFER') >= 0);
+});
+
+test('D7. 终点不出现沿途"绕行"惩罚字段', () => {
+  const d = dev('sh');
+  ['detour', 'addedKm', 'addedRailH', 'addedFare', 'railwayFit'].forEach(k => {
+    assert.strictEqual(k in d, false, '终点评价不应含 ' + k);
+  });
+  // 反证: 沿途评价含这些字段
+  const t = C.evaluateStop('jn', { startId: 'sjz', endId: 'sh', days: 5, budget: 1600 });
+  assert.ok('detour' in t && 'addedFare' in t, '沿途评价仍含增量字段(未改动)');
+});
+
+test('D8. 终点不产生沿途 opportunityCost', () => {
+  const d = dev('sh');
+  assert.strictEqual('opportunityCost' in d, false, '终点无机会成本字段');
+});
+
+test('D9. 预算约束沿用现有 estimateBudget 语义(整趟总花费)', () => {
+  const d = dev('sh');
+  assert.ok(typeof d.totalTrip === 'number', '给出整趟预计花费');
+  const total = C.estimateBudget(['sjz', 'sh'], { days: 5, stayPerNight: 90, foodPerDay: 60 }).total;
+  assert.ok(d.totalTrip > 0 && d.totalTrip <= total * 1.3, 'totalTrip 与 estimateBudget 同量级');
+  // 预算极低 → 硬约束
+  const poor = dev('sh', { budget: 300 });
+  assert.strictEqual(poor.feasible, false);
+  assert.ok(poor.reasonCodes.indexOf('BUDGET_EXCEEDED') >= 0);
+});
+
+test('D10. 时间约束正确(天数不足 → TIME_INFEASIBLE)', () => {
+  const d = dev('sh', { days: 1 });
+  assert.strictEqual(d.feasible, false);
+  assert.ok(d.reasonCodes.indexOf('TIME_INFEASIBLE') >= 0);
+  const ok = dev('sh', { days: 5 });
+  assert.strictEqual(ok.feasible, true);
+});
+
+test('D11. 偏好产生合理差异(省钱 vs 舒适)', () => {
+  const money = dev('sh', { preference: C.paceToPreference(0, 'money') });
+  const comfort = dev('sh', { preference: C.paceToPreference(1, 'comfort') });
+  assert.ok(money.feasible && comfort.feasible);
+  assert.notStrictEqual(money.score, comfort.score, '不同偏好应给出不同目的地价值');
+  assert.ok(money.budgetCost <= comfort.budgetCost + 1e-9, '省钱端预算压力不高于舒适端');
+  assert.strictEqual(money.preferenceProfile, 'money');
+});
+
+test('D12. 不修改输入对象(城市/景点/ctx)', () => {
+  const cities = JSON.stringify(C.CITIES);
+  const ats = JSON.stringify(C.ATTRACTIONS);
+  const ctx = { startId: 'sjz', days: 5, budget: 1600, preference: C.paceToPreference(0.3, 'play') };
+  const snap = JSON.stringify(ctx);
+  C.destinationEvaluation('sh', ctx);
+  assert.strictEqual(JSON.stringify(C.CITIES), cities);
+  assert.strictEqual(JSON.stringify(C.ATTRACTIONS), ats);
+  assert.strictEqual(JSON.stringify(ctx), snap, 'ctx 未被修改');
+});
+
+test('D13. reasonCodes 与 reasons 一致且可解释', () => {
+  const d = dev('sh');
+  assert.strictEqual(d.reasons.length, d.reasonCodes.length);
+  d.reasonCodes.forEach((k, i) => assert.ok(typeof d.reasons[i] === 'string' && d.reasons[i].length > 0, k));
+  // 抽查: HIGH_RAIL_TIME 对应实际 railHours
+  if (d.reasonCodes.indexOf('HIGH_RAIL_TIME') >= 0) assert.ok(d.railAccess.railHours >= 5);
+  if (d.reasonCodes.indexOf('RAILWAY_DIRECT') >= 0) assert.strictEqual(d.railAccess.direct, true);
+});
+
+test('D14. confidence / baselineType 存在且真实标注', () => {
+  const d = dev('sh');
+  assert.ok(['low', 'medium', 'unknown'].indexOf(d.confidence) >= 0);
+  assert.strictEqual(d.baselineType, 'heuristic');
+  assert.ok(!('sampleSize' in d) && !('userCount' in d), '无伪统计字段');
+});
+
+test('D15. DestinationEvaluation 与 TripEvaluation 语义不混(字段集合不同)', () => {
+  const dest = dev('sh');
+  const stop = C.evaluateStop('jn', { startId: 'sjz', endId: 'sh', days: 5, budget: 1600 });
+  const destKeys = new Set(Object.keys(dest));
+  ['detour', 'addedKm', 'addedRailH', 'addedFare', 'opportunityCost', 'railwayFit', 'stopDays'].forEach(k => {
+    assert.ok(!destKeys.has(k), '目的地评价不应含沿途字段: ' + k);
+  });
+  // 沿途仍保留其字段
+  ['addedKm', 'addedFare', 'detour', 'opportunityCost', 'railwayFit'].forEach(k => {
+    assert.ok(k in stop, '沿途评价应保留: ' + k);
+  });
+  // 共享的只有 placeValue 与偏好/阈值机制
+  assert.ok('placeValue' in dest && 'placeValue' in stop, '两者共享 placeValue');
+});
+
+test('D16. suggestStop 不回归(旧契约完整)', () => {
+  const s = C.suggestStop('sjz', 'sh', 5);
+  assert.strictEqual(s.suggestable, true);
+  const c0 = s.candidates[0];
+  ['cityId', 'name', 'score', 'stopDays', 'detour', 'value', 'addFare', 'est', 'recommendation', 'reasonCodes', 'reasons', 'tripEvaluation'].forEach(k => {
+    assert.ok(k in c0, '保留字段: ' + k);
+  });
+  assert.strictEqual(typeof c0.score, 'number');
+});
+
+test('D17. 方案级评分未受影响(candidate 契约不变)', () => {
+  const RC = C.generateRouteCandidates('sjz', ['jn', 'nj', 'sh'], 5, 1600);
+  assert.strictEqual(RC.candidates.length, 3);
+  RC.candidates.forEach(c => {
+    assert.ok(typeof c.score === 'number' && c.score >= 0 && c.score <= 100);
+    assert.ok(c.scoreBreakdown && typeof c.scoreBreakdown.tourism === 'number');
+    // 目的地价值不得混入方案匹配度(方案对象不应含目的地评价字段)
+    assert.ok(!('destId' in c) && !('railAccess' in c), '方案对象不得混入 DestinationEvaluation');
+  });
+});
+
+test('D18. UI contract: 硬约束 reasons 与 codes 一一对应且可直接渲染', () => {
+  const hardCases = [
+    { id: 'sh', ctx: { days: 1 }, code: 'TIME_INFEASIBLE' },
+    { id: 'sh', ctx: { budget: 300 }, code: 'BUDGET_EXCEEDED' },
+    { id: 'nope', ctx: {}, code: 'PLACE_DATA_MISSING' },
+  ];
+  hardCases.forEach(({ id, ctx, code }) => {
+    const d = dev(id, ctx);
+    assert.strictEqual(d.feasible, false, `${id} 不可行`);
+    const idx = d.reasonCodes.indexOf(code);
+    assert.ok(idx >= 0, `${id} 应包含 ${code}`);
+    assert.ok(typeof d.reasons[idx] === 'string' && d.reasons[idx].length > 0, `${code} 有展示文本`);
+  });
+});
