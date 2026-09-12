@@ -78,10 +78,9 @@
         '<span class="cc-score">' + c.score + ' 分</span></div>' +
         '<div class="cc-route">' + c.cityNames.join(' → ') + '</div>' +
         '<div class="cc-meta">' + c.days + ' 天 · ¥' + c.budget.total + ' · ' + c.transport.distanceKm + ' km · 换乘 ' + c.transport.transferCount + '</div>' +
-        '<div class="cc-tags">' + c.reasons.slice(0, 3).map(r => '<span class="tag ok">' + r + '</span>').join('') +
-        c.warnings.slice(0, 2).map(w => '<span class="tag warn">' + w + '</span>').join('') + '</div>' +
-        '<button class="btn small' + (on ? '' : ' ghost') + '">' + (on ? '✓ 当前方案' : '查看方案') + '</button>';
-      card.querySelector('.btn').addEventListener('click', e => { e.stopPropagation(); setActive(i, true); });
+        '<div class="cc-tags">' + c.reasons.slice(0, 2).map(r => '<span class="tag ok">' + r + '</span>').join('') +
+        c.warnings.slice(0, 1).map(w => '<span class="tag warn">' + w + '</span>').join('') + '</div>' +
+        '<div class="cc-state">' + (on ? '✓ 当前方案' : '点击查看 →') + '</div>';
       card.addEventListener('click', () => setActive(i, true));
       box.appendChild(card);
     });
@@ -575,6 +574,7 @@
     let html = '<div class="stop-card" style="background:#eef4ff;border-color:#bcd4ff">💡 在当前行程下，发现 ' +
       sug.candidates.length + ' 个值得考虑的中途停留城市：' +
       '<span class="hint">（偏好：' + esc(pref.profile) + ' · 节奏 ' + Math.round(state.pace * 100) + '）</span></div>';
+    html += '<div class="stop-cands">';
     sug.candidates.forEach(cd => {
       const e = cd.tripEvaluation || {};
       // 阶段7.5: 文案统一由 Core 提供(reasonCodes 仅用于分类, 不在 UI 重新定义文案)
@@ -589,17 +589,18 @@
         '<span class="tt">📍 ' + esc(cd.name) + '</span> ' +
         '<span class="badge ' + (recCls[cd.recommendation] || '') + '">值得去 ' + cd.score + ' · ' + (REC_TXT[cd.recommendation] || cd.recommendation) + '</span>' +
         '<div class="row-m">' +
-        '<span>建议停留 ' + cd.stopDays + ' 天</span>' +
-        '<span>增加时间 约 ' + (e.timeCostHours != null ? e.timeCostHours : '—') + ' h</span>' +
-        '<span>增加预算 约 ¥' + (e.addedFare != null ? e.addedFare : cd.addFare) + '【模拟】</span>' +
+        '<span>停留 ' + cd.stopDays + ' 天</span>' +
+        '<span>+时间 约 ' + (e.timeCostHours != null ? e.timeCostHours : '—') + ' h</span>' +
+        '<span>+预算 约 ¥' + (e.addedFare != null ? e.addedFare : cd.addFare) + '【模拟】</span>' +
         '<span>换乘 ' + (e.transfers != null ? e.transfers : '—') + ' 次</span>' +
-        '<span>铁路绕行 ' + (cd.detour <= 60 ? '低' : cd.detour <= 150 ? '中' : '高') + '（+' + cd.detour + ' km）</span>' +
+        '<span>绕行 ' + (cd.detour <= 60 ? '低' : cd.detour <= 150 ? '中' : '高') + '（+' + cd.detour + ' km）</span>' +
         '</div>' +
         (pos.length ? '<div class="reason-line pos">✓ ' + pos.map(k => reasonMap[k]).join(' · ') + '</div>' : '') +
         (neg.length ? '<div class="reason-line neg">⚠ ' + neg.map(k => reasonMap[k]).join(' · ') + '</div>' : '') +
-        '<button class="btn small ghost" data-add="' + cd.cityId + '" style="margin-top:8px">加入 ' + esc(cd.name) + ' 并重新规划</button>' +
+        '<button class="btn small ghost" data-add="' + cd.cityId + '" style="margin-top:6px">加入 ' + esc(cd.name) + ' 并重新规划</button>' +
         '</div>';
     });
+    html += '</div>';
     html += '<button class="btn small ghost" id="btnNoStop">暂不增加</button>';
     box.innerHTML = html;
     box.querySelectorAll('[data-add]').forEach(b => b.addEventListener('click', () => {
