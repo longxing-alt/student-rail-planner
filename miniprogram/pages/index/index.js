@@ -283,6 +283,7 @@ Page({
       canvas.width = W * dpr; canvas.height = H * dpr;
       const ctx = canvas.getContext('2d');
       ctx.scale(dpr, dpr);
+      self._posterCanvas = canvas;
       self.paintPoster(ctx, W, H, () => {
         wx.canvasToTempFilePath({
           canvas: canvas,
@@ -294,6 +295,7 @@ Page({
   },
 
   paintPoster(ctx, W, H, done) {
+    const canvas = this._posterCanvas;
     const S = state.school, Hh = state.depart || state.home;
     const planned = this.data.planned;
     const trips = state.trips.map(t => t.text);
@@ -308,7 +310,7 @@ Page({
     ctx.font = '17px sans-serif'; ctx.fillStyle = 'rgba(255,255,255,.75)';
     ctx.fillText('我的优惠区间与行程判定', 40, 108);
     // 白卡片
-    const cardY = 150, cardH = 470;
+    const cardY = 150, cardH = 400;
     ctx.fillStyle = '#ffffff';
     const r = 20;
     ctx.beginPath();
@@ -323,18 +325,10 @@ Page({
     ctx.fillText('优惠区间', 76, cardY + 52);
     ctx.fillStyle = '#18181b'; ctx.font = 'bold 34px sans-serif';
     ctx.fillText(S.name + ' ⇄ ' + ivH, 76, cardY + 100);
-    // 次数
-    if (planned) {
-      ctx.fillStyle = '#71717a'; ctx.font = '16px sans-serif';
-      ctx.fillText('本行程消耗', 76, cardY + 152);
-      ctx.fillStyle = '#3a5bd9'; ctx.font = 'bold 52px sans-serif';
-      ctx.fillText(String(this.data.used), 76, cardY + 208);
-      ctx.fillStyle = '#71717a'; ctx.font = '18px sans-serif';
-      ctx.fillText('次 / 预算 ' + this.data.budget + ' 次 · 剩余 ' + this.data.remain + ' 次', 150, cardY + 205);
-    }
+    // 次数暂不展示(计次规则尚未经真实购票验证, 避免误导)
     // 目的地判定
     const rows = (this.data.rows || []).slice(0, 5);
-    let y = cardY + 258;
+    let y = cardY + 172;
     ctx.font = '17px sans-serif';
     rows.forEach(row => {
       const cls = row.boxCls === 'ok' ? '#16a34a' : row.boxCls === 'edge' ? '#d97706' : row.boxCls === 'bad' ? '#dc2626' : '#71717a';
@@ -346,13 +340,38 @@ Page({
       y += 36;
     });
     if (!rows.length) { ctx.fillStyle = '#a1a1aa'; ctx.fillText(trips.length ? trips.join(' → ') : '（未添加目的地）', 104, y); }
-    // 底部
-    ctx.fillStyle = 'rgba(255,255,255,.85)'; ctx.font = '16px sans-serif';
-    ctx.fillText('扫码或搜索「学生票区间规划器」自查你的区间', 40, H - 96);
-    ctx.fillStyle = 'rgba(255,255,255,.6)'; ctx.font = '14px sans-serif';
-    ctx.fillText('判定基于实测数据推算，仅供参考；实际以 12306 出票为准', 40, H - 64);
-    ctx.fillText('冀ICP备2026033460号-1', 40, H - 38);
-    if (done) done();
+    // 底部: 小程序码(支持扫码跳转) + 说明
+    const qr = 150, qx = W - 40 - qr, qy = H - 40 - qr - 46;
+    const drawText = () => {
+      ctx.fillStyle = 'rgba(255,255,255,.9)'; ctx.font = 'bold 19px sans-serif';
+      ctx.fillText('长按识别小程序码', qx - 6, qy - 14);
+      ctx.fillStyle = 'rgba(255,255,255,.62)'; ctx.font = '14px sans-serif';
+      ctx.fillText('判定基于实测数据推算，仅供参考', 40, H - 78);
+      ctx.fillText('实际以 12306 出票为准', 40, H - 56);
+      ctx.fillText('冀ICP备2026033460号-1', 40, H - 30);
+      if (done) done();
+    };
+    // 白底衬扫码区(提高识别率)
+    ctx.fillStyle = '#ffffff'; ctx.fillRect(qx, qy, qr, qr);
+    if (this._qrImg && this._qrImg.width) {
+      try { ctx.drawImage(this._qrImg, qx, qy, qr, qr); } catch (e) { /* 绘制失败保留白底 */ }
+      drawText();
+    } else {
+      // 图片尚未就绪 → 尝试加载一次, 仍失败则留占位(不阻塞出图)
+      const img = canvas.createImage ? canvas.createImage() : null;
+      if (!img) {
+        ctx.fillStyle = '#d4d4d8'; ctx.font = '14px sans-serif';
+        ctx.fillText('小程序码', qx + 44, qy + 80);
+        drawText(); return;
+      }
+      img.onload = () => { this._qrImg = img; try { ctx.drawImage(img, qx, qy, qr, qr); } catch (e) { } drawText(); };
+      img.onerror = () => {
+        ctx.fillStyle = '#d4d4d8'; ctx.font = '14px sans-serif';
+        ctx.fillText('小程序码', qx + 44, qy + 80);
+        drawText();
+      };
+      img.src = '/images/qrcode.png';
+    }
   },
 
   /* 保存海报到相册(含授权处理) */
