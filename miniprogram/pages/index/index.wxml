@@ -34,7 +34,6 @@
     </view>
     <block wx:if="{{!showDepart}}">
       <input class="ipt" value="{{departInput}}" bindinput="onDepartInput" bindconfirm="nextStart" placeholder="留空默认从学校出发"/>
-      <view class="field-hint">已自动选取区间端点：<text class="hl">{{ivH}}</text>（规划时会迭代推荐更合适的）</view>
       <button hover-class="bh" class="btn primary" bindtap="nextStart">下一步</button>
     </block>
     <block wx:else>
@@ -56,14 +55,14 @@
       </view>
 
       <!-- 区间线: 学校—区间端点, 规划后圆点着色 -->
-      <view class="iv-line">
-        <view class="iv-track">
-          <view class="iv-zone"></view>
-          <view class="iv-pt {{item.cls}}" wx:for="{{ivDots}}" wx:key="name" style="left:{{item.left}}%"></view>
+      <view class="iv-line" style="padding:30rpx 4rpx 18rpx;border-bottom:1rpx solid #F3F4F6;margin-bottom:20rpx">
+        <view class="iv-track" style="position:relative;height:8rpx;background:#E5E7EB;border-radius:99rpx;margin:0 20rpx">
+          <view class="iv-zone" style="position:absolute;left:0;right:0;top:0;bottom:0;background:#DBEAFE;border-radius:99rpx"></view>
+          <view class="iv-pt {{item.cls}}" wx:for="{{ivDots}}" wx:key="name" style="position:absolute;top:50%;left:{{item.left}}%;width:20rpx;height:20rpx;border-radius:99rpx;transform:translate(-50%,-50%);border:3rpx solid #fff;box-sizing:border-box"></view>
         </view>
-        <view class="iv-nodes">
-          <text class="iv-node">{{ivS}}</text>
-          <text class="iv-node">{{ivH}}</text>
+        <view style="display:flex;justify-content:space-between;margin-top:18rpx;padding:0 4rpx">
+          <text style="font-size:24rpx;color:#4B5563;font-weight:600">{{ivS}}</text>
+          <text style="font-size:24rpx;color:#4B5563;font-weight:600">{{ivH}}</text>
         </view>
       </view>
 
@@ -76,18 +75,20 @@
         </view>
         <view class="empty-hint" wx:if="{{!rows.length}}">还没有目的地，在上方输入添加 👆</view>
         <view class="dest {{item.boxCls}} {{tdIndex===index?'dragging':''}}" wx:for="{{rows}}" wx:key="key" bindtap="tfmTap" data-i="{{index}}">
-          <text class="handle" data-i="{{index}}" catchtouchstart="tdStart" catchtouchmove="tdMove" catchtouchend="tdEnd">≡</text>
-          <text class="ring {{item.ring}}"></text>
-          <text class="name">{{item.text}}</text>
-          <text class="tkt" wx:if="{{item.tkt}}">{{item.tkt}}</text>
-          <text class="status" wx:if="{{item.status}}" style="margin-left:auto;margin-right:8rpx">{{item.status}}</text>
-          <view wx:if="{{item.hubs.length}}" class="hub-line">
-            <text class="hub-tag">中转可选：</text>
-            <view class="hub-grid">
-              <text wx:for="{{item.hubs}}" wx:key="n" wx:for-item="hb" class="hub-chip {{hb.cur?'on':''}}" data-i="{{item.iIdx}}" data-j="{{hb.idx}}" catchtap="setHubTap">{{hb.m}}{{hb.n}}</text>
+          <view style="display:flex;align-items:center;width:100%">
+            <text class="handle" data-i="{{index}}" catchtouchstart="tdStart" catchtouchmove="tdMove" catchtouchend="tdEnd" style="flex:0 0 auto;width:32rpx;text-align:center;color:#D1D5DB">≡</text>
+            <text class="ring {{item.ring}}" style="flex:0 0 auto;margin:0 16rpx 0 14rpx"></text>
+            <text class="name" style="flex:0 0 auto;font-size:30rpx;font-weight:600;color:#111827">{{item.text}}</text>
+            <text class="tkt" wx:if="{{item.tkt}}" style="flex:1;min-width:0;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;font-size:22rpx;color:#9CA3AF;margin-left:16rpx">{{item.tkt}}</text>
+            <text class="status" wx:if="{{item.status}}" style="flex:0 0 auto;font-size:22rpx;color:#6B7280;margin-left:auto;padding-left:12rpx">{{item.status}}</text>
+            <text class="x" data-id="{{item.id}}" catchtap="removeTrip" style="flex:0 0 auto;padding:4rpx 0 4rpx 16rpx;font-size:28rpx;color:#C4C4CC">✕</text>
+          </view>
+          <view wx:if="{{item.hubs.length}}" style="width:100%;margin-top:14rpx">
+            <text style="font-size:22rpx;color:#9CA3AF">中转可选：</text>
+            <view style="margin-top:8rpx">
+              <text wx:for="{{item.hubs}}" wx:key="n" wx:for-item="hb" class="hub-chip {{hb.cur?'on':''}}" data-i="{{item.iIdx}}" data-j="{{hb.idx}}" catchtap="setHubTap" style="display:inline-block;margin:0 12rpx 10rpx 0">{{hb.m}}{{hb.n}}</text>
             </view>
           </view>
-          <text class="x" data-id="{{item.id}}" catchtap="removeTrip" style="flex:0 0 auto;margin-left:auto;padding:6rpx 10rpx;font-size:28rpx;color:#C4C4CC">✕</text>
         </view>
       </view>
     </view>
