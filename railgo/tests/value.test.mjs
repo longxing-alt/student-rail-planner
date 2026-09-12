@@ -736,6 +736,96 @@ test('O7. 返回 remainingDays / remainingBudget(可解释性)', () => {
   assert.ok(typeof r.remainingBudget === 'number');
 });
 
+/* ==================== 阶段7.7: optBox 理由全量消费 ====================
+ * 背景: optBox(智能筛选结果)此前只渲染 selected 的 reasons[0], Core 给出的其余理由被丢弃。
+ * 本阶段改为消费全部 reasons 并按 pos/neg 分类(与 7.5 StopBox / 7.6 目的地卡同构)。 */
+
+/* 复刻 railgo.js optBox 的分类正则(与源码一致, 由 O10 校验源码本身) */
+const OPT_POS = /HIGH_EXPERIENCE|UNIQUENESS|REPRESENTATIVENESS|ON_ROUTE|LOW_TIME_COST|LOW_BUDGET_COST/;
+const OPT_NEG = /LOW_EXPERIENCE|HIGH_TIME_COST|HIGH_BUDGET_COST|HIGH_FATIGUE|HIGH_OPPORTUNITY_COST|MANY_TRANSFERS|HIGH_DETOUR/;
+
+test('O8. optBox 消费契约: selected 的 code/reason 一一对应且不得回退为英文码', () => {
+  const r = C.optimizeStopSelection('sjz', 'sh', 5, 1600, ['jn', 'xuzhou', 'nj', 'hz'], {});
+  assert.ok(r.selected.length > 0, '存在入选项');
+  r.selected.forEach(x => {
+    const codes = x.reasonCodes || [], texts = x.reasons || [];
+    assert.ok(codes.length > 0, x.id + ' 有 reasonCodes');
+    assert.strictEqual(texts.length, codes.length, x.id + ' code/reason 数量一致');
+    texts.forEach((t, i) => {
+      assert.ok(typeof t === 'string' && t.length > 0, `${x.id} #${i}(${codes[i]}) 文案非空`);
+      assert.ok(!/^[A-Z_]+$/.test(t), `${x.id} #${i} 不得回退为原始 code`);
+    });
+  });
+});
+
+test('O9. optBox 全量展示契约: selected 的每条 reason 均可被分类消费(不再只取首条)', () => {
+  // 至少存在一个 selected 项的理由数 > 1 —— 否则"只取首条"与"全量"无差异, 本阶段无意义
+  let maxReasons = 0;
+  const picked = [];
+  for (const c of ['jn', 'xuzhou', 'nj', 'hz', 'jn']) {
+    const r = C.optimizeStopSelection('sjz', 'sh', 6, 2000, [c], {});
+    r.selected.forEach(x => { maxReasons = Math.max(maxReasons, (x.reasons || []).length); picked.push(x); });
+  }
+  assert.ok(maxReasons > 1, '存在多理由的入选项(当前最多 ' + maxReasons + ' 条)');
+  // 每条 reason 必须能被 pos 或 neg 消费(全量展示后不得有理由无处安放)
+  picked.forEach(x => {
+    (x.reasonCodes || []).forEach(k => {
+      assert.ok(OPT_POS.test(k) || OPT_NEG.test(k), k + ' 必须被 optBox 分类覆盖');
+    });
+  });
+});
+
+test('O10. 零遗漏穷举 + 源码级防漂移: optBox 分类覆盖 selected 全部 code', () => {
+  const ids = C.CITIES.map(c => c.id);
+  const all = new Set();
+  for (const s of ['sjz', 'sh', 'jn', 'nj']) {
+    for (const e of ids) {
+      if (s === e) continue;
+      const cands = ids.filter(x => x !== s && x !== e);
+      for (const d of [3, 5, 6]) for (const b of [900, 1600, 2000]) {
+        const r = C.optimizeStopSelection(s, e, d, b, cands, {});
+        r.selected.forEach(x => (x.reasonCodes || []).forEach(k => all.add(k)));
+      }
+    }
+  }
+  assert.ok(all.size >= 5, '覆盖到足够 code(当前 ' + all.size + ' 个)');
+  const dropped = [...all].filter(k => !OPT_POS.test(k) && !OPT_NEG.test(k));
+  assert.deepStrictEqual(dropped, [], '未覆盖: ' + dropped.join(', '));
+  const both = [...all].filter(k => OPT_POS.test(k) && OPT_NEG.test(k));
+  assert.deepStrictEqual(both, [], '双重分类: ' + both.join(', '));
+  // 源码级: 必须精确定位到 optBox 段(railgo.js 中 StopBox 也有同形正则, 不可用 find 取首条)
+  const src = readRailgoJs();
+  const optStart = src.indexOf('optimizeStopSelection');
+  assert.ok(optStart > 0, '定位到 optBox 的 optimizeStopSelection 调用');
+  const optSeg = src.slice(optStart);
+  const posLine = optSeg.split('\n').find(l => l.includes('const pos = codes.filter'));
+  const negLine = optSeg.split('\n').find(l => l.includes('const neg = codes.filter'));
+  assert.ok(posLine && negLine, '定位到 optBox 段内的 pos/neg 分类行');
+  assert.ok(posLine.includes(OPT_POS.source), 'optBox pos 正则与实现一致');
+  assert.ok(negLine.includes(OPT_NEG.source), 'optBox neg 正则与实现一致');
+  // 且不得再出现"只取首条理由"的旧写法(在整个 railgo.js 内检查)
+  assert.ok(!/x\.reasons && x\.reasons\[0\]/.test(src), '不得残留只取 reasons[0] 的写法');
+  // 且 optBox 段必须逐条消费 reasons(而不是只取下标 0)
+  assert.ok(!/texts\[0\]/.test(optSeg), 'optBox 不得只取 reasons[0]');
+});
+
+test('O11. UI 源码契约: optBox 逐条消费 reasons(变异可捕获)', () => {
+  const src = readRailgoJs();
+  const optStart = src.indexOf('optimizeStopSelection');
+  assert.ok(optStart > 0, '定位到 optBox 段');
+  const optSeg = src.slice(optStart);
+  // 必须完整消费 Core 的 reasonCodes(不得截断为 [0])
+  assert.ok(/const codes = x\.reasonCodes \|\| \[\]/.test(optSeg),
+    'optBox 必须完整消费 x.reasonCodes(不得截断, 如 [x.reasonCodes[0]])');
+  assert.ok(!/\[x\.reasonCodes\[0\]\]/.test(optSeg), 'optBox 不得只取 reasonCodes[0]');
+  // 必须有 reasonMap 逐条构建(证明未丢失任何一条)
+  assert.ok(/reasonMap\[k\] = texts\[i\]/.test(optSeg), 'optBox 必须逐条构建 reasonMap(i 索引消费全部 texts)');
+  // 必须同时渲染 pos 与 neg 两行(负向理由不得被吞)
+  assert.ok(/reason-line pos/.test(optSeg) && /reason-line neg/.test(optSeg), 'optBox 必须同时渲染 pos 与 neg');
+  // reasons 必须逐条映射(不得只取下标 0)
+  assert.ok(!/texts\[0\]/.test(optSeg), 'optBox 不得只取 reasons[0]');
+});
+
 /* ==================== 阶段7.5: StopBox 理由文案来源统一(UI contract) ==================== */
 
 test('U1. handlers 契约: suggestStop 候选的 reasonCodes 与 reasons 严格一一对应', () => {

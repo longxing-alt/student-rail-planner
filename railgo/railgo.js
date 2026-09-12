@@ -761,9 +761,19 @@
       if (!r.selected.length) {
         lines.push('<div class="reason-line neg">当前天数/预算不足以增加中途站点</div>');
       } else {
+        // 阶段7.7: 文案统一由 Core 提供; 展示全部 reasons(此前只取 reasons[0], 其余被丢弃)
+        // reasonCodes 仅用于 ✓/⚠ 分类, 不在 UI 重新定义文案
         r.selected.forEach(x => {
           const name = C.cityById(x.id)?.name || x.id;
-          lines.push('<div class="reason-line pos">✓ ' + esc(name) + ' · 价值 ' + x.score + ' · ' + (x.reasons && x.reasons[0]) + '</div>');
+          const codes = x.reasonCodes || [];
+          const texts = x.reasons || [];
+          const reasonMap = {};
+          codes.forEach((k, i) => { reasonMap[k] = texts[i] || k; });
+          const pos = codes.filter(k => /HIGH_EXPERIENCE|UNIQUENESS|REPRESENTATIVENESS|ON_ROUTE|LOW_TIME_COST|LOW_BUDGET_COST/.test(k));
+          const neg = codes.filter(k => /LOW_EXPERIENCE|HIGH_TIME_COST|HIGH_BUDGET_COST|HIGH_FATIGUE|HIGH_OPPORTUNITY_COST|MANY_TRANSFERS|HIGH_DETOUR/.test(k));
+          lines.push('<div class="reason-line pos">✓ ' + esc(name) + ' · 价值 ' + x.score +
+            (pos.length ? ' · ' + pos.map(k => reasonMap[k]).join(' · ') : '') + '</div>');
+          if (neg.length) lines.push('<div class="reason-line neg">⚠ ' + neg.map(k => reasonMap[k]).join(' · ') + '</div>');
         });
       }
       if (r.rejected.length) {
