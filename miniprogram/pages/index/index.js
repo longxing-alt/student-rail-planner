@@ -170,7 +170,7 @@ Page({
     planned: false, used: '–', budget: 4, remain: '–', okN: 0, edgeN: 0, badN: 0,
     tfm: { show: false, step: 1, i: -1, hub: '', a: '', b: '', S: '', H: '', cands: [] },
     cntTip: { show: false, lines: [], used: '–', budget: 4, remain: '–' },
-    status: '',
+    status: '', statusDone: false,
     modal: { show: false, suggest: null, g2: 0, e2: 0, b2: 0 },
     poster: { show: false, path: '', saving: false },
     dbg: { on: false, badges: [], showLegend: false,
@@ -361,9 +361,8 @@ Page({
       ctx.fillStyle = 'rgba(255,255,255,.9)'; ctx.font = 'bold 19px sans-serif';
       ctx.fillText('长按识别小程序码', qx - 6, qy - 14);
       ctx.fillStyle = 'rgba(255,255,255,.62)'; ctx.font = '14px sans-serif';
-      ctx.fillText('判定基于实测数据推算，仅供参考', 40, H - 78);
-      ctx.fillText('实际以 12306 出票为准', 40, H - 56);
-      ctx.fillText('冀ICP备2026033460号-1', 40, H - 30);
+      ctx.fillText('判定基于实测数据推算，仅供参考', 40, H - 72);
+      ctx.fillText('实际以 12306 出票为准', 40, H - 46);
       if (done) done();
     };
     // 白底衬扫码区(提高识别率)
@@ -428,7 +427,7 @@ Page({
     });
   },
 
-  setStatus(m) { this.setData({ status: String(m || '') }); },
+  setStatus(m, done) { this.setData({ status: String(m || ''), statusDone: !!done }); },
 
   /* 输入 */
   onSchoolInput(e) { this.setData({ schoolInput: e.detail.value }); },

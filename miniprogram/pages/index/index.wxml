@@ -1,74 +1,88 @@
-<!-- 学生票区间规划器 · 主页面（按原型简化版重构） -->
+<!-- 学生票区间规划器 · 主页面 -->
 <view class="page">
 
-  <!-- 品牌头（长按开关调试编号） -->
-  <view class="brand-bar" bindlongpress="toggleDbg">
-    <view class="brand-logo">优</view>
-    <view class="brand-name">学生优惠 · 区间规划器</view>
+  <!-- 状态条 -->
+  <view class="status {{statusDone?'done':''}}" wx:if="{{status}}">
+    <text class="status-ico">{{statusDone?'✓':'i'}}</text>
+    <text class="status-txt">{{status}}</text>
   </view>
 
-  <!-- 状态条 -->
-  <view class="status" wx:if="{{status}}">{{status}}</view>
-
-  <view class="workspace">
-    <!-- ============ 步骤1: 学校 ============ -->
-    <view class="card step1">
-      <view class="label">① 学校 <text class="sub">区间固定端点（须与学信网一致）</text></view>
-      <view class="row">
-        <input class="ipt" value="{{schoolInput}}" bindinput="onSchoolInput" bindconfirm="nextSchool" placeholder="输入学校城市，如：北京"/>
-        <button hover-class="bh" class="btn primary" bindtap="nextSchool">下一步</button>
-      </view>
-      <view class="hint" wx:if="{{showDepart}}">已记住学校 <b>{{ivS}}</b>，下次打开自动填入 · <text class="link" catchtap="changeSchool">修改学校</text></view>
+  <!-- ============ 步骤1: 学校 ============ -->
+  <view class="card" id="cardSchool">
+    <view class="card-head">
+      <text class="step-no">1</text>
+      <text class="card-tt">学校</text>
     </view>
-
-    <!-- ============ 步骤2: 出发地 ============ -->
-    <view class="card step2 {{showStart?'show':''}}">
-      <view class="label">② 出发地 <text class="sub">行程起点（留空 = 从学校出发）</text></view>
-      <view class="row">
-        <input class="ipt" value="{{departInput}}" bindinput="onDepartInput" bindconfirm="nextStart" placeholder="留空默认从学校出发，或输入城市"/>
-        <button hover-class="bh" class="btn primary" bindtap="nextStart">下一步</button>
+    <block wx:if="{{!showStart}}">
+      <input class="ipt" value="{{schoolInput}}" bindinput="onSchoolInput" bindconfirm="nextSchool" placeholder="请输入学校所在城市或车站（如：北京）"/>
+      <button hover-class="bh" class="btn primary" bindtap="nextSchool">下一步</button>
+    </block>
+    <block wx:else>
+      <view class="ro-row"><text class="ro-name">{{ivS}}</text></view>
+      <view class="sub-row">
+        <text class="sub-txt">已记住学校 {{ivS}}</text>
+        <text class="link" catchtap="changeSchool">修改学校</text>
       </view>
-      <view class="hint">区间端点自动选取（{{ivH}}），做规划时会迭代推荐更合适的端点。</view>
+    </block>
+  </view>
+
+  <!-- ============ 步骤2: 出发地 ============ -->
+  <view class="card {{showStart?'show':''}}" id="cardDepart">
+    <view class="card-head">
+      <text class="step-no">2</text>
+      <text class="card-tt">出发地</text>
     </view>
+    <block wx:if="{{!showDepart}}">
+      <input class="ipt" value="{{departInput}}" bindinput="onDepartInput" bindconfirm="nextStart" placeholder="留空默认从学校出发"/>
+      <view class="field-hint">已自动选取区间端点：<text class="hl">{{ivH}}</text>（规划时会迭代推荐更合适的）</view>
+      <button hover-class="bh" class="btn primary" bindtap="nextStart">下一步</button>
+    </block>
+    <block wx:else>
+      <view class="ro-row"><text class="ro-name">{{startName}}</text><text class="ro-tag">行程起点</text></view>
+    </block>
+  </view>
 
-    <!-- ============ 步骤3: 目的地 + 规划 ============ -->
-    <view class="step3 {{showDest?'show':''}}">
-      <!-- 想去哪卡片: 输入在前, 与样例一致 -->
-      <view class="card">
-        <view class="label">③ 想去哪 <text class="sub">点【一键规划】后判定：绿=区间内 · 橙=可能被查 · 红=超区间</text></view>
-        <view class="row">
-          <input class="ipt" value="{{tripInput}}" bindinput="onTripInput" bindconfirm="addTrip" placeholder="添加想去的地方，如：长沙"/>
-          <button hover-class="bh" class="btn primary" bindtap="addTrip">添加</button>
-        </view>
-        <view class="hint">每个框可 ✕ 删除 · 按住 ≡ 拖动排序 · 改动后请重新【一键规划】</view>
+  <!-- ============ 步骤3: 目的地 + 规划 ============ -->
+  <view class="step3 {{showDest?'show':''}}">
+    <view class="card">
+      <view class="card-head">
+        <text class="step-no">3</text>
+        <text class="card-tt">想去哪</text>
+        <text class="card-tip">✕ 删除 · ≡ 拖动排序</text>
       </view>
-      <!-- 常驻区间线: 学校—区间端点, 规划后圆点着色 -->
-      <view class="iv-line top">
-        <text class="iv-node s">{{ivS}}</text>
+      <view class="add-row">
+        <input class="ipt grow" value="{{tripInput}}" bindinput="onTripInput" bindconfirm="addTrip" placeholder="输入目的地，如：长沙"/>
+        <button hover-class="bh" class="btn dark" bindtap="addTrip">添加</button>
+      </view>
+
+      <!-- 区间线: 学校—区间端点, 规划后圆点着色 -->
+      <view class="iv-line">
         <view class="iv-track">
           <view class="iv-zone"></view>
           <view class="iv-pt {{item.cls}}" wx:for="{{ivDots}}" wx:key="name" style="left:{{item.left}}%"></view>
         </view>
-        <text class="iv-node h">{{ivH}}</text>
+        <view class="iv-nodes">
+          <text class="iv-node">{{ivS}}</text>
+          <text class="iv-node">{{ivH}}</text>
+        </view>
       </view>
 
-      <!-- 目的地列表: 起点行固定 + 着色框 + 拖动 + 删除 -->
+      <!-- 目的地列表 -->
       <view class="dest-list">
         <view class="dest start">
           <text class="handle">≡</text>
-          <view class="ring start"><text class="dot">起</text></view>
+          <text class="ring start">起</text>
           <text class="name">{{startName}}</text>
-          <text class="status">起点 · 出发地</text>
         </view>
         <view class="empty-hint" wx:if="{{!rows.length}}">还没有目的地，在上方输入添加 👆</view>
-        <view class="dest {{item.boxCls}} {{tdIndex===index?'dragging':''}} {{item.anim?'in':''}}" wx:for="{{rows}}" wx:key="key" bindtap="tfmTap" data-i="{{index}}">
+        <view class="dest {{item.boxCls}} {{tdIndex===index?'dragging':''}}" wx:for="{{rows}}" wx:key="key" bindtap="tfmTap" data-i="{{index}}">
           <text class="handle" data-i="{{index}}" catchtouchstart="tdStart" catchtouchmove="tdMove" catchtouchend="tdEnd">≡</text>
-          <view class="ring {{item.ring}}"></view>
+          <text class="ring {{item.ring}}"></text>
           <text class="name">{{item.text}}</text>
           <text class="tkt" wx:if="{{item.tkt}}">{{item.tkt}}</text>
           <text class="status" wx:if="{{item.status}}">{{item.status}}</text>
           <view wx:if="{{item.hubs.length}}" class="hub-line">
-            <text class="hub-tag">最终中转可选：</text>
+            <text class="hub-tag">中转可选：</text>
             <view class="hub-grid">
               <text wx:for="{{item.hubs}}" wx:key="n" wx:for-item="hb" class="hub-chip {{hb.cur?'on':''}}" data-i="{{item.iIdx}}" data-j="{{hb.idx}}" catchtap="setHubTap">{{hb.m}}{{hb.n}}</text>
             </view>
@@ -76,49 +90,69 @@
           <text class="x" data-id="{{item.id}}" catchtap="removeTrip">✕</text>
         </view>
       </view>
+    </view>
+  </view>
 
-      <view class="cnt-entry" wx:if="{{planned}}" catchtap="showCntTip">❓ 当前消耗次数有疑问？点此查看区间内明细</view>
-
-      <!-- 结果: 消耗次数 -->
-      <view class="result {{planned?'show':''}}">
-        <view class="used"><text class="num {{used>budget?'red':''}}">{{used}}</text><text class="unit">次 / 预算 {{budget}} · 剩余 <text class="remain {{remain<0?'red':''}}">{{remain}}</text> 次</text></view>
-        <view class="meta">
-          <view class="chip green" wx:if="{{okN>0}}">区间内 {{okN}}/{{tripCount}}</view>
-          <view class="chip orange" wx:if="{{edgeN>0}}">可能被查 {{edgeN}}</view>
-          <view class="chip red" wx:if="{{badN>0}}">超区间 {{badN}}（另购全价）</view>
-          <view class="chip green" wx:if="{{okN+edgeN>0}}">整条联程 {{used}} 次（5 天内）</view>
-          <view class="chip gray" wx:if="{{okN+edgeN==0}}">全部需全价</view>
+  <!-- ============ 结果: 消耗次数 + 分享(右侧圆形按钮) ============ -->
+  <view class="result {{planned?'show':''}}">
+    <view class="result-card">
+      <view class="rc-main">
+        <view class="rc-label">
+          <text>当前规划消耗</text>
+          <text class="rc-q" catchtap="showCntTip">?</text>
         </view>
-        <!-- 分享: ①链接 点开直达复现方案 ②图片 生成海报保存/转发 -->
-        <view class="share-row">
-          <button hover-class="bh" class="btn ghost sm" open-type="share">📤 分享链接</button>
-          <button hover-class="bh" class="btn ghost sm" bindtap="openPoster">🖼 生成图片</button>
+        <view class="rc-num">
+          <text class="num {{used>budget?'red':''}}">{{used}}</text>
+          <text class="unit">次</text>
+          <text class="sep">/</text>
+          <text class="rest">预算 {{budget}} · 剩 {{remain}} 次</text>
         </view>
-        <view class="share-hint">链接：对方点开直接看到同款区间与判定 · 图片：可保存相册发朋友圈</view>
+        <view class="rc-chips">
+          <text class="chip green" wx:if="{{okN>0}}">区间内 {{okN}}/{{tripCount}}</text>
+          <text class="chip orange" wx:if="{{edgeN>0}}">中转 {{edgeN}}</text>
+          <text class="chip red" wx:if="{{badN>0}}">超区间 {{badN}}</text>
+          <text class="chip green" wx:if="{{okN+edgeN>0}}">联程 {{used}} 次</text>
+          <text class="chip gray" wx:if="{{okN+edgeN==0}}">需全价</text>
+        </view>
+      </view>
+      <view class="rc-actions">
+        <button hover-class="bh" class="circle-btn" open-type="share" title="分享链接">
+          <text class="cb-ico">↗</text>
+        </button>
+        <button hover-class="bh" class="circle-btn primary" bindtap="openPoster" title="生成图片">
+          <text class="cb-ico">▣</text>
+        </button>
       </view>
     </view>
   </view>
 
-  <!-- 规划区: 清空 + 一键规划 -->
+  <!-- 底部操作栏 -->
   <view class="plan-bar {{showDest?'show':''}}">
-    <button hover-class="bh" class="btn ghost plan-clear" wx:if="{{tripCount>0}}" bindtap="clearAll">🗑 清空全部目的地</button>
-    <button hover-class="bh" class="btn primary plan-btn" wx:if="{{showDest}}" bindtap="onPlan">🚀 一键规划行程</button>
+    <button hover-class="bh" class="icon-btn" wx:if="{{tripCount>0}}" bindtap="clearAll" title="清空">🗑</button>
+    <button hover-class="bh" class="btn dark plan-btn" wx:if="{{showDest}}" bindtap="onPlan">{{planned?'↻ 重新规划':'🚀 一键规划行程'}}</button>
   </view>
 
-  <!-- 区间建议弹窗 -->
+  <view class="footer">
+    判定结果基于实测数据推算，仅供参考，实际以 12306 出票为准。
+    <view style="margin-top:6px">ICP备案号：冀ICP备2026033460号-1</view>
+  </view>
+
+  <!-- ============ 弹窗: 区间优化建议 ============ -->
   <view class="mask" wx:if="{{modal.show}}" bindtap="closeModal">
     <view class="dialog" catchtap="noop">
       <view class="dialog-title">🎯 区间优化建议<text class="dialog-close" catchtap="closeModal">✕</text></view>
       <view class="dialog-body">
         <block wx:if="{{modal.suggest}}">
-          <view class="m-line">当前区间（{{ivS}} ↔ {{ivH}}）太小，多数目的地超出区间（红）。</view>
-          <view class="m-line">推荐把区间改为：<b>{{ivS}}</b> ↔ <text class="m-best">{{modal.suggest.name}} · {{modal.suggest.city}}</text><br/>（原出发地 <b>{{startName}}</b> 保持不变）</view>
+          <view class="m-line">当前区间（{{ivS}} ↔ {{ivH}}）偏小，部分目的地超出（<text class="red">红</text>）。</view>
+          <view class="m-line">推荐把区间改为：<b>{{ivS}}</b> ↔ <text class="m-best">{{modal.suggest.name}} · {{modal.suggest.city}}</text></view>
           <view class="m-line warn" wx:if="{{modal.isDest}}">⚠️ 推荐点=你的目的地，非家址会绕路；就近替代：<b>{{modal.altern}}</b></view>
-          <view class="m-line">→ {{tripCount}} 个目的地：<text class="g2">{{modal.g2}} 绿</text> / <text class="e2">{{modal.e2}} 橙</text> / <text class="b2">{{modal.b2}} 红</text></view>
-          <view class="m-line dests" wx:if="{{modal.dests.length}}">
-            <view class="m-dest-line" wx:for="{{modal.dests}}" wx:key="text"><text class="m-dot {{item.cls}}"></text>{{item.text}} = <text class="{{item.cls}}">{{item.c}}</text></view>
+          <view class="preview-box">
+            <view class="pv-title">{{tripCount}} 个目的地：<text class="g2">{{modal.g2}} 绿</text> / <text class="e2">{{modal.e2}} 橙</text> / <text class="b2">{{modal.b2}} 红</text></view>
+            <view class="pv-list" wx:if="{{modal.dests.length}}">
+              <text class="pv-chip {{item.cls}}" wx:for="{{modal.dests}}" wx:key="text">{{item.text}} {{item.c}}</text>
+            </view>
           </view>
-          <view class="m-note">采用后按新区间判定，出发地（{{startName}}）不变；实际修改请在核验中把家改为 {{modal.suggest.city}}。</view>
+          <view class="m-note">采用后按新区间判定，出发地（{{startName}}）不变。</view>
         </block>
         <block wx:else>
           <view class="m-line">当前区间已是最优：<b>{{ivS}}</b> ↔ <b>{{ivH}}</b> → 区间内 {{okN}}/{{tripCount}} 站。</view>
@@ -132,15 +166,10 @@
     </view>
   </view>
 
-  <view class="footer">
-    免责声明：判定结果基于实测数据推算，仅供参考，实际以 12306 出票为准；不构成购票或区间修改建议。
-    <view style="margin-top:6px">ICP备案号：冀ICP备2026033460号-1</view>
-  </view>
-
-  <!-- 次数明细弹窗 -->
+  <!-- ============ 弹窗: 次数明细 ============ -->
   <view class="mask" wx:if="{{cntTip.show}}" bindtap="closeCntTip">
     <view class="dialog" catchtap="noop">
-      <view class="dialog-title">🎫 次数明细（区间内怎么消耗）<text class="dialog-close" catchtap="closeCntTip">✕</text></view>
+      <view class="dialog-title">🎫 次数明细<text class="dialog-close" catchtap="closeCntTip">✕</text></view>
       <view class="dialog-body">
         <view class="m-line" wx:for="{{cntTip.lines}}" wx:key="*this">{{item}}</view>
         <view class="m-note">每程=1张票：直达到达计 1 次，中转联程（同一程内）仍计该程 1 次；勾选全程往返再 +1 次/程。区间外程不计学生优惠。</view>
@@ -152,17 +181,17 @@
     </view>
   </view>
 
-  <!-- 中转购买说明(分步向导, 仿网页) -->
+  <!-- ============ 弹窗: 中转购买说明 ============ -->
   <view class="mask" wx:if="{{tfm.show}}" bindtap="closeTfm">
     <view class="dialog" catchtap="noop">
       <view class="dialog-title">⇄ 中转购买说明<text class="dialog-close" catchtap="closeTfm">✕</text></view>
       <view class="dialog-body" wx:if="{{tfm.step===1}}">
-        <view class="m-line"><b>区间不用改</b>：保持<b>优惠区间为 {{tfm.S}} ⇄ {{tfm.H}}</b> 不变，只做中转。</view>
+        <view class="m-line"><b>区间不用改</b>：保持<b>优惠区间 {{tfm.S}} ⇄ {{tfm.H}}</b> 不变，只做中转。</view>
       </view>
       <view class="dialog-body" wx:if="{{tfm.step===2}}">
-        <view class="m-line">选择在 12306 上<b>可以中转的地点</b>（①推荐 ②次选…，点选后以下步骤以它为例）：</view>
-        <view class="m-line" style="flex-wrap:wrap;gap:6px" wx:for="{{tfm.cands}}" wx:key="name">
-          <text class="hub-chip {{item.name===tfm.hub?'on':''}}" data-j="{{index}}" catchtap="tfmPick">{{index===0?'①':index===1?'②':index===2?'③':index===3?'④':index===4?'⑤':index===5?'⑥':index===6?'⑦':'⑧'}}{{item.name}}</text>
+        <view class="m-line">选择 12306 上<b>可以中转的地点</b>（点选后以下步骤以它为例）：</view>
+        <view class="hub-grid">
+          <text wx:for="{{tfm.cands}}" wx:key="name" class="hub-chip {{item.name===tfm.hub?'on':''}}" data-j="{{index}}" catchtap="tfmPick">{{index===0?'①':index===1?'②':index===2?'③':index===3?'④':index===4?'⑤':index===5?'⑥':index===6?'⑦':'⑧'}}{{item.name}}</text>
         </view>
       </view>
       <view class="dialog-body" wx:if="{{tfm.step===3}}">
@@ -181,7 +210,7 @@
     </view>
   </view>
 
-  <!-- 图片分享海报弹窗 -->
+  <!-- ============ 弹窗: 分享图片(海报) ============ -->
   <view class="mask" wx:if="{{poster.show}}" bindtap="closePoster">
     <view class="dialog poster-dialog" catchtap="noop">
       <view class="dialog-title">🖼 分享图片<text class="dialog-close" catchtap="closePoster">✕</text></view>
@@ -195,16 +224,15 @@
         <view class="gspacer"></view>
         <button hover-class="bh" class="btn primary sm" catchtap="savePoster" disabled="{{!poster.path||poster.saving}}">{{poster.saving?'保存中…':'保存到相册'}}</button>
       </view>
-      <view class="m-note">保存后可在微信中发给好友或发朋友圈；图片同样只含区间与判定，不含个人身份信息。</view>
     </view>
   </view>
 
-  <!-- 调试编号层（长按品牌头开关） -->
+  <!-- 调试编号层（长按状态条开关） -->
   <view class="dbg-overlay" wx:if="{{dbg.on}}">
     <view class="dbg-badge" wx:for="{{dbg.badges}}" wx:key="n" style="left:{{item.x}}px;top:{{item.y}}px">{{item.n}}</view>
     <view class="dbg-pill" bindtap="toggleDbgLegend">{{dbg.showLegend?'✕ 收起对照':'🔢 编号对照'}}</view>
     <view class="dbg-legend" wx:if="{{dbg.showLegend}}">
-      <view class="dbg-legend-title">元素编号对照 <text class="dbg-hint">（长按顶部品牌头关闭）</text></view>
+      <view class="dbg-legend-title">元素编号对照</view>
       <view class="dbg-item" wx:for="{{dbg.list}}" wx:key="n">{{item.n}} = {{item.name}}</view>
       <button hover-class="bh" class="btn primary sm" bindtap="toggleDbg">关闭编号</button>
     </view>
