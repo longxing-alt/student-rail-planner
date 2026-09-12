@@ -8,7 +8,7 @@
   </view>
 
   <!-- ============ 步骤1: 学校 ============ -->
-  <view class="card" id="cardSchool">
+  <view class="card show">
     <view class="card-head">
       <text class="step-no">1</text>
       <text class="card-tt">学校</text>
@@ -27,7 +27,7 @@
   </view>
 
   <!-- ============ 步骤2: 出发地 ============ -->
-  <view class="card {{showStart?'show':''}}" id="cardDepart">
+  <view class="card {{showStart?'show':''}}">
     <view class="card-head">
       <text class="step-no">2</text>
       <text class="card-tt">出发地</text>
