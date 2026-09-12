@@ -72,8 +72,8 @@ page {
 .ipt[disabled] { background: #f4f4f5; color: #a1a1aa; }
 
 /* 步骤显隐 + 浮动 */
-.step2, .step3 { display: none; }
-.step2.show, .step3.show { display: block; animation: floatIn .42s cubic-bezier(.22,.9,.32,1); }
+.step2, .step3, .step3x { display: none; }
+.step2.show, .step3.show, .step3x.show { display: block; animation: floatIn .42s cubic-bezier(.22,.9,.32,1); }
 .step3 { padding: 0 14px 16px; }
 .step3 .card { margin: 0 -14px; padding: 15px 14px; border-bottom: 1px solid #e7e5e4; }
 .step3 .card .row { margin-bottom: 8px; }

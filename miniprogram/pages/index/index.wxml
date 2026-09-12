@@ -21,21 +21,31 @@
       <view class="hint" wx:if="{{showDepart}}">已记住学校 <b>{{ivS}}</b>，下次打开自动填入 · <text class="link" catchtap="changeSchool">修改学校</text></view>
     </view>
 
-    <!-- ============ 步骤2: 出发地 ============ -->
-    <view class="card step2 {{showDepart?'show':''}}">
-      <view class="label">② 出发地 <text class="sub">区间端点 + 行程起点</text></view>
+    <!-- ============ 步骤2: 家庭所在地 ============ -->
+    <view class="card step2 {{showHome?'show':''}}">
+      <view class="label">② 家庭所在地 <text class="sub">优惠区间另一端点（须与学信网一致）</text></view>
       <view class="row">
-        <input class="ipt" value="{{departInput}}" bindinput="onDepartInput" bindconfirm="nextDepart" placeholder="输入出发城市，如：石家庄"/>
-        <button hover-class="bh" class="btn primary" bindtap="nextDepart">下一步</button>
+        <input class="ipt" value="{{homeInput}}" bindinput="onHomeInput" bindconfirm="nextHome" placeholder="输入家庭所在城市，如：邯郸"/>
+        <button hover-class="bh" class="btn primary" bindtap="nextHome">下一步</button>
       </view>
-      <view class="hint">优惠区间 = 学校 ↔ 出发地（颜色判定用它）。优化建议会告诉你"把区间改为 学校↔X"，请按它在铁路学生优惠资质中自行修改真实家庭地址。</view>
+      <view class="hint">优惠区间 = 学校 ↔ 家庭所在地。做规划时会给出"把家改到某站更划算"的建议。</view>
+    </view>
+
+    <!-- ============ 步骤3: 出发地 ============ -->
+    <view class="card step3x {{showStart?'show':''}}">
+      <view class="label">③ 出发地 <text class="sub">行程起点（留空 = 从学校出发）</text></view>
+      <view class="row">
+        <input class="ipt" value="{{departInput}}" bindinput="onDepartInput" bindconfirm="nextStart" placeholder="留空默认从学校出发，或输入城市"/>
+        <button hover-class="bh" class="btn primary" bindtap="nextStart">下一步</button>
+      </view>
+      <view class="hint">出发地只决定"从哪走"，不影响优惠区间；区间由 学校 ↔ 家庭所在地 决定。</view>
     </view>
 
     <!-- ============ 步骤3: 目的地 + 规划 ============ -->
     <view class="step3 {{showDest?'show':''}}">
       <!-- 想去哪卡片: 输入在前, 与样例一致 -->
       <view class="card">
-        <view class="label">③ 想去哪 <text class="sub">点【一键规划】后判定：绿=区间内 · 橙=可能被查 · 红=超区间</text></view>
+        <view class="label">④ 想去哪 <text class="sub">点【一键规划】后判定：绿=区间内 · 橙=可能被查 · 红=超区间</text></view>
         <view class="row">
           <input class="ipt" value="{{tripInput}}" bindinput="onTripInput" bindconfirm="addTrip" placeholder="添加想去的地方，如：长沙"/>
           <button hover-class="bh" class="btn primary" bindtap="addTrip">添加</button>

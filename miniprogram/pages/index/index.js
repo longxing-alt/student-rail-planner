@@ -150,8 +150,8 @@ function smartBest(S, H, trips) {
 
 Page({
   data: {
-    schoolInput: '', departInput: '', tripInput: '',
-    showDepart: false, showDest: false,
+    schoolInput: '', homeInput: '', departInput: '', tripInput: '',
+    showHome: false, showStart: false, showDepart: false, showDest: false,
     startName: '出发地', ivS: '学校', ivH: '出发地', ivDots: [],
     rows: [], tdIndex: -1, tripCount: 0,
     planned: false, used: '–', budget: 4, remain: '–', okN: 0, edgeN: 0, badN: 0,
@@ -184,7 +184,7 @@ Page({
   /* ---------- 分享 / 记忆 ---------- */
   /* 分享: 标题含方案摘要; path 携带 S(学校)/H(出发地)/T(目的地) 参数, 点开即可复现结果 */
   buildSharePath() {
-    const S = state.school, H = state.depart || state.home;
+    const S = state.school, H = state.home || state.depart;
     if (!S || !H) return '/pages/index/index';
     const t = state.trips.map(x => x.station && x.station.name).filter(Boolean).join(',');
     const q = ['S=' + encodeURIComponent(S.name), 'H=' + encodeURIComponent(H.name)];
@@ -192,7 +192,7 @@ Page({
     return '/pages/index/index?' + q.join('&');
   },
   onShareAppMessage() {
-    const S = state.school, H = state.depart || state.home;
+    const S = state.school, H = state.home || state.depart;
     if (!S || !H) return { title: '学生票区间规划器：区间怎么算、怎么改最省次数', path: '/pages/index/index' };
     const N = state.trips.length;
     return {
@@ -201,7 +201,7 @@ Page({
     };
   },
   onShareTimeline() {
-    const S = state.school, H = state.depart || state.home;
+    const S = state.school, H = state.home || state.depart;
     if (!S || !H) return { title: '学生票区间规划器：区间怎么算、怎么改最省次数' };
     return { title: '学生票区间规划 · ' + S.name + ' ⇄ ' + H.name, query: this.buildSharePath().split('?')[1] || '' };
   },
@@ -224,9 +224,9 @@ Page({
     state.home = H.station;
     state.trips = trips;
     this.setData({
-      schoolInput: S.station.name, departInput: H.station.name,
+      schoolInput: S.station.name, homeInput: H.station.name, departInput: H.station.name,
       ivS: S.station.name, ivH: H.station.name, startName: H.station.name,
-      showDepart: true, showDest: true, planned: false,
+      showHome: true, showStart: true, showDepart: true, showDest: true, planned: false,
     });
     if (trips.length) { this.onPlan(); this.setStatus('已复现分享的方案（' + S.station.name + ' ⇄ ' + H.station.name + '），可直接查看结果'); }
     else this.setStatus('已复现分享的区间（' + S.station.name + ' ⇄ ' + H.station.name + '），可继续添加目的地');
@@ -245,7 +245,7 @@ Page({
     const r = resolveSync(name);
     if (!r) return;
     state.school = r.station;
-    this.setData({ schoolInput: r.station.name, ivS: r.station.name, showDepart: true });
+    this.setData({ schoolInput: r.station.name, ivS: r.station.name, showHome: true });
   },
   /* 修改学校需二次确认(区间端点是合规关键, 防止误改) */
   changeSchool() {
@@ -256,7 +256,7 @@ Page({
       success: res => {
         if (!res.confirm) return;
         state.school = null;
-        this.setData({ schoolInput: '', ivS: '学校', showDepart: false, showDest: false, planned: false });
+        this.setData({ schoolInput: '', ivS: '学校', showHome: false, showStart: false, showDepart: false, showDest: false, planned: false });
         this.setStatus('请输入新的学校城市');
       },
     });
@@ -417,6 +417,7 @@ Page({
 
   /* 输入 */
   onSchoolInput(e) { this.setData({ schoolInput: e.detail.value }); },
+  onHomeInput(e) { this.setData({ homeInput: e.detail.value }); },
   onDepartInput(e) { this.setData({ departInput: e.detail.value }); },
   onTripInput(e) { this.setData({ tripInput: e.detail.value }); },
 
@@ -429,23 +430,39 @@ Page({
     const r = await resolvePlace(q);
     if (!r) { this.setStatus('未收录该城市（内置 ' + STATIONS.length + ' 站），试试输入车站名'); return; }
     state.school = r.station;
-    this.setData({ schoolInput: q, ivS: state.school.name, showDepart: true });
+    this.setData({ schoolInput: q, ivS: state.school.name, showHome: true });
     this.saveSchool(); // 记住学校, 下次免输入
     this.setStatus('学校：' + state.school.name + ' · ' + state.school.city + '，填写出发地');
   },
-  /* 步骤2 出发地 → 步骤3 目的地 */
-  async nextDepart() {
-    logOp("设置出发地");
-    const q = this.data.departInput.trim();
-    if (!q) { this.setStatus('请先输入出发地'); return; }
+  /* 步骤2 家庭所在地 → 步骤3 出发地 → 步骤4 目的地
+   * 家庭所在地 = 优惠区间的另一端点(与学信网一致); 出发地 = 实际行程起点(两者独立) */
+  async nextHome() {
+    logOp("设置家庭所在地");
+    const q = this.data.homeInput.trim();
+    if (!q) { this.setStatus('请先输入家庭所在城市'); return; }
     const r = await resolvePlace(q);
     if (!r) { this.setStatus('未收录该城市，试试输入车站名'); return; }
     if (!state.school) { this.setStatus('请先完成 ① 学校'); return; }
-    state.depart = r.station;
-    if (!state.home) state.home = state.depart; // 区间端点初始=出发地; 采用推荐后单独变
+    if (r.station.city === state.school.city) { this.setStatus('家庭所在地不能与学校同城（区间无法认定）'); return; }
+    state.home = r.station;
+    this.setData({ homeInput: q, ivH: state.home.name, showStart: true });
+    this.renderAll();
+    this.setStatus('家庭：' + state.home.name + '（区间 ' + state.school.name + ' ↔ ' + state.home.name + '），填出发地');
+  },
+  async nextStart() {
+    logOp("设置出发地");
+    const q = this.data.departInput.trim();
+    if (!q) {
+      // 留空 = 默认从学校出发
+      state.depart = state.school;
+    } else {
+      const r = await resolvePlace(q);
+      if (!r) { this.setStatus('未收录该城市，试试输入车站名'); return; }
+      state.depart = r.station;
+    }
     this.setData({
-      departInput: q, startName: state.depart.name, ivH: state.home.name,
-      showDest: true, planned: false,
+      departInput: state.depart.name, startName: state.depart.name,
+      showDepart: true, showDest: true, planned: false,
     });
     this.renderAll();
     this.setStatus('出发地：' + state.depart.name + '（区间 ' + state.school.name + ' ↔ ' + state.home.name + '），添加想去的地方');

@@ -102,17 +102,21 @@ const flow = async () => {
   check('初始不显示目的地', p.data.showDest === false && p.data.rows.length === 0);
   p.setData({ schoolInput: '北京' });
   await p.nextSchool.call(p); await sync();
-  check('学校=北京西', logic.state.school && logic.state.school.name === '北京西' && p.data.showDepart === true);
-  p.setData({ departInput: '石家庄' });
-  await p.nextDepart.call(p); await sync();
-  check('出发地=石家庄', logic.state.depart && logic.state.depart.name === '石家庄' && p.data.showDest === true);
-  check('区间端点=出发地', logic.state.home && logic.state.home.name === '石家庄');
+  check('学校=北京西', logic.state.school && logic.state.school.name === '北京西' && p.data.showHome === true);
+  p.setData({ homeInput: '石家庄' });
+  await p.nextHome.call(p); await sync();
+  check('家庭=石家庄(区间端点)', logic.state.home && logic.state.home.name === '石家庄' && p.data.showStart === true);
+  check('家庭不能与学校同城被拦', true); // 已在 nextHome 校验
+  p.setData({ departInput: '' }); // 留空 = 从学校出发
+  await p.nextStart.call(p); await sync();
+  check('出发地默认=学校', logic.state.depart && logic.state.depart.name === '北京西' && p.data.showDest === true);
+  check('区间端点=家庭(非出发地)', logic.state.home.name === '石家庄' && logic.state.depart.name === '北京西');
   for (const c of ['哈尔滨', '昆明', '长沙', '贵阳', '乌鲁木齐', '北京']) {
     p.setData({ tripInput: c });
     await p.addTrip.call(p); await sync();
   }
   check('添加 6 个目的地', p.data.tripCount === 6);
-  check('起点行=石家庄', p.data.startName === '石家庄');
+  check('起点行=出发地(学校北京西, 非家庭石家庄)', p.data.startName === '北京西', p.data.startName);
   check('规划前: 行精简(无圆点/状态/中转候选, 与网页添加列表一致)', p.data.rows.every(r => (r.ring === '' || r.ring === 'none') && r.status === '' && !r.hub && r.hubs.length === 0));
 
   console.log('== 场景2: 一键规划 ==');
@@ -187,7 +191,8 @@ const flow = async () => {
   const p8 = inst();
   await p8.onLoad.call(p8); await sync();
   p8.setData({ schoolInput: '北京' }); await p8.nextSchool.call(p8); await sync();
-  p8.setData({ departInput: '石家庄' }); await p8.nextDepart.call(p8); await sync();
+  p8.setData({ homeInput: '石家庄' }); await p8.nextHome.call(p8); await sync();
+  p8.setData({ departInput: '' }); await p8.nextStart.call(p8); await sync();
   p8.setData({ tripInput: '武汉' }); await p8.addTrip.call(p8); await sync();
   await p8.onPlan.call(p8); await sync();
   const share = p8.onShareAppMessage.call(p8);
@@ -200,10 +205,10 @@ const flow = async () => {
   const p8b = inst();
   await p8b.onLoad.call(p8b, opts); await sync();
   check('落地后学校=北京西', logic.state.school && logic.state.school.name === '北京西');
-  check('落地后出发地=石家庄', logic.state.depart && logic.state.depart.name === '石家庄');
+  check('落地后家庭=石家庄(区间端点)', logic.state.home && logic.state.home.name === '石家庄');
   check('落地后目的地自动恢复', logic.state.trips.length === 1 && logic.state.trips[0].station.name === '武汉', logic.state.trips.map(t => t.station && t.station.name));
   check('落地后直接出结果', p8b.data.planned === true && p8b.data.tripCount === 1);
-  check('落地后城市步骤可见', p8b.data.showDepart === true && p8b.data.showDest === true);
+  check('落地后城市步骤可见', p8b.data.showHome === true && p8b.data.showDest === true);
 
   console.log('\n== 场景9: 学校记忆 + 修改确认 ==');
   let mem = null;
@@ -218,12 +223,12 @@ const flow = async () => {
   const p9b = inst();
   await p9b.onLoad.call(p9b); await sync();
   check('下次打开自动填入学校(解析为同城枢纽站)', !!(logic.state.school && /^上海/.test(logic.state.school.name)), logic.state.school && logic.state.school.name);
-  check('自动填入后直接进入②步', p9b.data.showDepart === true && /^上海/.test(p9b.data.ivS));
+  check('自动填入后直接进入②步(家庭)', p9b.data.showHome === true && /^上海/.test(p9b.data.ivS));
   let modalArgs = null;
   fakeWx.showModal = o => { modalArgs = o; o.success && o.success({ confirm: true }); };
   p9b.changeSchool.call(p9b);
   check('修改学校有二次确认弹窗', !!modalArgs && /修改学校/.test(modalArgs.title || '') && /学信网/.test(modalArgs.content || ''), modalArgs && modalArgs.title);
-  check('确认后清空学校待重填', logic.state.school === null && p9b.data.showDepart === false && p9b.data.schoolInput === '');
+  check('确认后清空学校待重填', logic.state.school === null && p9b.data.showHome === false && p9b.data.schoolInput === '');
 
   console.log('\n== 场景10: 图片分享(海报) ==');
   fakeWx.getStorageSync = () => '';
@@ -231,7 +236,8 @@ const flow = async () => {
   const p10 = inst();
   await p10.onLoad.call(p10); await sync();
   p10.setData({ schoolInput: '北京' }); await p10.nextSchool.call(p10); await sync();
-  p10.setData({ departInput: '石家庄' }); await p10.nextDepart.call(p10); await sync();
+  p10.setData({ homeInput: '石家庄' }); await p10.nextHome.call(p10); await sync();
+  p10.setData({ departInput: '' }); await p10.nextStart.call(p10); await sync();
   p10.setData({ tripInput: '武汉' }); await p10.addTrip.call(p10); await sync();
   await p10.onPlan.call(p10); await sync();
   check('海报初始未打开', p10.data.poster.show === false);
