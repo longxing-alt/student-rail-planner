@@ -50,9 +50,9 @@
         <text class="card-tt">想去哪</text>
         <text class="card-tip">✕ 删除 · ≡ 拖动排序</text>
       </view>
-      <view class="add-row">
-        <input class="ipt grow" value="{{tripInput}}" bindinput="onTripInput" bindconfirm="addTrip" placeholder="输入目的地，如：长沙"/>
-        <button hover-class="bh" class="btn dark" bindtap="addTrip">添加</button>
+      <view class="add-row" style="display:flex;align-items:stretch">
+        <input class="ipt" value="{{tripInput}}" bindinput="onTripInput" bindconfirm="addTrip" placeholder="输入目的地，如：长沙" style="flex:1;min-width:0;margin-right:16rpx;box-sizing:border-box"/>
+        <button hover-class="bh" class="btn dark" bindtap="addTrip" style="flex:0 0 auto;width:152rpx;margin:0;padding:0;display:flex;align-items:center;justify-content:center;box-sizing:border-box">添加</button>
       </view>
 
       <!-- 区间线: 学校—区间端点, 规划后圆点着色 -->
@@ -80,14 +80,14 @@
           <text class="ring {{item.ring}}"></text>
           <text class="name">{{item.text}}</text>
           <text class="tkt" wx:if="{{item.tkt}}">{{item.tkt}}</text>
-          <text class="status" wx:if="{{item.status}}">{{item.status}}</text>
+          <text class="status" wx:if="{{item.status}}" style="margin-left:auto;margin-right:8rpx">{{item.status}}</text>
           <view wx:if="{{item.hubs.length}}" class="hub-line">
             <text class="hub-tag">中转可选：</text>
             <view class="hub-grid">
               <text wx:for="{{item.hubs}}" wx:key="n" wx:for-item="hb" class="hub-chip {{hb.cur?'on':''}}" data-i="{{item.iIdx}}" data-j="{{hb.idx}}" catchtap="setHubTap">{{hb.m}}{{hb.n}}</text>
             </view>
           </view>
-          <text class="x" data-id="{{item.id}}" catchtap="removeTrip">✕</text>
+          <text class="x" data-id="{{item.id}}" catchtap="removeTrip" style="flex:0 0 auto;margin-left:auto;padding:6rpx 10rpx;font-size:28rpx;color:#C4C4CC">✕</text>
         </view>
       </view>
     </view>
@@ -95,17 +95,14 @@
 
   <!-- ============ 结果: 消耗次数 + 分享(右侧圆形按钮) ============ -->
   <view class="result {{planned?'show':''}}">
-    <view class="result-card">
-      <view class="rc-main">
+    <view class="result-card" style="display:flex;align-items:center;width:100%;box-sizing:border-box">
+      <view class="rc-main" style="flex:1;overflow:hidden">
         <view class="rc-label">
           <text>当前规划消耗</text>
           <text class="rc-q" catchtap="showCntTip">?</text>
         </view>
-        <view class="rc-num">
-          <text class="num {{used>budget?'red':''}}">{{used}}</text>
-          <text class="unit">次</text>
-          <text class="sep">/</text>
-          <text class="rest">预算 {{budget}} · 剩 {{remain}} 次</text>
+        <view class="rc-num" style="white-space:nowrap">
+          <text class="num {{used>budget?'red':''}}">{{used}}</text><text class="unit">次</text><text class="sep">/</text><text class="rest">预算 {{budget}} · 剩 {{remain}} 次</text>
         </view>
         <view class="rc-chips">
           <text class="chip green" wx:if="{{okN>0}}">区间内 {{okN}}/{{tripCount}}</text>
@@ -115,12 +112,12 @@
           <text class="chip gray" wx:if="{{okN+edgeN==0}}">需全价</text>
         </view>
       </view>
-      <view class="rc-actions">
-        <button hover-class="bh" class="circle-btn" open-type="share" title="分享链接">
-          <text class="cb-ico">↗</text>
+      <view class="rc-actions" style="flex:0 0 auto;display:flex;align-items:center">
+        <button hover-class="bh" class="circle-btn" open-type="share" title="分享链接" style="width:76rpx;height:76rpx;padding:0;margin:0 14rpx 0 0;border-radius:99rpx;display:flex;align-items:center;justify-content:center;background:#fff;border:1rpx solid #BFDBFE;color:#2563EB;box-sizing:border-box">
+          <text style="font-size:32rpx;line-height:1">↗</text>
         </button>
-        <button hover-class="bh" class="circle-btn primary" bindtap="openPoster" title="生成图片">
-          <text class="cb-ico">▣</text>
+        <button hover-class="bh" class="circle-btn primary" bindtap="openPoster" title="生成图片" style="width:76rpx;height:76rpx;padding:0;margin:0;border-radius:99rpx;display:flex;align-items:center;justify-content:center;background:#2563EB;border:1rpx solid #1D4ED8;color:#fff;box-sizing:border-box">
+          <text style="font-size:32rpx;line-height:1">▣</text>
         </button>
       </view>
     </view>
