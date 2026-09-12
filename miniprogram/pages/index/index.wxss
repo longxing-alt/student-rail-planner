@@ -1,3 +1,6 @@
+.link { color: #3a5bd9; font-weight: 700; }
+.share-row { display: flex; align-items: center; gap: 10px; margin-top: 10px; flex-wrap: wrap; }
+.share-hint { font-size: 22rpx; color: #8a8f9c; }
 /* 学生票区间规划器 · 小程序样式（按简化原型重构, 含浮动动效） */
 page {
   background: #fafafa;

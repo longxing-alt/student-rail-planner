@@ -15,6 +15,16 @@ function resolvePlace(q) {
   const h = hits.find(s => s[4]) || hits[0];
   return Promise.resolve({ point: { lat: h[2], lon: h[3] }, station: { name: h[0], city: h[1], lat: h[2], lon: h[3] } });
 }
+/* 同步版解析(分享落地/本地记忆还原用, 与 resolvePlace 同规则) */
+function resolveSync(q) {
+  q = String(q || '').trim();
+  if (!q) return null;
+  const qn = cleanCity(q);
+  const hits = STATIONS.filter(s => s[0] === qn || s[1] === qn || s[1].includes(qn) || qn.includes(s[1]));
+  if (!hits.length) return null;
+  const h = hits.find(s => s[4]) || hits[0];
+  return { point: { lat: h[2], lon: h[3] }, station: { name: h[0], city: h[1], lat: h[2], lon: h[3] } };
+}
 
 /* 单点判定(实测校准v2): 2=区间内(绿) 0=超区间(红) — 空间带+通道网+同城, 见 logic.beltV2 */
 function beltOf(S, H, P) { return logic.beltV2(S, H, P); }
@@ -157,13 +167,99 @@ Page({
         { n: 10, name: '区间建议弹窗' },
       ] },
   },
-  onLoad() {
+  onLoad(options) {
     this.hubOverride = {};
     this._cc = null;
+    // 分享落地: 带参进入则直接还原方案(学校/出发地/目的地), 无需重新输入
+    const fromShare = this.restoreFromShare(options);
+    if (!fromShare) {
+      // 无分享参数 → 读取本机记住的学校(免重复输入; 微信登录态由基础库自动维护)
+      this.restoreSchool();
+    }
     this.renderAll();
-    this.setStatus('填写 ① 学校 开始');
+    if (!fromShare) this.setStatus(this.data.ivS && this.data.ivS !== '学校' ? '已记住学校：' + this.data.ivS + '，填出发地继续' : '填写 ① 学校 开始');
   },
-  onShareAppMessage() { return { title: '学生票区间规划器：区间怎么算、怎么改最省次数' }; },
+
+  /* ---------- 分享 / 记忆 ---------- */
+  /* 分享: 标题含方案摘要; path 携带 S(学校)/H(出发地)/T(目的地) 参数, 点开即可复现结果 */
+  buildSharePath() {
+    const S = state.school, H = state.depart || state.home;
+    if (!S || !H) return '/pages/index/index';
+    const t = state.trips.map(x => x.station && x.station.name).filter(Boolean).join(',');
+    const q = ['S=' + encodeURIComponent(S.name), 'H=' + encodeURIComponent(H.name)];
+    if (t) q.push('T=' + encodeURIComponent(t));
+    return '/pages/index/index?' + q.join('&');
+  },
+  onShareAppMessage() {
+    const S = state.school, H = state.depart || state.home;
+    if (!S || !H) return { title: '学生票区间规划器：区间怎么算、怎么改最省次数', path: '/pages/index/index' };
+    const N = state.trips.length;
+    return {
+      title: '我查了 ' + S.name + ' ⇄ ' + H.name + (N ? ' 的 ' + N + ' 程学生票区间，点开看结果' : ' 的学生票区间'),
+      path: this.buildSharePath(),
+    };
+  },
+  onShareTimeline() {
+    const S = state.school, H = state.depart || state.home;
+    if (!S || !H) return { title: '学生票区间规划器：区间怎么算、怎么改最省次数' };
+    return { title: '学生票区间规划 · ' + S.name + ' ⇄ ' + H.name, query: this.buildSharePath().split('?')[1] || '' };
+  },
+
+  /* 从分享参数还原(同步, 纯本地解析): S/H/T → state + setData */
+  restoreFromShare(options) {
+    const o = options || {};
+    if (!o.S) return false;
+    const dec = v => { try { return decodeURIComponent(v); } catch (e) { return v; } };
+    const S = resolveSync(dec(o.S)), H = resolveSync(dec(o.H || ''));
+    if (!S || !H) return false;
+    const names = dec(o.T || '').split(',').map(s => s.trim()).filter(Boolean);
+    const trips = [];
+    for (const n of names) {
+      const r = resolveSync(n);
+      if (r) trips.push({ id: ++state._tid, text: n, point: r.point, station: r.station });
+    }
+    state.school = S.station;
+    state.depart = H.station;
+    state.home = H.station;
+    state.trips = trips;
+    this.setData({
+      schoolInput: S.station.name, departInput: H.station.name,
+      ivS: S.station.name, ivH: H.station.name, startName: H.station.name,
+      showDepart: true, showDest: true, planned: false,
+    });
+    if (trips.length) { this.onPlan(); this.setStatus('已复现分享的方案（' + S.station.name + ' ⇄ ' + H.station.name + '），可直接查看结果'); }
+    else this.setStatus('已复现分享的区间（' + S.station.name + ' ⇄ ' + H.station.name + '），可继续添加目的地');
+    this.saveSchool();
+    return true;
+  },
+
+  /* 学校记忆: 免每次输入(微信账号级登录态由平台维护, 这里只存业务数据) */
+  saveSchool() {
+    try { wx.setStorageSync('srp_school', state.school ? state.school.name : ''); } catch (e) { }
+  },
+  restoreSchool() {
+    let name = '';
+    try { name = wx.getStorageSync('srp_school') || ''; } catch (e) { }
+    if (!name) return;
+    const r = resolveSync(name);
+    if (!r) return;
+    state.school = r.station;
+    this.setData({ schoolInput: r.station.name, ivS: r.station.name, showDepart: true });
+  },
+  /* 修改学校需二次确认(区间端点是合规关键, 防止误改) */
+  changeSchool() {
+    wx.showModal({
+      title: '修改学校',
+      content: '学校是优惠区间的固定端点，须与学信网一致。确定要修改吗？',
+      confirmText: '修改', cancelText: '取消',
+      success: res => {
+        if (!res.confirm) return;
+        state.school = null;
+        this.setData({ schoolInput: '', ivS: '学校', showDepart: false, showDest: false, planned: false });
+        this.setStatus('请输入新的学校城市');
+      },
+    });
+  },
 
   setStatus(m) { this.setData({ status: String(m || '') }); },
 
@@ -182,6 +278,7 @@ Page({
     if (!r) { this.setStatus('未收录该城市（内置 ' + STATIONS.length + ' 站），试试输入车站名'); return; }
     state.school = r.station;
     this.setData({ schoolInput: q, ivS: state.school.name, showDepart: true });
+    this.saveSchool(); // 记住学校, 下次免输入
     this.setStatus('学校：' + state.school.name + ' · ' + state.school.city + '，填写出发地');
   },
   /* 步骤2 出发地 → 步骤3 目的地 */
@@ -424,16 +521,6 @@ Page({
 
   closeCntTip() { this.setData({ 'cntTip.show': false }); },
   noop() { },
-  /* 分享方案: 转发/朋友圈 统一文案 */
-  shareText() {
-    const S = state.school, H = state.home, N = state.trips.length;
-    if (S && H) return '学生票区间规划 · ' + S.name + ' ⇄ ' + H.name + (N ? ' · ' + N + ' 程查票' : '');
-    return '学生票区间规划 · 看看你的优惠区间能去哪';
-  },
-  onShareAppMessage() {
-    return { title: this.shareText(), path: '/pages/index/index' };
-  },
-
 
   /* ---------- 渲染 ---------- */
   renderAll() {

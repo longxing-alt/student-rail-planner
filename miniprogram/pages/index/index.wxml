@@ -18,6 +18,7 @@
         <input class="ipt" value="{{schoolInput}}" bindinput="onSchoolInput" bindconfirm="nextSchool" placeholder="输入学校城市，如：北京"/>
         <button hover-class="bh" class="btn primary" bindtap="nextSchool">下一步</button>
       </view>
+      <view class="hint" wx:if="{{showDepart}}">已记住学校 <b>{{ivS}}</b>，下次打开自动填入 · <text class="link" catchtap="changeSchool">修改学校</text></view>
     </view>
 
     <!-- ============ 步骤2: 出发地 ============ -->
@@ -87,6 +88,11 @@
           <view class="chip red" wx:if="{{badN>0}}">超区间 {{badN}}（另购全价）</view>
           <view class="chip green" wx:if="{{okN+edgeN>0}}">整条联程 {{used}} 次（5 天内）</view>
           <view class="chip gray" wx:if="{{okN+edgeN==0}}">全部需全价</view>
+        </view>
+        <!-- 分享: 点开后直接复现当前方案(学校/出发地/目的地随分享参数带入) -->
+        <view class="share-row">
+          <button hover-class="bh" class="btn ghost sm" open-type="share">📤 分享我的方案</button>
+          <text class="share-hint">对方点开即可看到同款区间与判定结果</text>
         </view>
       </view>
     </view>
