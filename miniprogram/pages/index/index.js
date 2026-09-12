@@ -736,7 +736,7 @@ Page({
         lines.push('区间外 ' + (sg.a ? sg.a.name : '') + '→' + (sg.b ? sg.b.name : '') + '：需购成人票（此段断开行程）');
       }
     });
-    lines.push('规则：同一趟连续行程（不折返、不往返）无论分几张票/几次中转，全程计 1 次；勾全程往返则 ×2。');
+    lines.push('规则：同一趟连续行程（不折返）无论分几张票/几次中转，全程计 1 次。');
     this.setData({ cntTip: { show: true, lines, used: this.data.used, budget: state.budget, remain: (state.budget - (typeof this.data.used === 'number' ? this.data.used : 0)) } });
   },
 
