@@ -367,25 +367,36 @@ Page({
     };
     // 白底衬扫码区(提高识别率)
     ctx.fillStyle = '#ffffff'; ctx.fillRect(qx, qy, qr, qr);
-    if (this._qrImg && this._qrImg.width) {
-      try { ctx.drawImage(this._qrImg, qx, qy, qr, qr); } catch (e) { /* 绘制失败保留白底 */ }
-      drawText();
-    } else {
-      // 图片尚未就绪 → 尝试加载一次, 仍失败则留占位(不阻塞出图)
-      const img = canvas.createImage ? canvas.createImage() : null;
-      if (!img) {
+    this.loadQr(canvas, img => {
+      if (img) {
+        ctx.fillStyle = '#ffffff'; ctx.fillRect(qx, qy, qr, qr);
+        try { ctx.drawImage(img, qx, qy, qr, qr); } catch (e) { /* 绘制失败保留白底 */ }
+      } else {
         ctx.fillStyle = '#d4d4d8'; ctx.font = '14px sans-serif';
         ctx.fillText('小程序码', qx + 44, qy + 80);
-        drawText(); return;
       }
-      img.onload = () => { this._qrImg = img; try { ctx.drawImage(img, qx, qy, qr, qr); } catch (e) { } drawText(); };
-      img.onerror = () => {
-        ctx.fillStyle = '#d4d4d8'; ctx.font = '14px sans-serif';
-        ctx.fillText('小程序码', qx + 44, qy + 80);
-        drawText();
-      };
-      img.src = '/images/qrcode.png';
-    }
+      drawText();
+    });
+  },
+
+  /* 载入小程序码: 先用 getImageInfo 解析包内路径(缓存), 再按当前 canvas 建图片对象
+   * canvas 2d 的图片对象与 canvas 绑定, 换 canvas 必须重建, 故只缓存路径 */
+  loadQr(canvas, cb) {
+    const mk = (p, retry) => {
+      const img = canvas && canvas.createImage ? canvas.createImage() : null;
+      if (!img) return cb(null);
+      img.onload = () => cb(img);
+      img.onerror = () => { if (retry) mk(retry, null); else cb(null); };
+      img.src = p;
+    };
+    if (this._qrPath) return mk(this._qrPath, null);
+    const direct = '/images/qrcode.png';
+    if (!wx.getImageInfo) return mk(direct, null);
+    wx.getImageInfo({
+      src: direct,
+      success: r => { this._qrPath = (r && r.path) || direct; mk(this._qrPath, direct); },
+      fail: () => mk(direct, null),
+    });
   },
 
   /* 保存海报到相册(含授权处理) */

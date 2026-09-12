@@ -31,6 +31,9 @@ const fakeWx = {
   openSetting: o => { o.success && o.success({ authSetting: {} }); },
   saveImageToPhotosAlbum: o => { o.success && o.success({ errMsg: 'saveImageToPhotosAlbum:ok' }); },
   canvasToTempFilePath: o => { o.success && o.success({ tempFilePath: '/tmp/poster.png' }); },
+  getImageInfo: o => { o.success && o.success({ path: o.src, width: 600, height: 600 }); },
+  _drawn: [],
+  _drawnSrc: [],
   _qnode: null,
   createSelectorQuery: () => {
     const tasks = [];
@@ -41,11 +44,20 @@ const fakeWx = {
           const c = (typeof optOrCb === 'function') ? optOrCb : maybeCb;
           const node = {
             width: 0, height: 0,
+            createImage: () => {
+              const o = {
+                width: 600, height: 600, _src: '',
+                set src(v) { this._src = v; fakeWx._drawnSrc.push(v); setTimeout(() => { o.onload && o.onload(); }, 5); },
+                get src() { return this._src; },
+              };
+              return o;
+            },
             getContext: () => ({
               scale: () => { }, createLinearGradient: () => ({ addColorStop: () => { } }),
               fillRect: () => { }, beginPath: () => { }, moveTo: () => { }, lineTo: () => { },
               quadraticCurveTo: () => { }, closePath: () => { }, fill: () => { }, arc: () => { },
-              fillText: () => { }, fillStyle: '', font: '',
+              fillText: () => { }, drawImage: (...a) => { fakeWx._drawn.push(a); },
+              fillStyle: '', font: '',
             }),
           };
           fakeWx._qnode = { node: node, width: 600, height: 900 };
@@ -237,9 +249,13 @@ const flow = async () => {
   p10.setData({ tripInput: '武汉' }); await p10.addTrip.call(p10); await sync();
   await p10.onPlan.call(p10); await sync();
   check('海报初始未打开', p10.data.poster.show === false);
-  p10.openPoster.call(p10); await sync();
+  fakeWx._drawn = []; fakeWx._drawnSrc = [];
+  p10.openPoster.call(p10); await sync(); await sync();
   check('点“生成图片”打开海报弹窗', p10.data.poster.show === true);
   check('canvas 绘制后导出临时图片', p10.data.poster.path === '/tmp/poster.png', p10.data.poster.path);
+  check('海报请求加载小程序码 /images/qrcode.png', fakeWx._drawnSrc.indexOf('/images/qrcode.png') >= 0, fakeWx._drawnSrc);
+  check('小程序码已绘制到海报上', fakeWx._drawn.length >= 1, fakeWx._drawn.length);
+  check('码图绘制区域为 150x150 方块', fakeWx._drawn.length >= 1 && fakeWx._drawn[0][3] === 150 && fakeWx._drawn[0][4] === 150, fakeWx._drawn[0] && fakeWx._drawn[0].slice(3));
   let saved = false;
   fakeWx.saveImageToPhotosAlbum = o => { saved = true; o.success && o.success({ errMsg: 'ok' }); };
   p10.savePoster.call(p10); await sync();
@@ -247,6 +263,30 @@ const flow = async () => {
   check('保存后状态提示成功', /已保存/.test(p10.data.status || ''), p10.data.status);
   p10.closePoster.call(p10);
   check('关闭海报弹窗', p10.data.poster.show === false);
+
+  console.log('\n== 场景11: 资源与样式守卫(防回归) ==');
+  const qrPath = path.join(root, 'miniprogram/images/qrcode.png');
+  check('小程序码资源存在', fs.existsSync(qrPath));
+  if (fs.existsSync(qrPath)) {
+    const buf = fs.readFileSync(qrPath);
+    const isPng = buf[0] === 0x89 && buf.toString('latin1', 1, 4) === 'PNG';
+    const w = buf.readUInt32BE(16), h = buf.readUInt32BE(20);
+    check('码图为合法 PNG', isPng);
+    check('码图为正方形(防拉伸变形)', w === h, w + 'x' + h);
+    check('码图边长 >= 300px(保证可识别)', w >= 300, w);
+  }
+  const wxss = fs.readFileSync(path.join(root, 'miniprogram/pages/index/index.wxss'), 'utf8');
+  const ipt = (wxss.match(/\.ipt\s*\{[^}]*\}/) || [''])[0];
+  const num = (re, s) => { const m = s.match(re); return m ? parseFloat(m[1]) : NaN; };
+  const hIpt = num(/height:\s*([\d.]+)rpx/, ipt), lhIpt = num(/line-height:\s*([\d.]+)rpx/, ipt);
+  const fsIpt = num(/font-size:\s*([\d.]+)rpx/, ipt);
+  check('输入框有确定高度(不被 padding 压塌)', hIpt >= 80, hIpt);
+  check('输入框行高 >= 字号(文字不被裁切)', lhIpt >= fsIpt, lhIpt + ' vs ' + fsIpt);
+  check('输入框无上下 padding(不与固定高度冲突)', !/padding:\s*[\d.]+rpx\s+[\d.]+rpx/.test(ipt), ipt);
+  check('输入框字号 >= 28rpx(打字看得清)', fsIpt >= 28, fsIpt);
+  const wxml = fs.readFileSync(path.join(root, 'miniprogram/pages/index/index.wxml'), 'utf8');
+  check('三处输入框均用 .ipt(样式统一生效)', (wxml.match(/class="ipt"/g) || []).length === 3, (wxml.match(/class="ipt"/g) || []).length);
+  check('海报绘制未残留旧的 _qrImg 缓存写法', !/this\._qrImg/.test(pageSrc));
 
   console.log('\n结果: ' + passed + ' 通过, ' + failed + ' 失败');
   process.exit(failed ? 1 : 0);

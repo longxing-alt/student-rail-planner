@@ -48,7 +48,8 @@ page { background: #F0F2F5; }
 /* 输入 */
 .ipt {
   width: 100%; box-sizing: border-box; background: #F9FAFB; border: 1rpx solid #E5E7EB;
-  border-radius: 22rpx; padding: 24rpx 28rpx; font-size: 28rpx; color: #111827; min-height: 44rpx;
+  border-radius: 22rpx; height: 92rpx; line-height: 90rpx; padding: 0 28rpx;
+  font-size: 30rpx; color: #111827;
 }
 .ipt.grow { flex: 1; }
 .add-row { display: flex; align-items: stretch; margin-bottom: 12rpx; }
