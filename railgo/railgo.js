@@ -570,7 +570,7 @@
       const reasonMap = {};
       codes.forEach((k, i) => { reasonMap[k] = texts[i] || k; });
       const pos = codes.filter(k => /HIGH_EXPERIENCE|UNIQUENESS|REPRESENTATIVENESS|ON_ROUTE|LOW_TIME_COST|LOW_BUDGET_COST/.test(k));
-      const neg = codes.filter(k => /LOW_EXPERIENCE|HIGH_TIME_COST|HIGH_BUDGET_COST|HIGH_FATIGUE|HIGH_OPPORTUNITY_COST|MANY_TRANSFERS|HIGH_DETOUR/.test(k));
+      const neg = codes.filter(k => /LOW_EXPERIENCE|HIGH_TIME_COST|HIGH_BUDGET_COST|HIGH_FATIGUE|HIGH_OPPORTUNITY_COST|MANY_TRANSFERS|HIGH_DETOUR|BUDGET_EXCEEDED|TIME_INFEASIBLE|RAILWAY_UNREACHABLE|PLACE_DATA_MISSING|SAME_AS_ENDPOINT/.test(k));
       html += '<div class="stop-card">' +
         '<span class="tt">📍 ' + esc(cd.name) + '</span> ' +
         '<span class="badge ' + (recCls[cd.recommendation] || '') + '">值得去 ' + cd.score + ' · ' + (REC_TXT[cd.recommendation] || cd.recommendation) + '</span>' +
@@ -770,7 +770,7 @@
           const reasonMap = {};
           codes.forEach((k, i) => { reasonMap[k] = texts[i] || k; });
           const pos = codes.filter(k => /HIGH_EXPERIENCE|UNIQUENESS|REPRESENTATIVENESS|ON_ROUTE|LOW_TIME_COST|LOW_BUDGET_COST/.test(k));
-          const neg = codes.filter(k => /LOW_EXPERIENCE|HIGH_TIME_COST|HIGH_BUDGET_COST|HIGH_FATIGUE|HIGH_OPPORTUNITY_COST|MANY_TRANSFERS|HIGH_DETOUR/.test(k));
+          const neg = codes.filter(k => /LOW_EXPERIENCE|HIGH_TIME_COST|HIGH_BUDGET_COST|HIGH_FATIGUE|HIGH_OPPORTUNITY_COST|MANY_TRANSFERS|HIGH_DETOUR|BUDGET_EXCEEDED|TIME_INFEASIBLE|RAILWAY_UNREACHABLE|PLACE_DATA_MISSING|SAME_AS_ENDPOINT/.test(k));
           lines.push('<div class="reason-line pos">✓ ' + esc(name) + ' · 价值 ' + x.score +
             (pos.length ? ' · ' + pos.map(k => reasonMap[k]).join(' · ') : '') + '</div>');
           if (neg.length) lines.push('<div class="reason-line neg">⚠ ' + neg.map(k => reasonMap[k]).join(' · ') + '</div>');

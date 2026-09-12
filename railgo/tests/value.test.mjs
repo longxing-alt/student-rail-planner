@@ -742,7 +742,7 @@ test('O7. 返回 remainingDays / remainingBudget(可解释性)', () => {
 
 /* 复刻 railgo.js optBox 的分类正则(与源码一致, 由 O10 校验源码本身) */
 const OPT_POS = /HIGH_EXPERIENCE|UNIQUENESS|REPRESENTATIVENESS|ON_ROUTE|LOW_TIME_COST|LOW_BUDGET_COST/;
-const OPT_NEG = /LOW_EXPERIENCE|HIGH_TIME_COST|HIGH_BUDGET_COST|HIGH_FATIGUE|HIGH_OPPORTUNITY_COST|MANY_TRANSFERS|HIGH_DETOUR/;
+const OPT_NEG = /LOW_EXPERIENCE|HIGH_TIME_COST|HIGH_BUDGET_COST|HIGH_FATIGUE|HIGH_OPPORTUNITY_COST|MANY_TRANSFERS|HIGH_DETOUR|BUDGET_EXCEEDED|TIME_INFEASIBLE|RAILWAY_UNREACHABLE|PLACE_DATA_MISSING|SAME_AS_ENDPOINT/;
 
 test('O8. optBox 消费契约: selected 的 code/reason 一一对应且不得回退为英文码', () => {
   const r = C.optimizeStopSelection('sjz', 'sh', 5, 1600, ['jn', 'xuzhou', 'nj', 'hz'], {});
@@ -824,6 +824,53 @@ test('O11. UI 源码契约: optBox 逐条消费 reasons(变异可捕获)', () =>
   assert.ok(/reason-line pos/.test(optSeg) && /reason-line neg/.test(optSeg), 'optBox 必须同时渲染 pos 与 neg');
   // reasons 必须逐条映射(不得只取下标 0)
   assert.ok(!/texts\[0\]/.test(optSeg), 'optBox 不得只取 reasons[0]');
+});
+
+test('O12. 零遗漏穷举: evaluateStop 全部 code 均被 StopBox 与 optBox 覆盖(含硬约束)', () => {
+  // 源码级提取 evaluateStop 产出的全部 code
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const { fileURLToPath } = require('node:url');
+  const here = path.dirname(fileURLToPath(import.meta.url));
+  const coreSrc = fs.readFileSync(path.join(here, '..', 'railgo.core.js'), 'utf8');
+  const s = coreSrc.indexOf('function evaluateStop');
+  const e = coreSrc.indexOf('起点→终点的绝对铁路可达信息', s);
+  assert.ok(s > 0 && e > s, '定位到 evaluateStop 函数体');
+  const codes = [...new Set([...coreSrc.slice(s, e).matchAll(/codes\.push\('([A-Z_]+)'\)/g)].map(m => m[1]))];
+  assert.ok(codes.length >= 15, '提取到足够 code(当前 ' + codes.length + ' 个)');
+
+  // 从 railgo.js 源码取出实现用的正则(不手抄, 防止测试与实现漂移)
+  const src = readRailgoJs();
+  const lines = src.split('\n');
+  const posLine = lines.find(l => l.includes('const pos = codes.filter'));
+  const negLine = lines.find(l => l.includes('const neg = codes.filter'));
+  assert.ok(posLine && negLine, '定位到 pos/neg 分类行');
+  const POS = new RegExp(posLine.match(/\/(.+)\/\.test/)[1]);
+  const NEG = new RegExp(negLine.match(/\/(.+)\/\.test/)[1]);
+
+  // (a) 每个 code 至少被一侧覆盖 —— 此前硬约束(4个)+SAME_AS_ENDPOINT 被静默丢弃
+  const dropped = codes.filter(k => !POS.test(k) && !NEG.test(k));
+  assert.deepStrictEqual(dropped, [], '以下 code 被 UI 静默丢弃: ' + dropped.join(', '));
+  // (b) 不得双重分类
+  const both = codes.filter(k => POS.test(k) && NEG.test(k));
+  assert.deepStrictEqual(both, [], '以下 code 被双重分类: ' + both.join(', '));
+  // (c) 硬约束必须落在 neg(不得被显示为优点, 也不得消失)
+  const HARD = ['BUDGET_EXCEEDED', 'TIME_INFEASIBLE', 'RAILWAY_UNREACHABLE', 'PLACE_DATA_MISSING'];
+  HARD.forEach(k => {
+    assert.ok(codes.includes(k), k + ' 属 evaluateStop 产出');
+    assert.ok(NEG.test(k), k + ' 必须被 neg 覆盖(硬约束不得隐藏)');
+    assert.ok(!POS.test(k), k + ' 不得被误分类为优点');
+  });
+  // (d) 两条 UI 路径(StopBox / optBox)必须使用同一套分类正则
+  const sbStart = src.indexOf('maybeSuggestStop');
+  const optStart = src.indexOf('optimizeStopSelection');
+  assert.ok(sbStart > 0 && optStart > sbStart, '定位到 StopBox 与 optBox 段');
+  const sbSeg = src.slice(sbStart, optStart);
+  const sbPos = sbSeg.split('\n').find(l => l.includes('const pos = codes.filter'));
+  const sbNeg = sbSeg.split('\n').find(l => l.includes('const neg = codes.filter'));
+  assert.ok(sbPos && sbNeg, '定位到 StopBox 的 pos/neg 分类行');
+  assert.strictEqual(sbNeg.match(/\/(.+)\/\.test/)[1], negLine.match(/\/(.+)\/\.test/)[1],
+    'StopBox 与 optBox 的 neg 正则必须一致(同源 Core, 不得各自维护)');
 });
 
 /* ==================== 阶段7.5: StopBox 理由文案来源统一(UI contract) ==================== */
