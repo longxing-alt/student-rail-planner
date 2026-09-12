@@ -36,6 +36,7 @@
 .candidate-card .cc-route { font-size: 14.5px; font-weight: 700; margin-top: 6px; }
 .candidate-card .cc-meta { font-size: 12.5px; color: var(--mut); margin-top: 3px; }
 .candidate-card .cc-tags { margin-top: 6px; display: flex; gap: 6px; flex-wrap: wrap; }
+.candidate-card .btn { margin-top: 8px; }
 .tag { font-size: 11px; border-radius: 6px; padding: 2px 8px; font-weight: 600; }
 .tag.ok { background: var(--ok-soft); color: var(--ok); }
 .tag.warn { background: var(--warn-soft); color: var(--warn); }

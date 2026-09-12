@@ -70,7 +70,8 @@
     box.innerHTML = '<div class="hint" style="margin-bottom:6px">为你生成了 ' + state.candidates.length + ' 种旅行方式，点击卡片切换：</div>';
     state.candidates.forEach((c, i) => {
       const card = document.createElement('div');
-      card.className = 'candidate-card' + (i === state.active ? ' on' : '');
+      const on = i === state.active;
+      card.className = 'candidate-card' + (on ? ' on' : '');
       card.dataset.i = i;
       card.innerHTML =
         '<div class="cc-head"><span class="cc-icon">' + c.icon + '</span> <b>' + c.title + '</b>' +
@@ -79,18 +80,31 @@
         '<div class="cc-meta">' + c.days + ' 天 · ¥' + c.budget.total + ' · ' + c.transport.distanceKm + ' km · 换乘 ' + c.transport.transferCount + '</div>' +
         '<div class="cc-tags">' + c.reasons.slice(0, 3).map(r => '<span class="tag ok">' + r + '</span>').join('') +
         c.warnings.slice(0, 2).map(w => '<span class="tag warn">' + w + '</span>').join('') + '</div>' +
-        '<button class="btn small" style="margin-top:8px">查看方案</button>';
-      card.querySelector('.btn').addEventListener('click', e => { e.stopPropagation(); setActive(i); });
-      card.addEventListener('click', () => setActive(i));
+        '<button class="btn small' + (on ? '' : ' ghost') + '">' + (on ? '✓ 当前方案' : '查看方案') + '</button>';
+      card.querySelector('.btn').addEventListener('click', e => { e.stopPropagation(); setActive(i, true); });
+      card.addEventListener('click', () => setActive(i, true));
       box.appendChild(card);
     });
   }
 
-  function setActive(i) {
+  function setActive(i, scroll) {
     state.active = i;
     renderCandidates();
     const start = resolveCity($('inStart').value);
     if (start && state.candidates[i]) renderActive(start, +$('inDays').value, +$('inBudget').value);
+    // 切换方案后结果区内容会变(路线/时间轴/地图/预算), 但都在视口下方;
+    // 滚动到"结果区顶部 + 露出一部分方案卡"的位置: 既看到内容变化, 又能继续对比其它方案
+    if (scroll) {
+      const box = $('sumBox');
+      if (box) {
+        const vh = window.innerHeight;
+        // 让结果区顶部落在视口上 1/3 处(上方留出方案卡底部, 便于连续点选)
+        const want = window.scrollY + box.getBoundingClientRect().top - Math.round(vh / 3);
+        const maxY = Math.max(0, (document.documentElement.scrollHeight || document.body.scrollHeight) - vh);
+        const target = Math.max(0, Math.min(want, maxY));
+        window.scrollTo({ top: target, behavior: 'smooth' });
+      }
+    }
   }
 
   /* ---------- 渲染选中方案 ---------- */
