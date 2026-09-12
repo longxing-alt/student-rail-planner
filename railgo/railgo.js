@@ -561,12 +561,14 @@
       '<span class="hint">（偏好：' + esc(pref.profile) + ' · 节奏 ' + Math.round(state.pace * 100) + '）</span></div>';
     sug.candidates.forEach(cd => {
       const e = cd.tripEvaluation || {};
-      const pos = (e.reasonCodes || []).filter(k => /HIGH_EXPERIENCE|UNIQUENESS|REPRESENTATIVENESS|ON_ROUTE|LOW_TIME_COST|LOW_BUDGET_COST/.test(k));
-      const neg = (e.reasonCodes || []).filter(k => /HIGH_TIME_COST|HIGH_BUDGET_COST|HIGH_FATIGUE|HIGH_OPPORTUNITY_COST|MANY_TRANSFERS|HIGH_DETOUR/.test(k));
-      const txt = k => ({ HIGH_EXPERIENCE_VALUE: '体验价值较高', HIGH_UNIQUENESS: '体验独特', HIGH_REPRESENTATIVENESS: '城市代表性较强',
-        RAILWAY_ON_ROUTE: '铁路基本顺路', LOW_TIME_COST: '增加时间较少', LOW_BUDGET_COST: '额外预算少',
-        HIGH_TIME_COST: '明显增加旅行时间', HIGH_BUDGET_COST: '额外预算偏高', HIGH_FATIGUE: '会增加旅途疲劳',
-        HIGH_OPPORTUNITY_COST: '会压缩后续城市游玩时间', MANY_TRANSFERS: '需要多次换乘', HIGH_DETOUR: '需要绕行' }[k] || k);
+      // 阶段7.5: 文案统一由 Core 提供(reasonCodes 仅用于分类, 不在 UI 重新定义文案)
+      // 优先用候选顶层 reasons(suggestStop 已提升), 回退到 tripEvaluation.reasons
+      const codes = e.reasonCodes || [];
+      const texts = (cd.reasons && cd.reasons.length ? cd.reasons : e.reasons) || [];
+      const reasonMap = {};
+      codes.forEach((k, i) => { reasonMap[k] = texts[i] || k; });
+      const pos = codes.filter(k => /HIGH_EXPERIENCE|UNIQUENESS|REPRESENTATIVENESS|ON_ROUTE|LOW_TIME_COST|LOW_BUDGET_COST/.test(k));
+      const neg = codes.filter(k => /LOW_EXPERIENCE|HIGH_TIME_COST|HIGH_BUDGET_COST|HIGH_FATIGUE|HIGH_OPPORTUNITY_COST|MANY_TRANSFERS|HIGH_DETOUR/.test(k));
       html += '<div class="stop-card">' +
         '<span class="tt">📍 ' + esc(cd.name) + '</span> ' +
         '<span class="badge ' + (recCls[cd.recommendation] || '') + '">值得去 ' + cd.score + ' · ' + (REC_TXT[cd.recommendation] || cd.recommendation) + '</span>' +
@@ -577,8 +579,8 @@
         '<span>换乘 ' + (e.transfers != null ? e.transfers : '—') + ' 次</span>' +
         '<span>铁路绕行 ' + (cd.detour <= 60 ? '低' : cd.detour <= 150 ? '中' : '高') + '（+' + cd.detour + ' km）</span>' +
         '</div>' +
-        (pos.length ? '<div class="reason-line pos">✓ ' + pos.map(txt).join(' · ') + '</div>' : '') +
-        (neg.length ? '<div class="reason-line neg">⚠ ' + neg.map(txt).join(' · ') + '</div>' : '') +
+        (pos.length ? '<div class="reason-line pos">✓ ' + pos.map(k => reasonMap[k]).join(' · ') + '</div>' : '') +
+        (neg.length ? '<div class="reason-line neg">⚠ ' + neg.map(k => reasonMap[k]).join(' · ') + '</div>' : '') +
         '<button class="btn small ghost" data-add="' + cd.cityId + '" style="margin-top:8px">加入 ' + esc(cd.name) + ' 并重新规划</button>' +
         '</div>';
     });
