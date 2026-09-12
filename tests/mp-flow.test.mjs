@@ -33,6 +33,7 @@ const fakeWx = {
   canvasToTempFilePath: o => { o.success && o.success({ tempFilePath: '/tmp/poster.png' }); },
   getImageInfo: o => { o.success && o.success({ path: o.src, width: 600, height: 600 }); },
   _drawn: [],
+  _texts: [],
   _drawnSrc: [],
   _qnode: null,
   createSelectorQuery: () => {
@@ -56,7 +57,8 @@ const fakeWx = {
               scale: () => { }, createLinearGradient: () => ({ addColorStop: () => { } }),
               fillRect: () => { }, beginPath: () => { }, moveTo: () => { }, lineTo: () => { },
               quadraticCurveTo: () => { }, closePath: () => { }, fill: () => { }, arc: () => { },
-              fillText: () => { }, drawImage: (...a) => { fakeWx._drawn.push(a); },
+              fillText: (t) => { fakeWx._texts.push(String(t)); }, measureText: s => ({ width: String(s || '').length * 8 }), drawImage: (...a) => { fakeWx._drawn.push(a); },
+              stroke: () => { }, strokeStyle: '', lineWidth: 1,
               fillStyle: '', font: '',
             }),
           };
@@ -249,7 +251,7 @@ const flow = async () => {
   p10.setData({ tripInput: '武汉' }); await p10.addTrip.call(p10); await sync();
   await p10.onPlan.call(p10); await sync();
   check('海报初始未打开', p10.data.poster.show === false);
-  fakeWx._drawn = []; fakeWx._drawnSrc = [];
+  fakeWx._drawn = []; fakeWx._drawnSrc = []; fakeWx._texts = [];
   p10.openPoster.call(p10); await sync(); await sync();
   check('点“生成图片”打开海报弹窗', p10.data.poster.show === true);
   check('canvas 绘制后导出临时图片', p10.data.poster.path === '/tmp/poster.png', p10.data.poster.path);
@@ -263,6 +265,22 @@ const flow = async () => {
   check('保存后状态提示成功', /已保存/.test(p10.data.status || ''), p10.data.status);
   p10.closePoster.call(p10);
   check('关闭海报弹窗', p10.data.poster.show === false);
+
+  console.log('\n== 场景10b: 海报显示中转信息 ==');
+  resetState();
+  const p10b = inst();
+  await p10b.onLoad.call(p10b); await sync();
+  p10b.setData({ schoolInput: '北京' }); await p10b.nextSchool.call(p10b); await sync();
+  p10b.setData({ departInput: '北京' }); await p10b.nextStart.call(p10b); await sync();
+  p10b.setData({ tripInput: '沈阳' }); await p10b.addTrip.call(p10b); await sync();
+  await p10b.onPlan.call(p10b); await sync();
+  check('该场景确实需要中转(前置条件)', !!(p10b.data.rows[0] && p10b.data.rows[0].hub), p10b.data.rows[0] && p10b.data.rows[0].hub);
+  fakeWx._drawn = []; fakeWx._drawnSrc = []; fakeWx._texts = [];
+  p10b.openPoster.call(p10b); await sync(); await sync();
+  const hubTxt = fakeWx._texts.filter(t => /中转经/.test(t));
+  check('海报绘制了中转行(含"中转经"+枢纽名)', hubTxt.length >= 1, hubTxt);
+  check('中转行内容与 Core 判定一致', hubTxt.some(t => t.indexOf(p10b.data.rows[0].hub) >= 0), hubTxt + ' vs ' + p10b.data.rows[0].hub);
+  p10b.closePoster.call(p10b);
 
   console.log('\n== 场景11: 资源与样式守卫(防回归) ==');
   const qrPath = path.join(root, 'miniprogram/images/qrcode.png');

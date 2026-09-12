@@ -324,8 +324,18 @@ Page({
     ctx.font = 'bold 30px sans-serif'; ctx.fillText('学生票 · 区间规划', 40, 76);
     ctx.font = '17px sans-serif'; ctx.fillStyle = 'rgba(255,255,255,.75)';
     ctx.fillText('我的优惠区间与行程判定', 40, 108);
+    // 目的地行: 每个目的地占 1~2 行(有中转时多一行), 先算高度让卡片自适应
+    const rows = (this.data.rows || []).slice(0, 5);
+    const ROW_H = 38, HUB_H = 30;
+    const rowsH = rows.reduce((s, row) => s + ROW_H + (row.hub ? HUB_H : 0), 0);
+    // 版面: 标题下方到二维码区之间放白卡片
+    const qrTop = H - 40 - 150 - 46;                 // 二维码区顶边
+    const cardTop = 150, cardBottomMax = qrTop - 16;  // 卡片可用纵向区间
+    // 高度按内容自适应; 内容少时在区间内垂直居中(上下留白均衡, 避免底部大片空白)
+    const cardH = Math.min(cardBottomMax - cardTop,
+      Math.max(240, 168 + Math.max(rowsH, ROW_H) + 20));
+    const cardY = cardTop + Math.max(0, Math.round((cardBottomMax - cardTop - cardH) / 2));
     // 白卡片
-    const cardY = 150, cardH = 400;
     ctx.fillStyle = '#ffffff';
     const r = 20;
     ctx.beginPath();
@@ -336,25 +346,53 @@ Page({
     ctx.lineTo(40, cardY + r); ctx.quadraticCurveTo(40, cardY, 40 + r, cardY);
     ctx.closePath(); ctx.fill();
     // 区间
+    const padL = 76, padR = W - 76;
     ctx.fillStyle = '#71717a'; ctx.font = '16px sans-serif';
-    ctx.fillText('优惠区间', 76, cardY + 52);
+    ctx.fillText('优惠区间', padL, cardY + 52);
     ctx.fillStyle = '#18181b'; ctx.font = 'bold 34px sans-serif';
-    ctx.fillText(S.name + ' ⇄ ' + ivH, 76, cardY + 100);
+    ctx.fillText(S.name + ' ⇄ ' + ivH, padL, cardY + 98);
+    // 分隔线
+    ctx.strokeStyle = '#F1F1F2'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(padL, cardY + 124); ctx.lineTo(padR, cardY + 124); ctx.stroke();
     // 次数暂不展示(计次规则尚未经真实购票验证, 避免误导)
-    // 目的地判定
-    const rows = (this.data.rows || []).slice(0, 5);
-    let y = cardY + 172;
+    // 目的地判定: 圆点 + 目的地名(左) / 票面(右, 右对齐) ; 中转另起一行缩进
+    let y = cardY + 162;
+    const yMax = cardY + cardH - 14;                 // 内容下界(超出则不再画, 防溢出卡片)
     ctx.font = '17px sans-serif';
     rows.forEach(row => {
+      const rowH = ROW_H + (row.hub ? HUB_H : 0);
+      if (y + rowH - ROW_H > yMax) return;           // 本行放不下则跳过(保持整洁)
       const cls = row.boxCls === 'ok' ? '#16a34a' : row.boxCls === 'edge' ? '#d97706' : row.boxCls === 'bad' ? '#dc2626' : '#71717a';
       ctx.fillStyle = cls;
-      ctx.beginPath(); ctx.arc(86, y - 5, 6, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.arc(padL + 10, y - 5, 6, 0, Math.PI * 2); ctx.fill();
+      // 目的地名
       ctx.fillStyle = '#18181b';
-      const label = (row.text || '') + (row.tkt ? '  ' + row.tkt : '');
-      ctx.fillText(label.length > 22 ? label.slice(0, 22) + '…' : label, 104, y);
-      y += 36;
+      let nm = row.text || '';
+      if (nm.length > 10) nm = nm.slice(0, 10) + '…';
+      ctx.fillText(nm, padL + 28, y);
+      // 票面(右对齐, 灰色); 过长时压缩到不与目的地名重叠
+      if (row.tkt) {
+        ctx.fillStyle = '#9CA3AF'; ctx.font = '15px sans-serif';
+        const tktW = ctx.measureText(row.tkt).width;
+        const minX = padL + 28 + ctx.measureText(nm).width + 12;
+        const tx = Math.max(minX, padR - tktW);
+        ctx.fillText(row.tkt, tx, y);
+        ctx.font = '17px sans-serif';
+      }
+      // 中转提示行: 缩进 + 橙色
+      if (row.hub && y + 24 <= yMax) {
+        ctx.fillStyle = '#C2410C'; ctx.font = '15px sans-serif';
+        ctx.fillText('⇄ 中转经 ' + row.hub, padL + 28, y + 24);
+        ctx.font = '17px sans-serif';
+        y += HUB_H;
+      }
+      y += ROW_H;
     });
-    if (!rows.length) { ctx.fillStyle = '#a1a1aa'; ctx.fillText(trips.length ? trips.join(' → ') : '（未添加目的地）', 104, y); }
+    if (!rows.length) {
+      ctx.fillStyle = '#a1a1aa'; ctx.font = '17px sans-serif';
+      const t = trips.length ? trips.join(' → ') : '（未添加目的地）';
+      ctx.fillText(t.length > 24 ? t.slice(0, 24) + '…' : t, padL, y);
+    }
     // 底部: 小程序码(支持扫码跳转) + 说明
     const qr = 150, qx = W - 40 - qr, qy = H - 40 - qr - 46;
     const drawText = () => {
