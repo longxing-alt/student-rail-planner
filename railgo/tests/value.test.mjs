@@ -599,6 +599,89 @@ test('D18. UI contract: 硬约束 reasons 与 codes 一一对应且可直接渲�
   });
 });
 
+/* ==================== 阶段7.6: 目的地卡理由分类零遗漏 ====================
+ * 背景: 目的地卡(renderDestination)与 StopBox 一样用 pos/neg 两个正则给 reasonCodes 分类。
+ * 7.5 修掉了 StopBox 的分类遗漏; 本阶段修目的地卡的对称遗漏(SAME_AS_ENDPOINT / LOW_EXPERIENCE),
+ * 并用源码级穷举锁住: Core 新增 code 而 UI 未分类时, D21 立即失败。 */
+
+/* 复刻 railgo.js renderDestination 的分类正则(与源码一致, 由 D21 校验源码本身) */
+const DEST_POS = /HIGH_EXPERIENCE|UNIQUENESS|REPRESENTATIVENESS|DIRECT|LOW_RAIL_TIME|DEST_DEPTH_ENOUGH/;
+const DEST_NEG = /LOW_EXPERIENCE|HIGH_RAIL_TIME|HIGH_RAIL_COST|HIGH_FATIGUE|NEEDS_TRANSFER|MANY_TRANSFERS|DEST_DEPTH_THIN|BUDGET_EXCEEDED|TIME_INFEASIBLE|RAILWAY_UNREACHABLE|PLACE_DATA_MISSING|SAME_AS_ENDPOINT/;
+const readRailgoJs = () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const { fileURLToPath } = require('node:url');
+  return fs.readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'railgo.js'), 'utf8');
+};
+
+test('D19. 目的地卡消费契约: 硬约束与 SAME_AS_ENDPOINT 均不得被分类静默丢弃', () => {
+  const hardCases = [
+    { id: 'nope', ctx: {}, code: 'PLACE_DATA_MISSING' },
+    { id: 'sjz', ctx: {}, code: 'SAME_AS_ENDPOINT' },       // 目的地=起点 → 此前被静默丢弃
+    { id: 'sh', ctx: { days: 1 }, code: 'TIME_INFEASIBLE' },
+    { id: 'sh', ctx: { budget: 300 }, code: 'BUDGET_EXCEEDED' },
+  ];
+  hardCases.forEach(({ id, ctx, code }) => {
+    const d = dev(id, ctx);
+    assert.ok(d.reasonCodes.includes(code), `${id} 应产出 ${code}`);
+    assert.ok(DEST_NEG.test(code), `${code} 必须被 neg 分类覆盖(否则 UI 不显示该原因)`);
+    const i = d.reasonCodes.indexOf(code);
+    assert.ok(typeof d.reasons[i] === 'string' && d.reasons[i].length > 0, `${code} 有核心文案`);
+    assert.ok(!/^[A-Z_]+$/.test(d.reasons[i]), `${code} 文案不得回退为英文码`);
+  });
+});
+
+test('D20. LOW_EXPERIENCE_VALUE 分类覆盖(契约级: 现有 mock 数据不可自然触发)', () => {
+  // 事实记录: 8 城 experience 均 >= experienceLow, 故该 code 当前不会出现(不伪造数据制造 PASS)
+  const T = C.VALUE_THRESHOLDS;
+  assert.ok(typeof T.experienceLow === 'number' && T.experienceLow > 0, '存在 experienceLow 阈值');
+  C.CITIES.forEach(c => {
+    const pv = C.placeValueOf(c.id);
+    assert.ok(pv.experience >= T.experienceLow, c.name + ' 体验值未低于阈值(该 code 不会自然触发)');
+  });
+  // 契约: 一旦触发, 必须被 neg 分类(不得像 7.5 之前的 StopBox 那样遗漏)
+  assert.ok(DEST_NEG.test('LOW_EXPERIENCE_VALUE'), 'neg 分类必须覆盖 LOW_EXPERIENCE_VALUE');
+  // 子串互斥: 不得与 HIGH_EXPERIENCE_VALUE 互相误伤
+  assert.ok(!DEST_NEG.test('HIGH_EXPERIENCE_VALUE'), 'HIGH_EXPERIENCE_VALUE 不得被 neg 误分类');
+  assert.ok(DEST_POS.test('HIGH_EXPERIENCE_VALUE'), 'HIGH_EXPERIENCE_VALUE 属于 pos');
+  // 源码级: 防止只改测试不改实现
+  const src = readRailgoJs();
+  const negLine = src.split('\n').find(l => l.includes('const neg = (d.reasonCodes || []).filter'));
+  assert.ok(negLine, '定位到 renderDestination 的 neg 分类行');
+  assert.ok(/LOW_EXPERIENCE/.test(negLine), '目的地卡 neg 分类必须包含 LOW_EXPERIENCE');
+  assert.ok(/SAME_AS_ENDPOINT/.test(negLine), '目的地卡 neg 分类必须包含 SAME_AS_ENDPOINT');
+});
+
+test('D21. 零遗漏穷举: destinationEvaluation 全部 code 均被 pos∪neg 覆盖(且不双重分类)', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const { fileURLToPath } = require('node:url');
+  const here = path.dirname(fileURLToPath(import.meta.url));
+  const coreSrc = fs.readFileSync(path.join(here, '..', 'railgo.core.js'), 'utf8');
+  const start = coreSrc.indexOf('function destinationEvaluation');
+  const end = coreSrc.indexOf('批量评估', start);
+  assert.ok(start > 0 && end > start, '定位到 destinationEvaluation 函数体');
+  const body = coreSrc.slice(start, end);
+  const codes = [...new Set([...body.matchAll(/codes\.push\('([A-Z_]+)'\)/g)].map(m => m[1]))];
+  assert.ok(codes.length >= 15, '提取到足够 code(当前 ' + codes.length + ' 个)');
+  // (a) 每个 code 至少被一侧覆盖
+  const dropped = codes.filter(k => !DEST_POS.test(k) && !DEST_NEG.test(k));
+  assert.deepStrictEqual(dropped, [], '以下 code 被 UI 静默丢弃: ' + dropped.join(', '));
+  // (b) 不得同时命中两侧(会造成同一条理由重复展示)
+  const both = codes.filter(k => DEST_POS.test(k) && DEST_NEG.test(k));
+  assert.deepStrictEqual(both, [], '以下 code 被双重分类(会重复展示): ' + both.join(', '));
+  // (c) 测试内正则与 railgo.js 源码一致(防漂移)
+  const src = readRailgoJs();
+  const posLine = src.split('\n').find(l => l.includes('const pos = (d.reasonCodes || []).filter'));
+  const negLine = src.split('\n').find(l => l.includes('const neg = (d.reasonCodes || []).filter'));
+  assert.ok(posLine && negLine, '定位到目的地卡 pos/neg 分类行');
+  assert.ok(posLine.includes(DEST_POS.source), 'pos 正则与实现一致');
+  assert.ok(negLine.includes(DEST_NEG.source), 'neg 正则与实现一致');
+  // (d) 全部 code 在 Core 中有正式文案(UI 无需自建第二套文案表)
+  const missing = codes.filter(k => !new RegExp(k + ":\\s*'").test(coreSrc));
+  assert.deepStrictEqual(missing, [], '以下 code 在 Core REASON_TEXT 中缺文案: ' + missing.join(', '));
+});
+
 /* ==================== 阶段7.4: 中途站点选择优化器 ==================== */
 
 test('O1. 空输入返回空结果(不崩溃)', () => {

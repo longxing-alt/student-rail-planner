@@ -107,10 +107,12 @@
     if (!d || !d.destName) { box.innerHTML = ''; return; }
     const REC = { high: '强烈推荐', medium: '值得考虑', low: '慎重考虑', avoid: '不建议' };
     const ra = d.railAccess || {};
+    // 阶段7.6: 文案统一由 Core 提供(reasonCodes 仅用于分类, 不在 UI 重新定义文案)
+    // 分类必须覆盖 destinationEvaluation 产出的全部 code, 不得静默丢弃(SAME_AS_ENDPOINT 曾漏)
     const reasonMap = {};
     (d.reasonCodes || []).forEach((k, i) => { reasonMap[k] = (d.reasons && d.reasons[i]) || k; });
     const pos = (d.reasonCodes || []).filter(k => /HIGH_EXPERIENCE|UNIQUENESS|REPRESENTATIVENESS|DIRECT|LOW_RAIL_TIME|DEST_DEPTH_ENOUGH/.test(k));
-    const neg = (d.reasonCodes || []).filter(k => /HIGH_RAIL_TIME|HIGH_RAIL_COST|HIGH_FATIGUE|NEEDS_TRANSFER|MANY_TRANSFERS|DEST_DEPTH_THIN|BUDGET_EXCEEDED|TIME_INFEASIBLE|RAILWAY_UNREACHABLE|PLACE_DATA_MISSING/.test(k));
+    const neg = (d.reasonCodes || []).filter(k => /LOW_EXPERIENCE|HIGH_RAIL_TIME|HIGH_RAIL_COST|HIGH_FATIGUE|NEEDS_TRANSFER|MANY_TRANSFERS|DEST_DEPTH_THIN|BUDGET_EXCEEDED|TIME_INFEASIBLE|RAILWAY_UNREACHABLE|PLACE_DATA_MISSING|SAME_AS_ENDPOINT/.test(k));
     box.innerHTML = '<div class="dest-card">' +
       '<div class="dt">📍 ' + esc(d.destName) + ' · 目的地价值 <span class="dscore">' + d.score + '</span> <span class="badge ' + (d.recommendation === 'high' ? 'ok' : d.recommendation === 'avoid' ? 'warn' : '') + '">' + (REC[d.recommendation] || d.recommendation) + '</span>' +
       '<span class="badge mock">与"方案匹配度"含义不同</span></div>' +
