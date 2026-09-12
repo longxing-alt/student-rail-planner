@@ -1,9 +1,14 @@
-# RailGo · 铁路学生出游智能规划（第一版 Demo）
+# RailGo · 铁路学生出游智能规划
 
 > 「让铁路成为旅行主线，让城市成为旅途节点。」
 
-RailGo 是挂在「学生票区间规划器」项目上、新增独立的**多目的地铁路出游规划 Demo**。
-本阶段只做 Web 独立页面，不触碰原学生票核心算法、不改动原 422 项测试、不进小程序。
+RailGo 是挂在「学生票区间规划器」项目上、独立的**多目的地铁路出游规划** Web 页面。
+不触碰原学生票核心算法、不改动原项目测试、不进小程序。
+
+当前状态: **阶段 7 封版** (HEAD `58c7a36`)。已完成 Value Engine、目的地价值、
+中途站点优化器, 以及三条 UI 理由路径的 Core 单一事实源统一。
+
+详见下方「阶段2-6」「阶段7」章节。
 
 ## 项目目的
 
@@ -12,10 +17,10 @@ RailGo 是挂在「学生票区间规划器」项目上、新增独立的**多�
 - 多目的地 *按用户顺序* 或 *智能优化* 排序
 - 城际铁路路线（自己的铁路图 + Dijkstra，**不用百度负责铁路算法**）
 - 中途城市主动推荐（时间充裕时提示可加站，如 石家庄→上海 推荐 济南）
-- 城市内部游玩规划（车站→景点→餐饮→住宿，分 Day）
+- 城市内部游玩规划（车站→景点→餐饮→住宿，分 Day），可接真实 POI
 - 预算与时间可行性检查（超预算自动调整 / 时间不足提示减城）
-- 综合推荐指数（0-100，可解释明细）
-- 演示地图（Svg）；配置百度 AK 后可升级真实地图
+- 三套方案候选（综合/省钱/轻松），各带可解释分数明细
+- 配置百度 AK 后使用真实地图与 POI，无 AK 自动降级演示模式
 
 ## 运行方式
 
@@ -28,11 +33,12 @@ RailGo 是挂在「学生票区间规划器」项目上、新增独立的**多�
 railgo/
 ├── railgo.html       入口页面（表单/结果/时间轴/地图/详情）
 ├── railgo.css        样式
-├── railgo.js         页面交互逻辑
-├── railgo.core.js    核心算法（Dijkstra/排序/评分/预算/时间/中途推荐，UMD 可测试）
+├── railgo.js         页面交互逻辑（只消费 Core 结果, 不重算业务语义）
+├── railgo.core.js    核心算法（Dijkstra/排序/评分/可行性/Value Engine，UMD 可测试）
 ├── mock-data.js      模拟数据（城市/铁路边/景点/餐饮/住宿，全部 source:"mock"）
 ├── baidu-api.js      百度地图 API 抽象层（无 AK 自动降级，不崩溃）
-└── tests/railgo.test.mjs   11 项独立测试
+├── baidu-map.js      地图渲染层
+└── tests/            10 套 176 项独立测试
 ```
 
 ## 模拟数据（重要）
@@ -74,6 +80,60 @@ railgo/
 
 测试: railgo/tests/ 共 21 项(核心 11 + 候选 10), 全部独立于原项目 422 项。
 
+## 阶段2-6: 地图/坐标/POI (已完成)
+
+- **阶段2-3**: 百度地图 JSAPI 最小可用接入 + 铁路旅行方案地图可视化(仅调用地图层, 不含 API 细节于 railgo.js)
+- **阶段4**: 坐标体系确认 + 坐标处理层(地理编码/缓存/容错, WGS84↔BD09 统一入口)
+- **阶段5**: POI 地点检索层(标准化/TTL 缓存/竞态处理/overlay 隔离); 真实通道为 `BMapGL.LocalSearch`
+- **阶段5.2**: POI 融入旅行方案(城市 Day 行程由真实 POI 驱动); 城市内步行路线接入
+- **阶段6**: 城市内路线行展示 + 方案切换后 DayPlan/POI 重建
+
+无 AK 时全部降级为演示数据, 功能完整可预览; 真实 API 仅在明确需要时调用(见下方"网络请求事实")。
+
+## 阶段7: Value Engine 与理由体系 (已完成)
+
+### 7.1 / 7.2 Value Engine
+
+`placeValueOf()`(地点价值) + `evaluateStop()`(沿途增量价值) + 偏好体系(7 维 + 节奏映射),
+评分按"时间效率/体验/铁路适配/预算匹配/便利/代表性"归一加权, 再扣疲劳/机会成本/换乘惩罚。
+
+### 7.3 目的地价值 `destinationEvaluation()`
+
+终点城市的**绝对**旅行价值, 与沿途 TripEvaluation 严格区分:
+- 含 `railAccess`(起点→终点绝对铁路质量: 可达/直达/时长/里程/票价/换乘)
+- **无** detour / addedKm / addedRailH / addedFare(终点不存在"绕行"概念)
+- **无** opportunityCost(终点不是被插入的可选项)
+
+UI: 目的地价值卡片, 明确标注"与方案匹配度含义不同"。
+
+### 7.4 中途站点选择优化器 `optimizeStopSelection()`
+
+复用 `evaluateStop` 做贪心 + 边际评估, 每次选择"增量价值/增量成本"最高的下一站;
+返回 `selected` / `rejected` / `remainingDays` / `remainingBudget`。
+
+### 7.5-7.8 理由文案统一消费 Core(单一事实源)
+
+三条 UI 路径(StopBox / DestinationBox / optBox)统一改为**逐条消费 Core `reasons`**,
+UI 不再自建中文 reason 文案表, `reasonCodes` 仅用于 ✓/⚠ 分类:
+
+- 7.5: StopBox 删除自建文案映射表, 改消费 Core reasons; 修复 `LOW_EXPERIENCE_VALUE` 分类遗漏
+- 7.6: DestinationBox 分类补齐 `LOW_EXPERIENCE` / `SAME_AS_ENDPOINT`(此前被静默丢弃)
+- 7.7: optBox 由"只显示 `reasons[0]`"改为全量展示(此前其余理由被丢弃)
+- 7.8: StopBox/optBox 分类补齐 4 个硬约束 code + `SAME_AS_ENDPOINT`
+
+**硬约束**(`BUDGET_EXCEEDED` / `TIME_INFEASIBLE` / `RAILWAY_UNREACHABLE` / `PLACE_DATA_MISSING`)
+由 Core 判定, 任何 UI 路径都不得隐藏。
+
+## 三条 score 的语义边界(禁止混用)
+
+| 分数 | 含义 | 产出函数 | UI 标签 |
+|---|---|---|---|
+| 方案匹配度 | 某套方案整体的匹配程度 | `routeScore` / 候选 `score` | 「推荐指数」 |
+| 目的地价值 | 终点城市的**绝对**旅行价值 | `destinationEvaluation` | 「目的地价值」 |
+| 沿途值得去 | 沿途城市插入本行程的**增量**价值 | `evaluateStop` | 「值得去」 |
+
+三者**不得相加、不得互相覆盖、不得互相替代**; UI 只消费 Core 结果, 不重算 score。
+
 ## 当前不能实现
 
 - 真实车次时刻表 / 实时票价 / 余票查询（无授权数据源）
@@ -83,17 +143,32 @@ railgo/
 
 ## 下一阶段计划
 
-- P1：接入百度 POI 真实检索（安全字段：名称/坐标/分类/地址）
-- P1：真实坐标系统一（WGS84↔BD09 转换 + 地理编码）
 - P1：扩展城市/景点数据（手工整理全国热门城）
-- P2：百度路线规划（步行/公交）真实接入
+- P2：百度路线规划（步行/公交）在更多城市启用
 - P2：把 RailGo 作为 Web 独立页并入主项目部署（GitHub Pages）
 
 ## 测试
 
 ```
-node --test railgo/tests/railgo.test.mjs railgo/tests/candidate.test.mjs
+node --test railgo/tests/*.test.mjs
 ```
-21 项全过：用户顺序/智能排序/中途推荐/时间不足/预算不足/评分/城市不存在/目的地重复/
-天数不足/百度未配置降级/页面级渲染 + 三方案候选(结构契约/分数范围/省钱删城/停留分配/警告)。
+
+**176 项全过**(10 套): value 76 / localsearch 16 / poi 15 / route-plan 12 / route 12 /
+railgo 11 / candidate 10 / map 10 / geo 9 / poi-plan 5。
+不依赖、不改动原项目测试(原项目 5 套 455 项断言 + check-v2 回测 63 吻合/0 不符 均独立全绿)。
+
+## 网络请求事实(诚实的边界说明)
+
+- 无 AK / 未触发检索时: **真实业务 API 请求 0**(地图 JSAPI 底图加载除外)
+- 城际铁路算法永远本地(自己的铁路图 + Dijkstra), 不调用百度
+- 百度 API 仅用于城市内 POI / 路线, 且必须经 `baidu-api.js` 抽象层, UI 不得直连
+- 已知事实(非缺陷): `confidence` 字段在 Core 中完整产出并有契约测试, 但 UI 未展示 ——
+  现有 8 城全为 `medium`, 展示无区分意义; 待未来数据分级变化时再考虑
+
+## 已知环境限制
+
+- 自动化浏览器(CUA 坐标点击)在页面滚动后可能失效, 验收时改用页面内派发用户事件序列
+  (属**合成事件验证**, 非真实坐标点击)
+- 部分 code(`SAME_AS_ENDPOINT` / `LOW_EXPERIENCE_VALUE`)在当前 mock 数据下不可自然触发,
+  仅有契约级测试覆盖, 不伪造数据制造 PASS
 不依赖、不改动原项目 422 项测试。
