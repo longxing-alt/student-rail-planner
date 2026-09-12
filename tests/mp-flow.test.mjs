@@ -19,18 +19,43 @@ const logic = loadLogic();
 
 /* ---- wx 模拟 ---- */
 const storage = {};
+const makeQueryResult = () => (fakeWx._qnode ? [fakeWx._qnode] : [{ top: 100, left: 20, width: 320, height: 60 }, { scrollTop: 0 }]);
+
 const fakeWx = {
   getStorageSync: () => undefined,
   setStorageSync: () => { },
   pageScrollTo: () => { },
   showModal: o => { o.success && o.success({ confirm: true }); },
+  getWindowInfo: () => ({ dpr: 2, windowWidth: 375, windowHeight: 667 }),
+  getSetting: o => { o.success && o.success({ authSetting: { 'scope.writePhotosAlbum': true } }); },
+  openSetting: o => { o.success && o.success({ authSetting: {} }); },
+  saveImageToPhotosAlbum: o => { o.success && o.success({ errMsg: 'saveImageToPhotosAlbum:ok' }); },
+  canvasToTempFilePath: o => { o.success && o.success({ tempFilePath: '/tmp/poster.png' }); },
+  _qnode: null,
   createSelectorQuery: () => {
     const tasks = [];
     const q = {
-      select: () => ({ boundingClientRect: c => { tasks.push(() => c && c({ top: 100, left: 20, width: 320, height: 60 })); return q; } }),
+      select: () => ({
+        boundingClientRect: c => { tasks.push(() => c && c({ top: 100, left: 20, width: 320, height: 60 })); return q; },
+        fields: (optOrCb, maybeCb) => {
+          const c = (typeof optOrCb === 'function') ? optOrCb : maybeCb;
+          const node = {
+            width: 0, height: 0,
+            getContext: () => ({
+              scale: () => { }, createLinearGradient: () => ({ addColorStop: () => { } }),
+              fillRect: () => { }, beginPath: () => { }, moveTo: () => { }, lineTo: () => { },
+              quadraticCurveTo: () => { }, closePath: () => { }, fill: () => { }, arc: () => { },
+              fillText: () => { }, fillStyle: '', font: '',
+            }),
+          };
+          fakeWx._qnode = { node: node, width: 600, height: 900 };
+          tasks.push(() => c && c({ node: node, width: 600, height: 900 }));
+          return q;
+        },
+      }),
       selectAll: () => ({ boundingClientRect: c => { tasks.push(() => c && c([0, 1, 2, 3, 4, 5, 6].map(i => ({ top: i * 68, bottom: (i + 1) * 68, left: 20, width: 320 })))); return q; } }),
       selectViewport: () => ({ scrollOffset: c => { tasks.push(() => c && c({ scrollTop: 0 })); return q; } }),
-      exec: cb => { tasks.forEach(t => t()); if (cb) cb([{ top: 100, left: 20, width: 320, height: 60 }, { scrollTop: 0 }]); },
+      exec: cb => { tasks.forEach(t => t()); if (cb) cb(makeQueryResult()); },
     };
     return q;
   },
@@ -199,6 +224,27 @@ const flow = async () => {
   p9b.changeSchool.call(p9b);
   check('修改学校有二次确认弹窗', !!modalArgs && /修改学校/.test(modalArgs.title || '') && /学信网/.test(modalArgs.content || ''), modalArgs && modalArgs.title);
   check('确认后清空学校待重填', logic.state.school === null && p9b.data.showDepart === false && p9b.data.schoolInput === '');
+
+  console.log('\n== 场景10: 图片分享(海报) ==');
+  fakeWx.getStorageSync = () => '';
+  resetState();
+  const p10 = inst();
+  await p10.onLoad.call(p10); await sync();
+  p10.setData({ schoolInput: '北京' }); await p10.nextSchool.call(p10); await sync();
+  p10.setData({ departInput: '石家庄' }); await p10.nextDepart.call(p10); await sync();
+  p10.setData({ tripInput: '武汉' }); await p10.addTrip.call(p10); await sync();
+  await p10.onPlan.call(p10); await sync();
+  check('海报初始未打开', p10.data.poster.show === false);
+  p10.openPoster.call(p10); await sync();
+  check('点“生成图片”打开海报弹窗', p10.data.poster.show === true);
+  check('canvas 绘制后导出临时图片', p10.data.poster.path === '/tmp/poster.png', p10.data.poster.path);
+  let saved = false;
+  fakeWx.saveImageToPhotosAlbum = o => { saved = true; o.success && o.success({ errMsg: 'ok' }); };
+  p10.savePoster.call(p10); await sync();
+  check('保存到相册已调用', saved === true);
+  check('保存后状态提示成功', /已保存/.test(p10.data.status || ''), p10.data.status);
+  p10.closePoster.call(p10);
+  check('关闭海报弹窗', p10.data.poster.show === false);
 
   console.log('\n结果: ' + passed + ' 通过, ' + failed + ' 失败');
   process.exit(failed ? 1 : 0);

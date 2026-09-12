@@ -1,3 +1,9 @@
+/* 图片分享海报 */
+.poster-dialog { max-width: 640rpx; }
+.poster-wrap { display: flex; align-items: center; justify-content: center; min-height: 320rpx; }
+.poster-img { width: 100%; border-radius: 12px; }
+.poster-loading { font-size: 13px; color: #9ca3af; padding: 60rpx 0; }
+.poster-canvas { position: fixed; left: -9999px; top: 0; width: 600px; height: 900px; }
 .link { color: #3a5bd9; font-weight: 700; }
 .share-row { display: flex; align-items: center; gap: 10px; margin-top: 10px; flex-wrap: wrap; }
 .share-hint { font-size: 22rpx; color: #8a8f9c; }

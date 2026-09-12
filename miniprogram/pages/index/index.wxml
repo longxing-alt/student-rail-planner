@@ -89,11 +89,12 @@
           <view class="chip green" wx:if="{{okN+edgeN>0}}">整条联程 {{used}} 次（5 天内）</view>
           <view class="chip gray" wx:if="{{okN+edgeN==0}}">全部需全价</view>
         </view>
-        <!-- 分享: 点开后直接复现当前方案(学校/出发地/目的地随分享参数带入) -->
+        <!-- 分享: ①链接 点开直达复现方案 ②图片 生成海报保存/转发 -->
         <view class="share-row">
-          <button hover-class="bh" class="btn ghost sm" open-type="share">📤 分享我的方案</button>
-          <text class="share-hint">对方点开即可看到同款区间与判定结果</text>
+          <button hover-class="bh" class="btn ghost sm" open-type="share">📤 分享链接</button>
+          <button hover-class="bh" class="btn ghost sm" bindtap="openPoster">🖼 生成图片</button>
         </view>
+        <view class="share-hint">链接：对方点开直接看到同款区间与判定 · 图片：可保存相册发朋友圈</view>
       </view>
     </view>
   </view>
@@ -177,6 +178,24 @@
         <button hover-class="bh" class="btn primary sm" wx:if="{{tfm.step<4}}" catchtap="tfmNext">下一步</button>
         <button hover-class="bh" class="btn primary sm" wx:if="{{tfm.step===4}}" catchtap="closeTfm">知道了</button>
       </view>
+    </view>
+  </view>
+
+  <!-- 图片分享海报弹窗 -->
+  <view class="mask" wx:if="{{poster.show}}" bindtap="closePoster">
+    <view class="dialog poster-dialog" catchtap="noop">
+      <view class="dialog-title">🖼 分享图片<text class="dialog-close" catchtap="closePoster">✕</text></view>
+      <view class="poster-wrap">
+        <image wx:if="{{poster.path}}" class="poster-img" src="{{poster.path}}" mode="widthFix"/>
+        <view wx:else class="poster-loading">正在生成海报…</view>
+        <canvas type="2d" id="posterCanvas" class="poster-canvas"></canvas>
+      </view>
+      <view class="dialog-btns">
+        <button hover-class="bh" class="btn ghost sm" catchtap="openPoster">↻ 重新生成</button>
+        <view class="gspacer"></view>
+        <button hover-class="bh" class="btn primary sm" catchtap="savePoster" disabled="{{!poster.path||poster.saving}}">{{poster.saving?'保存中…':'保存到相册'}}</button>
+      </view>
+      <view class="m-note">保存后可在微信中发给好友或发朋友圈；图片同样只含区间与判定，不含个人身份信息。</view>
     </view>
   </view>
 

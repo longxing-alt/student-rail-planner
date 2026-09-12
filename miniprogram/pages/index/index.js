@@ -159,6 +159,7 @@ Page({
     cntTip: { show: false, lines: [], used: '–', budget: 4, remain: '–' },
     status: '',
     modal: { show: false, suggest: null, g2: 0, e2: 0, b2: 0 },
+    poster: { show: false, path: '', saving: false },
     dbg: { on: false, badges: [], showLegend: false,
       list: [
         { n: 1, name: '品牌头' }, { n: 2, name: '状态条' }, { n: 3, name: '学校卡片' },
@@ -258,6 +259,138 @@ Page({
         this.setData({ schoolInput: '', ivS: '学校', showDepart: false, showDest: false, planned: false });
         this.setStatus('请输入新的学校城市');
       },
+    });
+  },
+
+  /* ---------- 图片分享(海报): 生成 → 预览 → 保存相册 ---------- */
+  openPoster() {
+    if (!state.school || (!state.depart && !state.home)) { this.setStatus('先完成学校与出发地，再生成海报'); return; }
+    this.setData({ 'poster.show': true, 'poster.path': '', 'poster.saving': false });
+    this.drawPoster();
+  },
+  closePoster() { this.setData({ 'poster.show': false }); },
+
+  /* 用 canvas 2d 绘制方案海报(纯本地绘制, 不联网) */
+  drawPoster() {
+    const self = this;
+    const q = wx.createSelectorQuery();
+    q.select('#posterCanvas').fields({ node: true, size: true }).exec(res => {
+      const info = res && res[0];
+      if (!info || !info.node) { self.setStatus('海报生成失败(画布不可用)'); return; }
+      const canvas = info.node;
+      const W = 600, H = 900;                 // 设计尺寸(px)
+      const dpr = (wx.getWindowInfo && wx.getWindowInfo().dpr) || 2;
+      canvas.width = W * dpr; canvas.height = H * dpr;
+      const ctx = canvas.getContext('2d');
+      ctx.scale(dpr, dpr);
+      self.paintPoster(ctx, W, H, () => {
+        wx.canvasToTempFilePath({
+          canvas: canvas,
+          success: r => self.setData({ 'poster.path': r.tempFilePath }),
+          fail: () => self.setStatus('海报导出失败，请重试'),
+        });
+      });
+    });
+  },
+
+  paintPoster(ctx, W, H, done) {
+    const S = state.school, Hh = state.depart || state.home;
+    const planned = this.data.planned;
+    const trips = state.trips.map(t => t.text);
+    const ivH = state.home ? state.home.name : (Hh ? Hh.name : '出发地');
+    // 背景
+    const grad = ctx.createLinearGradient(0, 0, 0, H);
+    grad.addColorStop(0, '#1e3a8a'); grad.addColorStop(0.5, '#2b4bb5'); grad.addColorStop(1, '#3a5bd9');
+    ctx.fillStyle = grad; ctx.fillRect(0, 0, W, H);
+    // 头部
+    ctx.fillStyle = 'rgba(255,255,255,.92)';
+    ctx.font = 'bold 30px sans-serif'; ctx.fillText('学生票 · 区间规划', 40, 76);
+    ctx.font = '17px sans-serif'; ctx.fillStyle = 'rgba(255,255,255,.75)';
+    ctx.fillText('我的优惠区间与行程判定', 40, 108);
+    // 白卡片
+    const cardY = 150, cardH = 470;
+    ctx.fillStyle = '#ffffff';
+    const r = 20;
+    ctx.beginPath();
+    ctx.moveTo(40 + r, cardY); ctx.lineTo(W - 40 - r, cardY);
+    ctx.quadraticCurveTo(W - 40, cardY, W - 40, cardY + r);
+    ctx.lineTo(W - 40, cardY + cardH - r); ctx.quadraticCurveTo(W - 40, cardY + cardH, W - 40 - r, cardY + cardH);
+    ctx.lineTo(40 + r, cardY + cardH); ctx.quadraticCurveTo(40, cardY + cardH, 40, cardY + cardH - r);
+    ctx.lineTo(40, cardY + r); ctx.quadraticCurveTo(40, cardY, 40 + r, cardY);
+    ctx.closePath(); ctx.fill();
+    // 区间
+    ctx.fillStyle = '#71717a'; ctx.font = '16px sans-serif';
+    ctx.fillText('优惠区间', 76, cardY + 52);
+    ctx.fillStyle = '#18181b'; ctx.font = 'bold 34px sans-serif';
+    ctx.fillText(S.name + ' ⇄ ' + ivH, 76, cardY + 100);
+    // 次数
+    if (planned) {
+      ctx.fillStyle = '#71717a'; ctx.font = '16px sans-serif';
+      ctx.fillText('本行程消耗', 76, cardY + 152);
+      ctx.fillStyle = '#3a5bd9'; ctx.font = 'bold 52px sans-serif';
+      ctx.fillText(String(this.data.used), 76, cardY + 208);
+      ctx.fillStyle = '#71717a'; ctx.font = '18px sans-serif';
+      ctx.fillText('次 / 预算 ' + this.data.budget + ' 次 · 剩余 ' + this.data.remain + ' 次', 150, cardY + 205);
+    }
+    // 目的地判定
+    const rows = (this.data.rows || []).slice(0, 5);
+    let y = cardY + 258;
+    ctx.font = '17px sans-serif';
+    rows.forEach(row => {
+      const cls = row.boxCls === 'ok' ? '#16a34a' : row.boxCls === 'edge' ? '#d97706' : row.boxCls === 'bad' ? '#dc2626' : '#71717a';
+      ctx.fillStyle = cls;
+      ctx.beginPath(); ctx.arc(86, y - 5, 6, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#18181b';
+      const label = (row.text || '') + (row.tkt ? '  ' + row.tkt : '');
+      ctx.fillText(label.length > 22 ? label.slice(0, 22) + '…' : label, 104, y);
+      y += 36;
+    });
+    if (!rows.length) { ctx.fillStyle = '#a1a1aa'; ctx.fillText(trips.length ? trips.join(' → ') : '（未添加目的地）', 104, y); }
+    // 底部
+    ctx.fillStyle = 'rgba(255,255,255,.85)'; ctx.font = '16px sans-serif';
+    ctx.fillText('扫码或搜索「学生票区间规划器」自查你的区间', 40, H - 96);
+    ctx.fillStyle = 'rgba(255,255,255,.6)'; ctx.font = '14px sans-serif';
+    ctx.fillText('判定基于实测数据推算，仅供参考；实际以 12306 出票为准', 40, H - 64);
+    ctx.fillText('冀ICP备2026033460号-1', 40, H - 38);
+    if (done) done();
+  },
+
+  /* 保存海报到相册(含授权处理) */
+  savePoster() {
+    const self = this;
+    const path = this.data.poster.path;
+    if (!path) { this.setStatus('海报还没生成好，请稍候'); return; }
+    this.setData({ 'poster.saving': true });
+    const doSave = () => wx.saveImageToPhotosAlbum({
+      filePath: path,
+      success: () => { self.setData({ 'poster.saving': false }); self.setStatus('已保存到相册，可发到微信/朋友圈'); },
+      fail: err => {
+        self.setData({ 'poster.saving': false });
+        const msg = (err && err.errMsg) || '';
+        if (/auth deny|authorize|permission/i.test(msg)) {
+          wx.showModal({
+            title: '需要相册权限', content: '保存图片需要"保存到相册"权限，是否前往设置开启？',
+            confirmText: '去设置', cancelText: '取消',
+            success: r2 => { if (r2.confirm) wx.openSetting({}); },
+          });
+        } else if (!/cancel/i.test(msg)) { self.setStatus('保存失败：' + msg); }
+      },
+    });
+    wx.getSetting({
+      success: res => {
+        const st = res && res.authSetting ? res.authSetting['scope.writePhotosAlbum'] : undefined;
+        if (st === false) {
+          wx.showModal({
+            title: '需要相册权限', content: '保存图片需要"保存到相册"权限，是否前往设置开启？',
+            confirmText: '去设置', cancelText: '取消',
+            success: r2 => { if (r2.confirm) wx.openSetting({}); },
+          });
+          self.setData({ 'poster.saving': false });
+          return;
+        }
+        doSave();
+      },
+      fail: () => doSave(),
     });
   },
 
