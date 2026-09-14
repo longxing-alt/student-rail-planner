@@ -62,9 +62,21 @@ page { background: #F0F2F5; }
 .field-hint { font-size: 22rpx; color: #9CA3AF; margin: 14rpx 0 4rpx; line-height: 1.6; }
 .field-hint .hl { color: #2563EB; font-weight: 600; }
 
-/* 首次进入: 一键示例卡 */
+/* 首次进入: 引导 + 一键示例卡 */
 .demo-tip { font-size: 24rpx; color: #6B7280; line-height: 1.7; margin-bottom: 20rpx; }
 .demo-or { font-size: 22rpx; color: #9CA3AF; text-align: center; margin-top: 20rpx; }
+
+/* 引导块 */
+.guide-block { background: #F9FAFB; border: 1rpx solid #F3F4F6; border-radius: 20rpx; padding: 22rpx 24rpx; margin-bottom: 18rpx; }
+.guide-title { font-size: 26rpx; font-weight: 700; color: #111827; margin-bottom: 14rpx; }
+.guide-item { display: flex; align-items: flex-start; font-size: 25rpx; color: #4B5563; line-height: 1.65; margin-top: 12rpx; }
+.guide-item .guide-no {
+  flex: 0 0 auto; width: 34rpx; height: 34rpx; border-radius: 99rpx; background: #DBEAFE; color: #2563EB;
+  font-size: 21rpx; font-weight: 800; text-align: center; line-height: 34rpx; margin: 3rpx 12rpx 0 0;
+}
+.guide-item b { color: #111827; }
+.guide-sub { display: block; font-size: 22rpx; color: #9CA3AF; margin-top: 2rpx; }
+.guide-item .hl { color: #2563EB; font-weight: 600; }
 
 /* 按钮 */
 .btn {
@@ -233,6 +245,8 @@ page { background: #F0F2F5; }
 .m-line .red { color: #EF4444; font-weight: 600; }
 .m-line.warn { color: #C2410C; background: #FFF7ED; border: 1rpx solid #FED7AA; border-radius: 14rpx; padding: 14rpx 18rpx; margin-top: 12rpx; }
 .m-best { color: #2563EB; font-weight: 800; background: #EFF6FF; border-radius: 8rpx; padding: 2rpx 10rpx; }
+/* 弹窗内的"怎么做"主提示(醒目, 小白一眼看到) */
+.m-line.big-tip { font-size: 29rpx; color: #111827; background: #EFF6FF; border: 1rpx solid #BFDBFE; border-radius: 16rpx; padding: 18rpx 20rpx; margin: 16rpx 0; line-height: 1.7; }
 .g2 { color: #15803D; font-weight: 700; }
 .e2 { color: #C2410C; font-weight: 700; }
 .b2 { color: #B91C1C; font-weight: 700; }

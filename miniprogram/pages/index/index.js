@@ -655,12 +655,19 @@ Page({
     const suggest = best && best.st.name !== H.name ? best.st : null;
     let modal = { show: true, suggest: null, g2: 0, e2: 0, b2: 0, isDest: false, altern: '', dests: [] };
     this.setData({ 'modalFlag': '' });
+    let ccAfterSuggest = null;
     if (suggest) {
       const H2 = { name: suggest.name, city: suggest.city, lat: suggest.lat, lon: suggest.lon };
       const cc2 = mpChain(S, H2, state.trips, true);
-      const j2 = cc2 ? cc2.segs.map(sg => (sg.inInt ? 2 : 0)) : [];
+      // 三段判定: 直达=绿(2) / 可中转=橙(1) / 超区间=红(0)
+      // (此前只判 inInt, 把"可中转"错算成红, 导致预览框出现 1绿/0橙/0红 与"中转可出"并存)
+      const j2 = cc2 ? cc2.segs.map(sg => (sg.inInt ? 2 : (sg.hub ? 1 : 0))) : [];
       modal = { show: true, suggest,
-        g2: j2.filter(x => x === 2).length, e2: 0, b2: j2.filter(x => x === 0).length };
+        g2: j2.filter(x => x === 2).length,
+        e2: j2.filter(x => x === 1).length,
+        b2: j2.filter(x => x === 0).length };
+      // 采用推荐区间后的判定, 供下方明细复用(局部变量, 不进 setData)
+      ccAfterSuggest = cc2;
       // 推荐端点恰为目的地 → 可能绕路, 给出就近替代
       modal.isDest = state.trips.some(t => t.station && (t.station.name === suggest.name || t.station.city === suggest.city));
       const curCover = cc0 ? cc0.okN : 0;
@@ -681,9 +688,12 @@ Page({
       if (alt) modal.altern = alt[0] + ' · ' + alt[1] + '（覆盖 ' + aCover + '，出发地不动）';
     }
     // 每段当前判定(颜色), 指明哪里不行(直达/中转可出/超区间)
+    // 每段判定(颜色), 指明哪里不行(直达/需换车/买不了)
+    // 统一用"推荐区间(cc2)"的数据源, 与上面的 g2/e2/b2 统计保持一致, 避免用户看到自相矛盾的数字
+    const ccForDests = ccAfterSuggest || cc0;
     modal.dests = state.trips.map((t, i) => {
-      const sg = cc0 ? cc0.segs[i] : null;
-      const c = sg && sg.inInt ? '区间内·可买' : sg && sg.hub ? '中转可出·经' + sg.hub : '超区间·不能买';
+      const sg = ccForDests ? ccForDests.segs[i] : null;
+      const c = sg && sg.inInt ? '能买直达' : sg && sg.hub ? '要换车·经' + sg.hub : '买不了学生票';
       const cls = sg && sg.inInt ? 'g2' : sg && sg.hub ? 'e2' : 'b2';
       return { text: t.text, c, cls };
     });
@@ -781,7 +791,13 @@ Page({
     const segOk = i => { const sg = segOf(i); return !!(sg && (sg.inInt || sg.hub)); };
     const segHub = i => { const sg = segOf(i); return !!(sg && sg.hub); };
     if (cc) cc.segs.forEach((sg2, i2) => { if (this.hubOverride && this.hubOverride[i2]) { sg2.hub = this.hubOverride[i2]; sg2.ok = sg2.inInt || !!sg2.hub; } });
-    const segTxt = i => { const sg = segOf(i); return sg ? (sg.inInt ? '区间内' : sg.hub ? (sg.lowConf ? '⚠ 近邻中转·未实测' : '⇄ 可中转哪里出票·推荐' + sg.hub) : '区间外·需购成人票') : ''; };
+    const segTxt = i => {
+      const sg = segOf(i);
+      if (!sg) return '';
+      if (sg.inInt) return '直达·可买学生票';
+      if (sg.hub) return sg.lowConf ? '需中转·经' + sg.hub + '（未实测）' : '需中转·经' + sg.hub;
+      return '区间外·不能买学生票';
+    };
     this._cc = cc;
     // 区间线圆点
     const ivDots = state.trips.map((t, i) => {
@@ -817,7 +833,8 @@ Page({
         key: 't' + t.id, id: t.id, iIdx: i, text: t.text,
         boxCls: j === 2 ? 'ok' : j === 1 ? 'edge' : j === 0 ? 'bad' : '',
         ring: plannedNow && j >= 0 ? (j === 2 ? 'ok' : j === 1 ? 'edge' : 'bad') : 'none', // 规划前圆点透明(不增删节点, 防渲染层错误)
-        status: plannedNow && j >= 1 ? segTxt(i) : '',
+        // 规划后每行都给出明确结论(含"买不了"的红色段), 小白才知道为什么不行
+        status: plannedNow && j >= 0 ? segTxt(i) : '',
         hub: plannedNow && hub ? sg.hub : '', hubs: plannedNow && hubChips.length ? hubChips : [],
         tkt: (plannedNow && sg && sg.a && sg.b) ? (sg.a.name + '→' + sg.b.name) : '',
         anim: false,
