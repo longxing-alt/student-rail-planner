@@ -175,7 +175,6 @@
         <block wx:if="{{modal.suggest}}">
           <view class="m-line">你的优惠区间<b>太小了</b>，有些想去的地方买不了学生票（<text class="b2">红</text>）或要中途换车（<text class="e2">橙</text>）。</view>
           <view class="m-line big-tip">👉 把「家庭所在地」改成：<text class="m-best">{{modal.suggest.name}} · {{modal.suggest.city}}</text></view>
-          <view class="m-line warn" wx:if="{{modal.isDest}}">⚠️ 这个推荐点就是你的目的地之一，当"家"会绕路；建议改用就近的：<b>{{modal.altern}}</b></view>
           <view class="preview-box">
             <view class="pv-title">改完后这 {{tripCount}} 个地方变成：<text class="g2">{{modal.g2}} 个能买直达</text> / <text class="e2">{{modal.e2}} 个要换车</text> / <text class="b2">{{modal.b2}} 个仍买不了</text></view>
             <view class="pv-list" wx:if="{{modal.dests.length}}">

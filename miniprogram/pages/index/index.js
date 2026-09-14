@@ -133,16 +133,21 @@ function mpChain(S, H, trips, fast) {
   return logic.chainV2(S, H, arr.slice(0,-1), dep, arr[arr.length-1], fast);
 }
 
-/* 最优区间端点(联程): 枚举全部车站, 联程段覆盖(okN)优先 → 平局按 段端点p/L最小 → 距当前端点近 */
+/* 最优区间端点(联程): 枚举全部车站, 联程段覆盖(okN)优先 → 平局按 段端点p/L最小 → 距当前端点近
+ * 排除项: 学校同城 / 当前家同城 / 任意目的地同城 —— 把"家"安在想去的地方语义错误,
+ *        只是让覆盖数字变好看, 会让用户误以为区间变大就都能买 */
 function smartBest(S, H, trips) {
   const sts = trips.map(t => t.station);
   const curCover = mpChain(S, H, trips, true).okN;
+  const destCities = {};
+  trips.forEach(t => { if (t.station && t.station.city) destCities[t.station.city] = 1; });
   let best = null;
   for (const s of STATIONS) {
     if (s[0] === S.name) continue;
     if (!logic.railAdj().nodes.has(s[1])) continue; // 推荐只考虑通道网内端点(图外支线/海岛可手动填写)
     if (H && s[1] === H.city) continue; // 不再推荐当前家同城
     if (S && s[1] === S.city) continue; // 家不能与学校同城(北京⇄北京 无法认定); 推荐跨城端点
+    if (destCities[s[1]]) continue;     // 不推荐目的地作为"家"(否则会建议把家安在想去的城市)
     const H2 = { name: s[0], city: s[1], lat: s[2], lon: s[3] };
     const cc = mpChain(S, H2, trips, true);
     const cover = cc ? cc.okN : 0;
@@ -653,7 +658,7 @@ Page({
     // 推荐区间端点(联程段覆盖)
     const best = smartBest(S, H, state.trips);
     const suggest = best && best.st.name !== H.name ? best.st : null;
-    let modal = { show: true, suggest: null, g2: 0, e2: 0, b2: 0, isDest: false, altern: '', dests: [] };
+    let modal = { show: true, suggest: null, g2: 0, e2: 0, b2: 0, dests: [] };
     this.setData({ 'modalFlag': '' });
     let ccAfterSuggest = null;
     if (suggest) {
@@ -668,24 +673,6 @@ Page({
         b2: j2.filter(x => x === 0).length };
       // 采用推荐区间后的判定, 供下方明细复用(局部变量, 不进 setData)
       ccAfterSuggest = cc2;
-      // 推荐端点恰为目的地 → 可能绕路, 给出就近替代
-      modal.isDest = state.trips.some(t => t.station && (t.station.name === suggest.name || t.station.city === suggest.city));
-      const curCover = cc0 ? cc0.okN : 0;
-      const destNames = state.trips.map(t => t.station && t.station.name);
-      const destCities = state.trips.map(t => t.station && t.station.city);
-      let alt = null, aKm = 0, aCover = 0;
-      for (const ss of STATIONS) {
-        if (ss[0] === S.name || ss[0] === suggest.name) continue;
-        if (ss[1] === H.city) continue;
-        const H3 = { name: ss[0], city: ss[1], lat: ss[2], lon: ss[3] };
-        const cc3 = logic.chainV2(S, H3, sts, H3, H3, true);
-        const cov = cc3 ? cc3.okN : 0;
-        if (cov < curCover) continue;
-        if (destNames.includes(ss[0]) || destCities.includes(ss[1])) continue;
-        const km = dist({ lat: ss[2], lon: ss[3] }, { lat: H.lat, lon: H.lon });
-        if (!alt || cov > aCover || (cov === aCover && km < aKm)) { alt = ss; aKm = km; aCover = cov; }
-      }
-      if (alt) modal.altern = alt[0] + ' · ' + alt[1] + '（覆盖 ' + aCover + '，出发地不动）';
     }
     // 每段当前判定(颜色), 指明哪里不行(直达/中转可出/超区间)
     // 每段判定(颜色), 指明哪里不行(直达/需换车/买不了)
