@@ -63,7 +63,7 @@
     </view>
     <block wx:if="{{!showDepart}}">
       <input class="ipt" value="{{departInput}}" bindinput="onDepartInput" bindconfirm="nextStart" placeholder="留空默认从学校出发"/>
-      <view class="field-hint">你这次行程<b>实际从哪出发</b>（通常就是学校）；留空即从学校出发</view>
+      <view class="field-hint">你这次行程<b>实际从哪出发</b></view>
       <button hover-class="bh" class="btn primary" bindtap="nextStart">下一步</button>
     </block>
     <block wx:else>
