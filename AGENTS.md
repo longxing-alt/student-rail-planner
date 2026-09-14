@@ -106,6 +106,15 @@ return p <= w;
 | 武汉⇄广州 | 855km | →深圳(t=1.05, p=90) | ❌ |
 | 南宁东⇄济南 | 1739km | →天津(t=1.15) | ❌ |
 
+### 4.3 测试基线（2026-09-14 实测）
+
+```
+npm test          → 103 + 178 + 86(对比一致) + 100 + 23  全绿
+check-v2 回测      → 68 吻合 / 0 不符 / 17 跳过 (共 85 条样本)
+三端一致性         → logic.js == index.html(PURE) == planner.html  ✅
+D:\mini 同步       → index.js / logic.js 一致  ✅
+```
+
 ---
 
 ## 五、待实测（已知疑点，可主动提出测试）
@@ -164,7 +173,7 @@ node -e "
 | 主仓库 | `github.com/longxing-alt/student-rail-planner`（公开），分支 `dev` |
 | 独立仓库 | `github.com/longxing-alt/railgo`（**待删除**，需 `delete_repo` 权限的 token） |
 | 推送代理 | 本机 git 配置了 `http.proxy=http://127.0.0.1:7890`（常未开启），推送时需 `-c http.proxy= -c https.proxy=` 直连 |
-| 小程序提审 | 隐私弹窗选「**采集用户隐私**」（代码用 `wx.saveImageToPhotosAlbum`）；测试账号选「无需登录账号即可使用」 |
+| 小程序提审 | ✅ **已于 2026-09-14 通过审核并发布**（要点已归档：隐私弹窗选「采集用户隐私」因代码用 `wx.saveImageToPhotosAlbum`；测试账号选「无需登录账号即可使用」） |
 
 ---
 
