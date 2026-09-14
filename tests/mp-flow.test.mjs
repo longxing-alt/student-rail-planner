@@ -309,19 +309,27 @@ const flow = async () => {
   console.log('\n== 场景12: 首次进入可完整体验(审核合规) ==');
   const wxmlSrc = fs.readFileSync(path.join(root, 'miniprogram/pages/index/index.wxml'), 'utf8');
   const jsSrc2 = fs.readFileSync(path.join(root, 'miniprogram/pages/index/index.js'), 'utf8');
-  // 首次进入必须有"一键示例"入口, 否则审核员看到空白表单会判"无法完整体验"
-  check('首屏存在一键示例入口', /loadDemo/.test(wxmlSrc), '需 bindtap="loadDemo"');
+  // 首次进入必须有示例入口, 否则审核员看到空白表单会判"无法完整体验"
+  check('首屏存在示例入口', /playDemo/.test(wxmlSrc), '需 catchtap="playDemo"');
   // 首次进入显示一行提示(含"看示例"入口), 不整页铺开说明
   check('首屏有首次提示行', /class="first-tip"/.test(wxmlSrc));
-  check('提示行含"看示例"入口', /catchtap="loadDemo"/.test(wxmlSrc));
+  check('提示行含"看示例"入口', /catchtap="playDemo"/.test(wxmlSrc));
   check('提示行仅在未填写时出现', /first-tip" wx:if="\{\{!everFilled && !showStart\}\}"/.test(wxmlSrc));
-  // loadDemo 必须走与正常流程相同的逻辑(不新建第二套计算)
-  const demoFn = jsSrc2.match(/loadDemo\(\)\s*\{[\s\S]*?\n  \},/);
-  check('loadDemo 已实现', !!demoFn);
+  // 示例 = 逐步自动演示(动效引导), 复用现有 nextSchool/nextStart/addTrip/onPlan
+  const demoFn = jsSrc2.match(/playDemo\(fast\)\s*\{[\s\S]*?\n  \},/);
+  check('playDemo 已实现', !!demoFn);
   if (demoFn) {
-    check('示例复用 onPlan(不新建计算路径)', /this\.onPlan\(\)/.test(demoFn[0]));
-    check('示例复用 resolveSync', /resolveSync\('北京'\)/.test(demoFn[0]));
+    check('演示复用 nextSchool', /self\.nextSchool\(\)/.test(demoFn[0]));
+    check('演示复用 nextStart', /self\.nextStart\(\)/.test(demoFn[0]));
+    check('演示复用 addTrip', /self\.addTrip\(\)/.test(demoFn[0]));
+    check('演示带动效状态(pulseStep)', /pulseStep/.test(demoFn[0]));
   }
+  const fillFn = jsSrc2.match(/_demoFillAll\(\)\s*\{[\s\S]*?\n  \},/);
+  check('_demoFillAll 已实现', !!fillFn);
+  if (fillFn) check('补齐路径复用 onPlan', /this\.onPlan\(\)/.test(fillFn[0]));
+  check('演示可跳过(skipDemo)', /skipDemo\(\)/.test(jsSrc2));
+  check('演示条在 WXML 中', /class="demo-bar"/.test(wxmlSrc));
+  check('步骤卡片有 pulse 高亮位', /pulseStep===\d\?'pulse'/.test(wxmlSrc));
   // 无登录/无账号体系(3.3.4 不适用) 且无网络请求
   check('小程序无登录逻辑', !/wx\.login|getUserProfile|getUserInfo/.test(jsSrc2));
   check('小程序无网络请求', !/wx\.request|wx\.uploadFile/.test(jsSrc2));
@@ -332,16 +340,25 @@ const flow = async () => {
   const p12 = inst();
   await p12.onLoad.call(p12); await sync();
   check('初始状态 seenDemo=false(首次进入显示示例入口)', p12.data.seenDemo === false);
-  p12.loadDemo.call(p12); await sync();
-  check('一键示例后直接出结果(planned=true)', p12.data.planned === true);
-  check("一键示例后有目的地", p12.data.tripCount === 2, p12.data.tripCount);
+  // 逐步演示的中间状态: 起始应 pulse 步骤1 且未出结果
+  const p12b = inst();
+  await p12b.onLoad.call(p12b); await sync();
+  p12b.playDemo.call(p12b, false); await sync();
+  check('演示开始: pulse 步骤1 且未规划', p12b.data.pulseStep === 1 && p12b.data.planned === false, p12b.data.pulseStep);
+  check('演示开始: 显示演示条', p12b.data.demoPlaying === true);
+  p12b.skipDemo.call(p12b); await sync();
+  check('跳过演示后补齐并出结果', p12b.data.planned === true && p12b.data.tripCount === 2, p12b.data.tripCount);
+
+  p12.playDemo.call(p12, true); await sync();
+  check('示例(fast)后直接出结果(planned=true)', p12.data.planned === true);
+  check("示例后有目的地", p12.data.tripCount === 2, p12.data.tripCount);
   const demoCls = p12.data.rows.map(r => r.boxCls);
-  check('一键示例后有判定着色', demoCls.every(c => c !== ''), demoCls);
+  check('示例后有判定着色', demoCls.every(c => c !== ''), demoCls);
   // 示例须展示工具的核心价值: 能出的段 + 不能出的段 都被判定出来(真实结果, 不造假)
   check('示例同时含可出段与不可出段', demoCls.includes('edge') && demoCls.includes('bad'), demoCls);
   check('示例展示中转建议(核心能力)', p12.data.rows.some(r => r.hub), p12.data.rows.map(r => r.hub));
-  check('一键示例后 seenDemo=true(示例入口收起)', p12.data.seenDemo === true);
-  check('一键示例后区间为 北京西⇄武汉', /北京/.test(p12.data.ivS) && /武汉/.test(p12.data.ivH), p12.data.ivS + '⇄' + p12.data.ivH);
+  check('示例后 seenDemo=true(示例入口收起)', p12.data.seenDemo === true);
+  check('示例后区间为 北京西⇄武汉', /北京/.test(p12.data.ivS) && /武汉/.test(p12.data.ivH), p12.data.ivS + '⇄' + p12.data.ivH);
   // 修改学校后: 首次提示不应重现(用户已填过), 且应聚焦步骤1
   p12.changeSchool.call(p12); await sync();
   check('修改学校后 everFilled 保持 true(首次提示不重现)', p12.data.everFilled === true);

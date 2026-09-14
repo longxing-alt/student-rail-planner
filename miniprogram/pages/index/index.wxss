@@ -71,6 +71,27 @@ page { background: #F0F2F5; }
 .first-tip .ft-ico { flex: 0 0 auto; margin-right: 10rpx; }
 .first-tip .ft-txt { flex: 1; line-height: 1.5; }
 .first-tip .ft-link { flex: 0 0 auto; color: #2563EB; font-weight: 700; text-decoration: underline; margin-left: 12rpx; }
+
+/* 演示进行中: 顶部步骤指示条 */
+.demo-bar {
+  display: flex; align-items: center; background: #111827; color: #fff;
+  border-radius: 18rpx; padding: 16rpx 22rpx; margin-bottom: 20rpx;
+  animation: demoBarIn .3s ease-out;
+}
+@keyframes demoBarIn { from { opacity: 0; transform: translateY(-10rpx); } to { opacity: 1; transform: none; } }
+.demo-bar .db-step { flex: 1; font-size: 25rpx; font-weight: 700; }
+.demo-bar .db-skip { flex: 0 0 auto; font-size: 23rpx; color: #93C5FD; margin-left: 16rpx; }
+
+/* 动效引导: 当前步骤卡片脉冲高亮 */
+.card.pulse, .step3.pulse .card {
+  border: 2rpx solid #2563EB;
+  box-shadow: 0 0 0 6rpx rgba(37,99,235,.14);
+  animation: pulseHi 1.1s ease-in-out infinite;
+}
+@keyframes pulseHi {
+  0%, 100% { box-shadow: 0 0 0 6rpx rgba(37,99,235,.14); }
+  50% { box-shadow: 0 0 0 14rpx rgba(37,99,235,.06); }
+}
 .demo-or { font-size: 22rpx; color: #9CA3AF; text-align: center; margin-top: 20rpx; }
 
 /* 按钮 */

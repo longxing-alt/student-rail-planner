@@ -7,15 +7,21 @@
     <text class="status-txt">{{status}}</text>
   </view>
 
-  <!-- 首次进入: 只提示当前这一步(聚焦输入框 + 一行文字); 不整页展示说明 -->
+  <!-- 首次进入: 一行提示 + 动效演示入口(不铺开说明) -->
   <view class="first-tip" wx:if="{{!everFilled && !showStart}}">
     <text class="ft-ico">👋</text>
-    <text class="ft-txt">第一次来？按 1→2→3 填就行，每步都有说明</text>
-    <text class="ft-link" catchtap="loadDemo">看示例</text>
+    <text class="ft-txt">第一次来？让它自动演示一遍怎么填</text>
+    <text class="ft-link" catchtap="playDemo">▶ 看示例</text>
+  </view>
+
+  <!-- 演示进行中: 步骤指示 + 跳过 -->
+  <view class="demo-bar" wx:if="{{demoPlaying}}">
+    <text class="db-step">{{demoStep}}</text>
+    <text class="db-skip" catchtap="skipDemo">跳过 →</text>
   </view>
 
   <!-- ============ 步骤1: 学校 ============ -->
-  <view class="card show">
+  <view class="card show {{pulseStep===1?'pulse':''}}">
     <view class="card-head">
       <text class="step-no">1</text>
       <text class="card-tt">学校</text>
@@ -35,7 +41,7 @@
   </view>
 
   <!-- ============ 步骤2: 出发地 ============ -->
-  <view class="card {{showStart?'show':''}}">
+  <view class="card {{showStart?'show':''}} {{pulseStep===2?'pulse':''}}">
     <view class="card-head">
       <text class="step-no">2</text>
       <text class="card-tt">出发地</text>
@@ -51,7 +57,7 @@
   </view>
 
   <!-- ============ 步骤3: 目的地 + 规划 ============ -->
-  <view class="step3 {{showDest?'show':''}}">
+  <view class="step3 {{showDest?'show':''}} {{pulseStep===3?'pulse':''}}">
     <view class="card">
       <view class="card-head">
         <text class="step-no">3</text>

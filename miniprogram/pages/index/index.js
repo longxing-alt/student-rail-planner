@@ -170,6 +170,7 @@ Page({
   data: {
     schoolInput: '', departInput: '', tripInput: '',
     showStart: false, showDepart: false, showDest: false, seenDemo: false, everFilled: false, focusNow: 1,
+    pulseStep: 0, demoPlaying: false, demoStep: '',
     startName: '出发地', ivS: '学校', ivH: '出发地', ivDots: [],
     rows: [], tdIndex: -1, tripCount: 0,
     planned: false, used: '–', budget: 4, remain: '–', okN: 0, edgeN: 0, badN: 0,
@@ -267,14 +268,55 @@ Page({
     state.home = picked.station;
     this.setData({ schoolInput: r.station.name, ivS: r.station.name, ivH: picked.station.name, showStart: true });
   },
-  /* 一键示例: 免输入直达完整结果(供首次体验/审核体验用; 走的是与正常流程完全相同的逻辑)
-   * 选 石家庄(区间内直达=绿) + 长沙(需中转=橙) → 一次展示两种判定与中转推荐
-   * 注: 不刻意制造"超区间=红"——bestRoute 会优先让更多段落在区间内, 红在优化后本就少见,
-   *     硬凑会偏离真实使用场景 */
-  loadDemo() {
-    logOp("载入示例");
+  /* ---------- 示例: 逐步自动演示(动效引导) ----------
+   * 不直接跳到结果, 而是按 ①填学校 → ②填出发地 → ③加目的地 → 规划 自动走一遍,
+   * 让用户看清怎么填; 演示中可随时点"跳过"直接看结果。 */
+  playDemo(fast) {
+    logOp("示例演示");
+    this._demoCancel();
+    state.school = null; state.home = null; state.depart = null; state.trips = [];
+    this.hubOverride = {};
+    this.setData({
+      schoolInput: '', departInput: '', tripInput: '', ivS: '学校', ivH: '出发地', startName: '出发地',
+      showStart: false, showDepart: false, showDest: false, planned: false,
+      everFilled: true, focusNow: 0, pulseStep: 1,
+      demoPlaying: !fast, demoStep: '① 填写学校城市',
+    });
+    this.renderAll();
+    if (fast) { this._demoFillAll(); return; }   // 测试/跳过: 立即完成
+
+    var self = this;
+    var seq = [
+      [700,  function () { self.setData({ schoolInput: '北京' }); }],
+      [1700, function () { self.setData({ pulseStep: 0 }); self.nextSchool(); }],
+      [2600, function () { self.setData({ departInput: '北京', pulseStep: 2, demoStep: '② 填写出发地' }); }],
+      [3500, function () { self.setData({ pulseStep: 0 }); self.nextStart(); }],
+      [4300, function () { self.setData({ pulseStep: 3, demoStep: '③ 添加想去的地方', tripInput: '石家庄' }); }],
+      [4900, function () { self.addTrip(); }],
+      [5500, function () { self.setData({ tripInput: '长沙' }); }],
+      [6000, function () { self.addTrip(); }],
+      [6700, function () { self._demoFinish(); }],
+    ];
+    this._demoTimers = seq.map(function (it) { return setTimeout(it[1], it[0]); });
+  },
+
+  /* 演示收尾: 填齐数据并出结果 */
+  _demoFinish() {
+    this._demoCancel();
+    this.setData({ demoPlaying: false, demoStep: '', pulseStep: 0, focusNow: 0 });
+    if (!state.school || state.trips.length < 2) this._demoFillAll();   // 中途跳过时补齐
+    else this.onPlan();
+  },
+  _demoCancel() {
+    (this._demoTimers || []).forEach(clearTimeout);
+    this._demoTimers = [];
+  },
+  skipDemo() { this._demoFinish(); },
+
+  /* 立即填好示例数据并出结果(不走动画) */
+  _demoFillAll() {
     var S = resolveSync('北京'), H = resolveSync('武汉'), D1 = resolveSync('石家庄'), D2 = resolveSync('长沙');
-    if (!S || !H || !D1 || !D2) { this.setStatus('示例数据不可用，请手动填写'); return; }
+    if (!S || !H || !D1 || !D2) { this.setStatus('示例数据不可用，请手动填写'); return false; }
     state.school = S.station;
     state.home = H.station;
     state.depart = S.station;              // 从学校出发
@@ -286,13 +328,18 @@ Page({
     this.setData({
       schoolInput: S.station.name, departInput: S.station.name,
       ivS: S.station.name, ivH: H.station.name, startName: S.station.name,
-      showStart: true, showDepart: true, showDest: true, planned: false, seenDemo: true, everFilled: true, focusNow: 0,
+      showStart: true, showDepart: true, showDest: true, planned: false,
+      seenDemo: true, everFilled: true, focusNow: 0, pulseStep: 0, demoPlaying: false, demoStep: '',
     });
     this.saveSchool();
     this.renderAll();
-    this.onPlan();                          // 直接出一键规划结果(与用户点击同一入口)
+    this.onPlan();                          // 与用户点击同一入口
     this.setStatus('示例：' + S.station.name + ' ⇄ ' + H.station.name + '，去 石家庄/长沙 — 已着色并给出中转建议，可直接查看与分享海报', true);
+    return true;
   },
+
+  /* 兼容旧调用名 */
+  loadDemo() { return this._demoFillAll(); },
 
   /* 修改学校需二次确认(区间端点是合规关键, 防止误改) */
   changeSchool() {
