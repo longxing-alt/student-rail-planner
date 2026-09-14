@@ -1,0 +1,322 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>改签·退票 省钱计算器</title>
+<style>
+:root {
+  --ink:#18181b; --ink2:#3f3f46; --mut:#71717a; --mut2:#a1a1aa;
+  --line:#e4e4e7; --line2:#f4f4f5; --bg:#F7F8FA;
+  --blue:#2563EB; --blue-soft:#EFF6FF; --blue-line:#BFDBFE;
+  --ok:#16a34a; --ok-soft:#F0FDF4; --ok-line:#BBF7D0;
+  --warn:#d97706; --warn-soft:#FFF7ED; --warn-line:#FED7AA;
+  --err:#dc2626; --err-soft:#FEF2F2; --err-line:#FECACA;
+  --gold:#FFD479;
+}
+* { box-sizing:border-box; margin:0; padding:0; }
+body {
+  background:var(--bg); color:var(--ink); font-size:14px; line-height:1.55;
+  font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Microsoft YaHei',sans-serif;
+  padding:16px; min-height:100vh;
+}
+.wrap { max-width:520px; margin:0 auto; display:flex; flex-direction:column; gap:12px; }
+
+/* ===== 输入卡 ===== */
+.inputs { background:#fff; border:1px solid var(--line); border-radius:16px; padding:16px; }
+.field { margin-bottom:12px; }
+.field:last-child { margin-bottom:0; }
+.field label { display:block; font-size:11.5px; color:var(--mut); font-weight:700; margin-bottom:5px; letter-spacing:.02em; }
+.field input {
+  width:100%; border:1px solid var(--line); border-radius:12px; padding:10px 14px;
+  font-size:15px; font-weight:600; font-family:inherit; background:var(--line2); color:var(--ink);
+  transition:border-color .15s ease, background .15s ease;
+}
+.field input:focus { outline:none; border-color:var(--blue); background:#fff; }
+.field input[type=number] { width:120px; }
+.price-line { display:flex; align-items:baseline; gap:8px; }
+.price-line .yen { font-size:15px; font-weight:700; color:var(--mut); }
+
+/* ===== 结果卡(深色主卡) ===== */
+.hero {
+  background:linear-gradient(160deg, #1e293b 0%, #0f172a 100%);
+  border-radius:20px; padding:20px; color:#fff;
+  box-shadow:0 10px 30px -12px rgba(15,23,42,.45);
+}
+.hero-title { font-size:11.5px; font-weight:700; color:#94a3b8; letter-spacing:.12em; margin-bottom:14px; }
+.h-row { display:flex; align-items:baseline; justify-content:space-between; gap:10px; padding:10px 0; }
+.h-row + .h-row { border-top:1px solid rgba(255,255,255,.08); }
+.h-row .k { font-size:13.5px; font-weight:600; color:#cbd5e1; display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+.h-row .v { font-size:20px; font-weight:800; font-variant-numeric:tabular-nums; white-space:nowrap; }
+.h-row .v small { font-size:12px; font-weight:600; color:#94a3b8; margin-left:4px; }
+.h-row.base .v { color:#e2e8f0; }
+.h-row.best { border-top:1px solid rgba(255,255,255,.14); }
+.h-row.best .k { color:#fff; }
+.h-row.best .v { color:var(--gold); }
+.hero-sub {
+  margin-top:12px; padding:10px 12px; border-radius:12px;
+  background:rgba(255,255,255,.06); font-size:12.5px; line-height:1.7; color:#cbd5e1;
+}
+.hero-sub b { color:#fff; }
+.hero-sub .gold { color:var(--gold); font-weight:800; }
+.hero-sub .ok { color:#4ade80; font-weight:800; }
+.hero-tags { display:flex; gap:6px; flex-wrap:wrap; margin-top:10px; }
+.hero-tag { font-size:10.5px; font-weight:700; border-radius:6px; padding:2px 8px; }
+.hero-tag.same { background:rgba(74,222,128,.15); color:#4ade80; }
+.hero-tag.cross { background:rgba(251,146,60,.15); color:#fb923c; }
+.hero-tag.lock { background:rgba(255,212,121,.15); color:var(--gold); }
+.badge-pct { font-size:11px; font-weight:700; background:rgba(255,255,255,.12); color:#e2e8f0; border-radius:6px; padding:2px 7px; }
+
+/* ===== 折叠区 ===== */
+details { background:#fff; border:1px solid var(--line); border-radius:16px; padding:4px 16px; }
+details summary {
+  cursor:pointer; font-weight:700; font-size:13.5px; color:var(--ink);
+  padding:12px 0; list-style:none; display:flex; align-items:center; justify-content:space-between;
+}
+details summary::-webkit-details-marker { display:none; }
+details summary::after { content:'▾'; color:var(--mut2); font-size:12px; transition:transform .2s ease; }
+details[open] summary::after { transform:rotate(180deg); }
+details[open] summary { border-bottom:1px solid var(--line2); }
+
+table { width:100%; border-collapse:collapse; font-size:12.5px; margin:4px 0 10px; }
+th, td { text-align:left; padding:8px 6px; border-bottom:1px solid var(--line2); vertical-align:top; }
+th { color:var(--mut); font-weight:600; font-size:11px; }
+td.num, th.num { text-align:right; font-variant-numeric:tabular-nums; white-space:nowrap; }
+tr.best td { background:var(--ok-soft); }
+tr.best td:first-child { border-radius:8px 0 0 8px; }
+tr.best td:last-child { border-radius:0 8px 8px 0; }
+.tier-tag { display:inline-block; border-radius:6px; padding:1px 7px; font-size:10.5px; font-weight:700; margin-left:4px; }
+.tier-tag.same { background:var(--ok-soft); color:var(--ok); }
+.tier-tag.cross { background:var(--warn-soft); color:var(--warn); }
+.tier-note { font-size:11px; color:var(--mut); padding:4px 6px 8px; line-height:1.6; }
+
+/* ===== 试算 ===== */
+.try-row { display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-bottom:10px; }
+.try-row label { font-size:12px; color:var(--mut); font-weight:600; }
+.try-row input { border:1px solid var(--line); border-radius:10px; padding:7px 11px; font-size:13.5px; font-family:inherit; background:var(--line2); }
+.try-row input:focus { outline:none; border-color:var(--blue); background:#fff; }
+.chk { display:flex; align-items:center; gap:5px; font-size:12px; color:var(--ink2,#3f3f46); }
+.chk input { width:auto; }
+.try-out { font-size:13px; line-height:1.8; color:var(--ink2); }
+.try-out b { font-size:15px; color:var(--ink); }
+.try-out .ok { color:var(--ok); font-weight:800; }
+.try-out .bad { color:var(--err); font-weight:800; }
+.try-out .warn { color:var(--warn); font-weight:600; }
+
+/* ===== 规则表 ===== */
+.rules { font-size:12.5px; margin-bottom:12px; }
+.rules th { background:var(--line2); color:var(--ink); font-weight:700; }
+.rules td:last-child { font-weight:700; }
+.src { font-size:11.5px; color:var(--mut); line-height:1.9; }
+.src a { color:var(--blue); }
+
+/* ===== toast ===== */
+.toast {
+  position:fixed; left:50%; bottom:24px; transform:translateX(-50%);
+  background:var(--ink); color:#fff; font-size:13px; border-radius:10px;
+  padding:9px 18px; z-index:90;
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="inputs">
+    <div class="field">
+      <label>原车发车时间</label>
+      <input type="datetime-local" id="dep">
+    </div>
+    <div class="field">
+      <label>票价（元）</label>
+      <div class="price-line"><span class="yen">¥</span><input type="number" id="price" value="553" min="1"></div>
+    </div>
+  </div>
+
+  <div class="hero" id="hero"></div>
+
+  <details>
+    <summary>各档位需要改签到什么时候</summary>
+    <table id="tiers"></table>
+    <div class="tier-note">「改签至」= 需要找到的最低发车时间，找更晚的同档车次效果相同。8 天以上一档受反套利条款约束，最低仍收 5%。</div>
+  </details>
+
+  <details>
+    <summary>试算：改签到指定时间再退</summary>
+    <div class="try-row">
+      <label>改签至</label>
+      <input type="datetime-local" id="newTime">
+      <label class="chk"><input type="checkbox" id="chunyun"> 改签后落春运</label>
+    </div>
+    <div class="try-out" id="tryOut"></div>
+  </details>
+
+  <details>
+    <summary>规则依据（12306 官方原文）</summary>
+    <table class="rules">
+      <tr><th colspan="2">退票费（按退票时距开车时间计）</th></tr>
+      <tr><td>开车前 8 天以上</td><td><b>免费</b></td></tr>
+      <tr><td>48 小时以上、不足 8 天</td><td><b>5%</b></td></tr>
+      <tr><td>24 小时以上、不足 48 小时</td><td><b>10%</b></td></tr>
+      <tr><td>不足 24 小时</td><td><b>20%</b></td></tr>
+      <tr><th colspan="2">改签费（不足48小时改签「乘车日期之后」的列车时收，按改签前后较低票价计）</th></tr>
+      <tr><td>24 小时以上、不足 48 小时</td><td><b>5%</b></td></tr>
+      <tr><td>不足 24 小时</td><td><b>15%</b></td></tr>
+      <tr><td>48 小时以上改签 / 改签乘车日期「及以前」（含同日）/ 开车后改签当日</td><td><b>不收</b></td></tr>
+    </table>
+    <div class="src">
+      · 反套利条款：距开车前不足8天的车票，改签至开车前8天以上的列车，又在距开车前8天以上退票的，退票费核收 <b>5%</b>（而非0%）。<br>
+      · 春运：改签后乘车日期在春运期间的，退票费一律按不足24小时（20%）核收。<br>
+      · 退票费最低 <b>2 元</b>，以5角为单位（尾数&lt;2.5角舍去、≥2.5角进1元）。<br>
+      · 网上退票/改签须在开车前 <b>30 分钟</b>之前办理（之后到车站窗口）；每张票只能改签一次，改签费一旦收取不退还。<br>
+      · 来源：<a href="https://kyfw.12306.cn/otn/gonggao/deliveryPrice_4.html" target="_blank">国铁集团退票改签收费通知</a> ·
+      <a href="https://kyfw.12306.cn/otn/gonggao/windowEndorse.html" target="_blank">12306 改签规定</a> ·
+      <a href="https://mobile.12306.cn/otsmobile/h5/otsbussiness/info/orderWarmTips.html" target="_blank">12306 退改说明</a>
+    </div>
+  </details>
+
+</div>
+
+<script>
+(function () {
+  'use strict';
+  var H = 3600e3;
+  var $ = function (id) { return document.getElementById(id); };
+
+  /* ===== 规则常量（12306 官方通知原文，与旧版完全一致） ===== */
+  var REFUND_TIERS = [ { min: 8*24, pct: 0 }, { min: 48, pct: 5 }, { min: 24, pct: 10 }, { min: 0, pct: 20 } ];
+  var CHANGE_TIERS = [ { min: 24, pct: 5 }, { min: 0, pct: 15 } ];
+  var CUT_MIN = 30;
+  var PRESALE_DAYS = 15;
+
+  function refundPct(h) { for (var i = 0; i < REFUND_TIERS.length; i++) if (h >= REFUND_TIERS[i].min) return REFUND_TIERS[i].pct; return 20; }
+  function changeFeePct(t, crossDate) { if (t >= 48) return 0; if (!crossDate) return 0; for (var i = 0; i < CHANGE_TIERS.length; i++) if (t >= CHANGE_TIERS[i].min) return CHANGE_TIERS[i].pct; return 15; }
+  function roundFee(y) { if (y <= 0) return 0; var j = Math.round(y * 10); if (j % 5 !== 0) j = Math.round(j / 5) * 5; return Math.max(2, j / 10); }
+
+  /* ===== 计算（逻辑不变） ===== */
+  function computeDirect(now, dep, price) {
+    var h = Math.max(0, (dep - now) / H);
+    var pct = refundPct(h);
+    return { hours: h, pct: pct, fee: roundFee(price * pct / 100) };
+  }
+  function computeChange(now, dep, price, target, chunyun) {
+    var t = (dep - now) / H; if (t <= 0) return null;
+    var dH = (target - now) / H; if (dH <= 0) return null;
+    var cross = new Date(target.getFullYear(), target.getMonth(), target.getDate())
+      > new Date(dep.getFullYear(), dep.getMonth(), dep.getDate());
+    var chgPct = changeFeePct(t, cross);
+    var chgFee = roundFee(price * chgPct / 100);
+    var rPct = refundPct(dH);
+    var antiAbuse = (t < 192 && dH >= 192);
+    if (antiAbuse) rPct = Math.max(rPct, 5);
+    if (chunyun) rPct = 20;
+    var rFee = roundFee(price * rPct / 100);
+    return { dH: dH, cross: cross, chgPct: chgPct, chgFee: chgFee, rPct: rPct, rFee: rFee,
+      total: chgFee + rFee, antiAbuse: antiAbuse, onlineOk: dH * 60 > CUT_MIN };
+  }
+  function bestChange(now, dep, price, chunyun) {
+    var best = null;
+    var start = now.getTime() + CUT_MIN * 60000;
+    var maxT = dep.getTime() + PRESALE_DAYS * H;
+    for (var t = start; t <= maxT; t += H) {
+      var r = computeChange(now, dep, price, new Date(t), chunyun);
+      if (r && (!best || r.total < best.total)) { best = r; best.target = new Date(t); }
+    }
+    return best;
+  }
+
+  /* ===== 渲染 ===== */
+  var money = function (n) { return '¥' + (Math.round(n * 100) / 100); };
+  function fmt(d) { var p = function (n) { return (n < 10 ? '0' : '') + n; }; return (d.getMonth() + 1) + '月' + d.getDate() + '日 ' + p(d.getHours()) + ':' + p(d.getMinutes()); }
+  function fmtH(h) { return h >= 48 ? (Math.round(h / 24 * 10) / 10) + ' 天' : (Math.round(h * 10) / 10) + ' 小时'; }
+
+  function render() {
+    var dep = new Date($('dep').value), now = new Date();
+    var price = +$('price').value || 0;
+    var chunyun = $('chunyun').checked;
+    if (isNaN(dep.getTime()) || !price) return;
+
+    var direct = computeDirect(now, dep, price);
+    var best = bestChange(now, dep, price, chunyun);
+    var save = direct.fee - best.total;
+    var hasSaving = save > 0.005;
+
+    /* 深色结果卡 */
+    var hero = '<div class="hero-title">改签 · 退票 最优方案</div>';
+    hero += '<div class="h-row base"><span class="k">直接退票 <span class="badge-pct">' + direct.pct + '% 档</span></span>' +
+      '<span class="v">' + money(direct.fee) + '</span></div>';
+    if (hasSaving) {
+      hero += '<div class="h-row best"><span class="k">✅ 先改签，再退票' +
+        (best.antiAbuse ? ' <span class="badge-pct">反套利 5%</span>' : '') + '</span>' +
+        '<span class="v">' + money(best.total) + '<small>损失</small></span></div>' +
+        '<div class="hero-sub">改签至 <b>' + fmt(best.target) + '</b> 之后发车的车次（改签费 ' + money(best.chgFee) + '），再退票（退票费 ' + money(best.rFee) + '）。' +
+        '比直接退票<b class="ok">省 ' + money(save) + '</b>。</div>';
+    } else {
+      hero += '<div class="h-row best"><span class="k">✅ 先改签，再退票</span>' +
+        '<span class="v">' + money(best.total) + '</span></div>' +
+        '<div class="hero-sub">与直接退票持平——现行改签费 + 反套利条款已堵住套利空间。</div>';
+    }
+    hero += '<div class="hero-tags">' +
+      '<span class="hero-tag same">同日改签免改签费</span>' +
+      '<span class="hero-tag cross">跨日改签收改签费</span>' +
+      '<span class="hero-tag lock">改签仅限一次</span></div>';
+    $('hero').innerHTML = hero;
+
+    /* 档位表 */
+    var tiers = [
+      { name: '降到 10%', need: 24 },
+      { name: '降到 5%', need: 48 },
+      { name: '降到 0%（8天以上）', need: 192 }
+    ];
+    var tHtml = '<tr><th>目标</th><th>改签至（发车时间下限）</th><th class="num">改签费</th><th class="num">退票费</th><th class="num">合计</th><th class="num">对比直接退</th></tr>';
+    tiers.forEach(function (t) {
+      var target = new Date(now.getTime() + t.need * H);
+      var r = computeChange(now, dep, price, target, chunyun);
+      var vs = direct.fee - r.total;
+      var crossTag = r.cross ? '<span class="tier-tag cross">跨日·收改签费</span>' : '<span class="tier-tag same">同日·免改签费</span>';
+      tHtml += '<tr' + (vs > 0.005 ? ' class="best"' : '') + '><td>' + t.name + '</td>' +
+        '<td>' + fmt(target) + ' ' + crossTag + '</td>' +
+        '<td class="num">' + money(r.chgFee) + '</td><td class="num">' + money(r.rFee) + '</td>' +
+        '<td class="num">' + money(r.total) + '</td>' +
+        '<td class="num">' + (vs > 0.005 ? '<span class="ok">省 ' + money(vs) + '</span>' : vs < -0.005 ? '<span class="bad">多亏</span>' : '持平') + '</td></tr>';
+    });
+    tHtml += '<tr><td colspan="6" class="tier-note">「改签至」= 需要找到的最低发车时间；找更晚的同档车次效果相同。</td></tr>';
+    $('tiers').innerHTML = tHtml;
+
+    /* 试算 */
+    renderTry(now, dep, price, chunyun, direct);
+  }
+
+  function renderTry(now, dep, price, chunyun, direct) {
+    var nt = $('newTime').value;
+    if (!nt) { $('tryOut').innerHTML = '<span style="color:var(--mut2)">选择一个改签目标时间后显示明细。</span>'; return; }
+    var r = computeChange(now, dep, price, new Date(nt), chunyun);
+    if (!r) { $('tryOut').innerHTML = '<span class="bad">目标时间无效（须晚于当前时间）。</span>'; return; }
+    var save = direct.fee - r.total;
+    $('tryOut').innerHTML =
+      '改签至 <b>' + fmt(new Date(nt)) + '</b>（' + fmtH(r.dH) + ' 后发车）：' +
+      '改签费 <b>' + money(r.chgFee) + '</b>（' + r.chgPct + '%） + 退票费 <b>' + money(r.rFee) + '</b>（' + r.rPct + '%）' +
+      ' = 合计损失 <b>' + money(r.total) + '</b>，' +
+      (save > 0.005 ? '比直接退票<span class="ok">省 ' + money(save) + '</span>'
+        : save < -0.005 ? '比直接退票<span class="bad">多亏 ' + money(-save) + '</span>'
+        : '与直接退票<b>持平</b>') +
+      (r.antiAbuse ? '<br><span class="warn">已触发反套利条款（不足8天改签至8天以上再退票：5%）。</span>' : '');
+  }
+
+  /* ===== 初始化 ===== */
+  function pad(n) { return (n < 10 ? '0' : '') + n; }
+  function toLocal(d) { return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()) + 'T' + pad(d.getHours()) + ':' + pad(d.getMinutes()); }
+  function setDefaults() {
+    var dep = new Date(Date.now() + 19 * H); dep.setMinutes(0, 0, 0);
+    $('dep').value = toLocal(dep);
+    $('newTime').value = toLocal(new Date(Date.now() + 30 * H));
+  }
+  ['dep', 'price', 'newTime', 'chunyun'].forEach(function (id) {
+    $(id).addEventListener('input', render);
+    $(id).addEventListener('change', render);
+  });
+  setDefaults();
+  render();
+})();
+</script>
+</body>
+</html>

@@ -306,6 +306,36 @@ const flow = async () => {
   check('三处输入框均用 .ipt(样式统一生效)', (wxml.match(/class="ipt"/g) || []).length === 3, (wxml.match(/class="ipt"/g) || []).length);
   check('海报绘制未残留旧的 _qrImg 缓存写法', !/this\._qrImg/.test(pageSrc));
 
+  console.log('\n== 场景12: 首次进入可完整体验(审核合规) ==');
+  const wxmlSrc = fs.readFileSync(path.join(root, 'miniprogram/pages/index/index.wxml'), 'utf8');
+  const jsSrc2 = fs.readFileSync(path.join(root, 'miniprogram/pages/index/index.js'), 'utf8');
+  // 首次进入必须有"一键示例"入口, 否则审核员看到空白表单会判"无法完整体验"
+  check('首屏存在一键示例入口', /loadDemo/.test(wxmlSrc), '需 bindtap="loadDemo"');
+  check('示例入口在未开始填写时可见', /wx:if="\{\{!showStart && !seenDemo\}\}"/.test(wxmlSrc));
+  // loadDemo 必须走与正常流程相同的逻辑(不新建第二套计算)
+  const demoFn = jsSrc2.match(/loadDemo\(\)\s*\{[\s\S]*?\n  \},/);
+  check('loadDemo 已实现', !!demoFn);
+  if (demoFn) {
+    check('示例复用 onPlan(不新建计算路径)', /this\.onPlan\(\)/.test(demoFn[0]));
+    check('示例复用 resolveSync', /resolveSync\('北京'\)/.test(demoFn[0]));
+  }
+  // 无登录/无账号体系(3.3.4 不适用) 且无网络请求
+  check('小程序无登录逻辑', !/wx\.login|getUserProfile|getUserInfo/.test(jsSrc2));
+  check('小程序无网络请求', !/wx\.request|wx\.uploadFile/.test(jsSrc2));
+  // 隐私说明必须出现在页脚
+  check('页脚声明"不联网/不上传"', /不联网、不上传任何信息/.test(wxmlSrc));
+  // loadDemo 功能验证: 调用后应直接产出结果
+  resetState();
+  const p12 = inst();
+  await p12.onLoad.call(p12); await sync();
+  check('初始状态 seenDemo=false(首次进入显示示例入口)', p12.data.seenDemo === false);
+  p12.loadDemo.call(p12); await sync();
+  check('一键示例后直接出结果(planned=true)', p12.data.planned === true);
+  check('一键示例后有目的地', p12.data.tripCount === 2, p12.data.tripCount);
+  check('一键示例后有判定着色', p12.data.rows.some(r => r.boxCls !== ''), p12.data.rows.map(r => r.boxCls));
+  check('一键示例后 seenDemo=true(示例入口收起)', p12.data.seenDemo === true);
+  check('一键示例后区间为 北京西⇄武汉', /北京/.test(p12.data.ivS) && /武汉/.test(p12.data.ivH), p12.data.ivS + '⇄' + p12.data.ivH);
+
   console.log('\n结果: ' + passed + ' 通过, ' + failed + ' 失败');
   process.exit(failed ? 1 : 0);
 };

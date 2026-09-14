@@ -164,7 +164,7 @@ function smartBest(S, H, trips) {
 Page({
   data: {
     schoolInput: '', departInput: '', tripInput: '',
-    showStart: false, showDepart: false, showDest: false,
+    showStart: false, showDepart: false, showDest: false, seenDemo: false,
     startName: '出发地', ivS: '学校', ivH: '出发地', ivDots: [],
     rows: [], tdIndex: -1, tripCount: 0,
     planned: false, used: '–', budget: 4, remain: '–', okN: 0, edgeN: 0, badN: 0,
@@ -262,6 +262,30 @@ Page({
     state.home = picked.station;
     this.setData({ schoolInput: r.station.name, ivS: r.station.name, ivH: picked.station.name, showStart: true });
   },
+  /* 一键示例: 免输入直达完整结果(供首次体验/审核体验用; 走的是与正常流程完全相同的逻辑) */
+  loadDemo() {
+    logOp("载入示例");
+    var S = resolveSync('北京'), H = resolveSync('武汉'), D1 = resolveSync('广州'), D2 = resolveSync('上海');
+    if (!S || !H || !D1 || !D2) { this.setStatus('示例数据不可用，请手动填写'); return; }
+    state.school = S.station;
+    state.home = H.station;
+    state.depart = S.station;              // 从学校出发
+    state.trips = [
+      { id: ++state._tid, text: '广州', point: D1.point, station: D1.station },
+      { id: ++state._tid, text: '上海', point: D2.point, station: D2.station },
+    ];
+    this.hubOverride = {};
+    this.setData({
+      schoolInput: S.station.name, departInput: S.station.name,
+      ivS: S.station.name, ivH: H.station.name, startName: S.station.name,
+      showStart: true, showDepart: true, showDest: true, planned: false, seenDemo: true,
+    });
+    this.saveSchool();
+    this.renderAll();
+    this.onPlan();                          // 直接出一键规划结果(与用户点击同一入口)
+    this.setStatus('示例：' + S.station.name + ' ⇄ ' + H.station.name + '，去 广州/上海 — 可直接查看判定与海报', true);
+  },
+
   /* 修改学校需二次确认(区间端点是合规关键, 防止误改) */
   changeSchool() {
     wx.showModal({
@@ -271,7 +295,7 @@ Page({
       success: res => {
         if (!res.confirm) return;
         state.school = null;
-        this.setData({ schoolInput: '', ivS: '学校', showStart: false, showDepart: false, showDest: false, planned: false });
+        this.setData({ schoolInput: '', ivS: '学校', showStart: false, showDepart: false, showDest: false, planned: false, seenDemo: false });
         this.setStatus('请输入新的学校城市');
       },
     });

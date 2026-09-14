@@ -7,8 +7,19 @@
     <text class="status-txt">{{status}}</text>
   </view>
 
+  <!-- 首次进入: 一键示例(免输入即可完整体验; 也可自行填写) -->
+  <view class="card show" wx:if="{{!showStart && !seenDemo}}">
+    <view class="card-head">
+      <text class="step-no">✨</text>
+      <text class="card-tt">先用示例看结果</text>
+    </view>
+    <view class="demo-tip">点下方按钮载入一组演示数据（学校 北京 · 家 武汉 · 目的地 广州/上海），直接查看区间判定、消耗次数与海报分享；也可在下一步自行填写。</view>
+    <button hover-class="bh" class="btn primary" bindtap="loadDemo">一键载入示例并查看结果</button>
+    <view class="demo-or">或自行填写（学校 → 出发地 → 想去哪）</view>
+  </view>
+
   <!-- ============ 步骤1: 学校 ============ -->
-  <view class="card show">
+  <view class="card {{seenDemo||showStart?'show':''}}">
     <view class="card-head">
       <text class="step-no">1</text>
       <text class="card-tt">学校</text>
@@ -132,6 +143,7 @@
 
   <view class="footer">
     判定结果基于实测数据推算，仅供参考，实际以 12306 出票为准。
+    <view style="margin-top:6px">全部计算在本机完成，不联网、不上传任何信息；仅在本机记住学校名以便下次免输入（可在「修改学校」中清除）。</view>
     <view style="margin-top:6px">ICP备案号：冀ICP备2026033460号-1</view>
   </view>
 
