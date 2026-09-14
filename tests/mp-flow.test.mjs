@@ -311,7 +311,10 @@ const flow = async () => {
   const jsSrc2 = fs.readFileSync(path.join(root, 'miniprogram/pages/index/index.js'), 'utf8');
   // 首次进入必须有"一键示例"入口, 否则审核员看到空白表单会判"无法完整体验"
   check('首屏存在一键示例入口', /loadDemo/.test(wxmlSrc), '需 bindtap="loadDemo"');
-  check('示例入口在未开始填写时可见', /wx:if="\{\{!showStart && !seenDemo\}\}"/.test(wxmlSrc));
+  // 首次进入显示一行提示(含"看示例"入口), 不整页铺开说明
+  check('首屏有首次提示行', /class="first-tip"/.test(wxmlSrc));
+  check('提示行含"看示例"入口', /catchtap="loadDemo"/.test(wxmlSrc));
+  check('提示行仅在未填写时出现', /first-tip" wx:if="\{\{!everFilled && !showStart\}\}"/.test(wxmlSrc));
   // loadDemo 必须走与正常流程相同的逻辑(不新建第二套计算)
   const demoFn = jsSrc2.match(/loadDemo\(\)\s*\{[\s\S]*?\n  \},/);
   check('loadDemo 已实现', !!demoFn);
@@ -339,6 +342,10 @@ const flow = async () => {
   check('示例展示中转建议(核心能力)', p12.data.rows.some(r => r.hub), p12.data.rows.map(r => r.hub));
   check('一键示例后 seenDemo=true(示例入口收起)', p12.data.seenDemo === true);
   check('一键示例后区间为 北京西⇄武汉', /北京/.test(p12.data.ivS) && /武汉/.test(p12.data.ivH), p12.data.ivS + '⇄' + p12.data.ivH);
+  // 修改学校后: 首次提示不应重现(用户已填过), 且应聚焦步骤1
+  p12.changeSchool.call(p12); await sync();
+  check('修改学校后 everFilled 保持 true(首次提示不重现)', p12.data.everFilled === true);
+  check('修改学校后聚焦步骤1', p12.data.focusNow === 1, p12.data.focusNow);
 
   console.log('\n结果: ' + passed + ' 通过, ' + failed + ' 失败');
   process.exit(failed ? 1 : 0);

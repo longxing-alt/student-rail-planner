@@ -169,7 +169,7 @@ function smartBest(S, H, trips) {
 Page({
   data: {
     schoolInput: '', departInput: '', tripInput: '',
-    showStart: false, showDepart: false, showDest: false, seenDemo: false,
+    showStart: false, showDepart: false, showDest: false, seenDemo: false, everFilled: false, focusNow: 1,
     startName: '出发地', ivS: '学校', ivH: '出发地', ivDots: [],
     rows: [], tdIndex: -1, tripCount: 0,
     planned: false, used: '–', budget: 4, remain: '–', okN: 0, edgeN: 0, badN: 0,
@@ -286,7 +286,7 @@ Page({
     this.setData({
       schoolInput: S.station.name, departInput: S.station.name,
       ivS: S.station.name, ivH: H.station.name, startName: S.station.name,
-      showStart: true, showDepart: true, showDest: true, planned: false, seenDemo: true,
+      showStart: true, showDepart: true, showDest: true, planned: false, seenDemo: true, everFilled: true, focusNow: 0,
     });
     this.saveSchool();
     this.renderAll();
@@ -303,7 +303,7 @@ Page({
       success: res => {
         if (!res.confirm) return;
         state.school = null;
-        this.setData({ schoolInput: '', ivS: '学校', showStart: false, showDepart: false, showDest: false, planned: false, seenDemo: false });
+        this.setData({ schoolInput: '', ivS: '学校', showStart: false, showDepart: false, showDest: false, planned: false, focusNow: 1 });
         this.setStatus('请输入新的学校城市');
       },
     });
@@ -527,7 +527,7 @@ Page({
     // 自动选初始区间端点: 依次尝试候选, 跳过与学校同城者
     const picked = pickInitialHome(state.school);
     state.home = picked.station;
-    this.setData({ schoolInput: q, ivS: state.school.name, ivH: picked.station.name, showStart: true });
+    this.setData({ schoolInput: q, ivS: state.school.name, ivH: picked.station.name, showStart: true, focusNow: 2, everFilled: true });
     this.saveSchool(); // 记住学校, 下次免输入
     this.setStatus('学校：' + state.school.name + '（区间端点自动选为 ' + picked.station.name + '），填出发地');
   },

@@ -7,43 +7,22 @@
     <text class="status-txt">{{status}}</text>
   </view>
 
-  <!-- 首次进入: 引导 + 一键示例(免输入即可完整体验; 也可自行填写) -->
-  <view class="card show guide-card" wx:if="{{!showStart && !seenDemo}}">
-    <view class="card-head">
-      <text class="step-no">✨</text>
-      <text class="card-tt">第一次来？看这里</text>
-    </view>
-
-    <view class="guide-block">
-      <view class="guide-title">📝 怎么填（共 3 步）</view>
-      <view class="guide-item"><text class="guide-no">1</text><view>填<b>学校</b>所在的城市（与学信网一致，例如"北京"）</view></view>
-      <view class="guide-item"><text class="guide-no">2</text><view>填<b>家庭所在地</b>（优惠区间的另一头，例如"武汉"）<text class="guide-sub">这两点连成的范围，就是你学生票能买的地方</text></view></view>
-      <view class="guide-item"><text class="guide-no">3</text><view>填<b>想去哪</b>（可加多个），点「一键规划」看能不能买</view></view>
-    </view>
-
-    <view class="guide-block">
-      <view class="guide-title">🔗 别人分享给你？</view>
-      <view class="guide-item"><text class="guide-no">↗</text><view>直接点开分享卡片就会自动填好学校和区间，你只需继续添加想去的地方</view></view>
-    </view>
-
-    <view class="guide-block">
-      <view class="guide-title">📖 区间在哪看</view>
-      <view class="guide-item"><text class="guide-no">→</text><view>「家庭所在地」按<text class="hl">学生资质里填的城市</text>写（不是你现在住哪）；填完会用橙色/红色标出哪些地方买不了，并按需给出改区间的建议</view></view>
-    </view>
-
-    <button hover-class="bh" class="btn primary" bindtap="loadDemo">先看一个示例（免填写）</button>
-    <view class="demo-or">或直接在下面开始填写 ↓</view>
+  <!-- 首次进入: 只提示当前这一步(聚焦输入框 + 一行文字); 不整页展示说明 -->
+  <view class="first-tip" wx:if="{{!everFilled && !showStart}}">
+    <text class="ft-ico">👋</text>
+    <text class="ft-txt">第一次来？按 1→2→3 填就行，每步都有说明</text>
+    <text class="ft-link" catchtap="loadDemo">看示例</text>
   </view>
 
   <!-- ============ 步骤1: 学校 ============ -->
-  <view class="card {{seenDemo||showStart?'show':''}}">
+  <view class="card show">
     <view class="card-head">
       <text class="step-no">1</text>
       <text class="card-tt">学校</text>
     </view>
     <block wx:if="{{!showStart}}">
-      <input class="ipt" value="{{schoolInput}}" bindinput="onSchoolInput" bindconfirm="nextSchool" placeholder="请输入学校所在城市或车站（如：北京）"/>
-      <view class="field-hint">填学校所在城市，例如「北京」；与学信网一致</view>
+      <input class="ipt" value="{{schoolInput}}" bindinput="onSchoolInput" bindconfirm="nextSchool" focus="{{focusNow===1}}" placeholder="学校所在城市，如：北京"/>
+      <view class="field-hint">填<b>你学生资质上写的学校城市</b>（与学信网一致），例：北京</view>
       <button hover-class="bh" class="btn primary" bindtap="nextSchool">下一步</button>
     </block>
     <block wx:else>
@@ -62,7 +41,7 @@
       <text class="card-tt">出发地</text>
     </view>
     <block wx:if="{{!showDepart}}">
-      <input class="ipt" value="{{departInput}}" bindinput="onDepartInput" bindconfirm="nextStart" placeholder="留空默认从学校出发"/>
+      <input class="ipt" value="{{departInput}}" bindinput="onDepartInput" bindconfirm="nextStart" focus="{{focusNow===2}}" placeholder="留空默认从学校出发"/>
       <view class="field-hint">你这次行程<b>实际从哪出发</b></view>
       <button hover-class="bh" class="btn primary" bindtap="nextStart">下一步</button>
     </block>

@@ -59,24 +59,19 @@ page { background: #F0F2F5; }
   display: flex; align-items: center; justify-content: center;
   font-size: 28rpx; box-sizing: border-box;
 }
-.field-hint { font-size: 22rpx; color: #9CA3AF; margin: 14rpx 0 4rpx; line-height: 1.6; }
+.field-hint { font-size: 23rpx; color: #6B7280; margin: 14rpx 0 4rpx; line-height: 1.6; }
+.field-hint b { color: #2563EB; font-weight: 700; }
 .field-hint .hl { color: #2563EB; font-weight: 600; }
 
-/* 首次进入: 引导 + 一键示例卡 */
-.demo-tip { font-size: 24rpx; color: #6B7280; line-height: 1.7; margin-bottom: 20rpx; }
-.demo-or { font-size: 22rpx; color: #9CA3AF; text-align: center; margin-top: 20rpx; }
-
-/* 引导块 */
-.guide-block { background: #F9FAFB; border: 1rpx solid #F3F4F6; border-radius: 20rpx; padding: 22rpx 24rpx; margin-bottom: 18rpx; }
-.guide-title { font-size: 26rpx; font-weight: 700; color: #111827; margin-bottom: 14rpx; }
-.guide-item { display: flex; align-items: flex-start; font-size: 25rpx; color: #4B5563; line-height: 1.65; margin-top: 12rpx; }
-.guide-item .guide-no {
-  flex: 0 0 auto; width: 34rpx; height: 34rpx; border-radius: 99rpx; background: #DBEAFE; color: #2563EB;
-  font-size: 21rpx; font-weight: 800; text-align: center; line-height: 34rpx; margin: 3rpx 12rpx 0 0;
+/* 首次进入: 一行提示(不占版面, 只告诉用户按步骤填) */
+.first-tip {
+  display: flex; align-items: center; background: #EFF6FF; border: 1rpx solid #BFDBFE;
+  border-radius: 18rpx; padding: 16rpx 20rpx; margin-bottom: 20rpx; font-size: 24rpx; color: #2563EB;
 }
-.guide-item b { color: #111827; }
-.guide-sub { display: block; font-size: 22rpx; color: #9CA3AF; margin-top: 2rpx; }
-.guide-item .hl { color: #2563EB; font-weight: 600; }
+.first-tip .ft-ico { flex: 0 0 auto; margin-right: 10rpx; }
+.first-tip .ft-txt { flex: 1; line-height: 1.5; }
+.first-tip .ft-link { flex: 0 0 auto; color: #2563EB; font-weight: 700; text-decoration: underline; margin-left: 12rpx; }
+.demo-or { font-size: 22rpx; color: #9CA3AF; text-align: center; margin-top: 20rpx; }
 
 /* 按钮 */
 .btn {
