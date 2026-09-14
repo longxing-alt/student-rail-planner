@@ -13,7 +13,7 @@
       <text class="step-no">✨</text>
       <text class="card-tt">先用示例看结果</text>
     </view>
-    <view class="demo-tip">点下方按钮载入一组演示数据（学校 北京 · 家 武汉 · 目的地 广州/上海），直接查看区间判定、消耗次数与海报分享；也可在下一步自行填写。</view>
+    <view class="demo-tip">点下方按钮载入一组演示数据（学校 北京 · 家 武汉 · 目的地 石家庄/长沙），直接查看区间判定着色、中转建议、消耗次数与海报分享；也可在下一步自行填写。</view>
     <button hover-class="bh" class="btn primary" bindtap="loadDemo">一键载入示例并查看结果</button>
     <view class="demo-or">或自行填写（学校 → 出发地 → 想去哪）</view>
   </view>

@@ -262,17 +262,20 @@ Page({
     state.home = picked.station;
     this.setData({ schoolInput: r.station.name, ivS: r.station.name, ivH: picked.station.name, showStart: true });
   },
-  /* 一键示例: 免输入直达完整结果(供首次体验/审核体验用; 走的是与正常流程完全相同的逻辑) */
+  /* 一键示例: 免输入直达完整结果(供首次体验/审核体验用; 走的是与正常流程完全相同的逻辑)
+   * 选 石家庄(区间内直达=绿) + 长沙(需中转=橙) → 一次展示两种判定与中转推荐
+   * 注: 不刻意制造"超区间=红"——bestRoute 会优先让更多段落在区间内, 红在优化后本就少见,
+   *     硬凑会偏离真实使用场景 */
   loadDemo() {
     logOp("载入示例");
-    var S = resolveSync('北京'), H = resolveSync('武汉'), D1 = resolveSync('广州'), D2 = resolveSync('上海');
+    var S = resolveSync('北京'), H = resolveSync('武汉'), D1 = resolveSync('石家庄'), D2 = resolveSync('长沙');
     if (!S || !H || !D1 || !D2) { this.setStatus('示例数据不可用，请手动填写'); return; }
     state.school = S.station;
     state.home = H.station;
     state.depart = S.station;              // 从学校出发
     state.trips = [
-      { id: ++state._tid, text: '广州', point: D1.point, station: D1.station },
-      { id: ++state._tid, text: '上海', point: D2.point, station: D2.station },
+      { id: ++state._tid, text: '石家庄', point: D1.point, station: D1.station },
+      { id: ++state._tid, text: '长沙', point: D2.point, station: D2.station },
     ];
     this.hubOverride = {};
     this.setData({
@@ -283,7 +286,7 @@ Page({
     this.saveSchool();
     this.renderAll();
     this.onPlan();                          // 直接出一键规划结果(与用户点击同一入口)
-    this.setStatus('示例：' + S.station.name + ' ⇄ ' + H.station.name + '，去 广州/上海 — 可直接查看判定与海报', true);
+    this.setStatus('示例：' + S.station.name + ' ⇄ ' + H.station.name + '，去 石家庄/长沙 — 已着色并给出中转建议，可直接查看与分享海报', true);
   },
 
   /* 修改学校需二次确认(区间端点是合规关键, 防止误改) */

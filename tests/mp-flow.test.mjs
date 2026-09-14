@@ -331,8 +331,12 @@ const flow = async () => {
   check('初始状态 seenDemo=false(首次进入显示示例入口)', p12.data.seenDemo === false);
   p12.loadDemo.call(p12); await sync();
   check('一键示例后直接出结果(planned=true)', p12.data.planned === true);
-  check('一键示例后有目的地', p12.data.tripCount === 2, p12.data.tripCount);
-  check('一键示例后有判定着色', p12.data.rows.some(r => r.boxCls !== ''), p12.data.rows.map(r => r.boxCls));
+  check("一键示例后有目的地", p12.data.tripCount === 2, p12.data.tripCount);
+  const demoCls = p12.data.rows.map(r => r.boxCls);
+  check('一键示例后有判定着色', demoCls.every(c => c !== ''), demoCls);
+  // 示例须展示工具的核心价值: 能出的段 + 不能出的段 都被判定出来(真实结果, 不造假)
+  check('示例同时含可出段与不可出段', demoCls.includes('edge') && demoCls.includes('bad'), demoCls);
+  check('示例展示中转建议(核心能力)', p12.data.rows.some(r => r.hub), p12.data.rows.map(r => r.hub));
   check('一键示例后 seenDemo=true(示例入口收起)', p12.data.seenDemo === true);
   check('一键示例后区间为 北京西⇄武汉', /北京/.test(p12.data.ivS) && /武汉/.test(p12.data.ivH), p12.data.ivS + '⇄' + p12.data.ivH);
 
