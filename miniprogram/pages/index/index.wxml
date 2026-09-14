@@ -11,7 +11,7 @@
   <view class="first-tip" wx:if="{{!everFilled && !showStart}}">
     <text class="ft-ico">👋</text>
     <text class="ft-txt">第一次来？让它自动演示一遍怎么填</text>
-    <text class="ft-link" catchtap="playDemo">▶ 看示例</text>
+    <text class="ft-link" catchtap="startDemo">▶ 看示例</text>
   </view>
 
   <!-- 演示进行中: 步骤指示 + 跳过 -->
@@ -28,7 +28,7 @@
     </view>
     <block wx:if="{{!showStart}}">
       <input class="ipt" value="{{schoolInput}}" bindinput="onSchoolInput" bindconfirm="nextSchool" focus="{{focusNow===1}}" placeholder="学校所在城市，如：北京"/>
-      <view class="field-hint">填<b>你学生资质上写的学校城市</b>（与学信网一致），例：北京</view>
+      <view class="field-hint">填学校所在城市，例如「北京」；与学信网一致</view>
       <button hover-class="bh" class="btn primary" bindtap="nextSchool">下一步</button>
     </block>
     <block wx:else>

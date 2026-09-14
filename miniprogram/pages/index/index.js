@@ -268,10 +268,16 @@ Page({
     state.home = picked.station;
     this.setData({ schoolInput: r.station.name, ivS: r.station.name, ivH: picked.station.name, showStart: true });
   },
+  /* 示例入口(供 WXML catchtap 绑定): 事件对象不能当参数传进 playDemo,
+   * 否则 fast 被事件对象顶成 truthy → 直接跳到结果(实测踩过这个坑) */
+  startDemo() { this.playDemo(false); },
+
   /* ---------- 示例: 逐步自动演示(动效引导) ----------
    * 不直接跳到结果, 而是按 ①填学校 → ②填出发地 → ③加目的地 → 规划 自动走一遍,
-   * 让用户看清怎么填; 演示中可随时点"跳过"直接看结果。 */
+   * 让用户看清怎么填; 演示中可随时点"跳过"直接看结果。
+   * @param {boolean} fast 仅内部/测试用: true=立即填齐出结果 */
   playDemo(fast) {
+    fast = (fast === true);                       // 只认显式 true; 事件对象等一律按逐步演示
     logOp("示例演示");
     this._demoCancel();
     state.school = null; state.home = null; state.depart = null; state.trips = [];

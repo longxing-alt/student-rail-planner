@@ -310,10 +310,10 @@ const flow = async () => {
   const wxmlSrc = fs.readFileSync(path.join(root, 'miniprogram/pages/index/index.wxml'), 'utf8');
   const jsSrc2 = fs.readFileSync(path.join(root, 'miniprogram/pages/index/index.js'), 'utf8');
   // 首次进入必须有示例入口, 否则审核员看到空白表单会判"无法完整体验"
-  check('首屏存在示例入口', /playDemo/.test(wxmlSrc), '需 catchtap="playDemo"');
+  check('首屏存在示例入口', /startDemo/.test(wxmlSrc), '需 catchtap="startDemo"');
   // 首次进入显示一行提示(含"看示例"入口), 不整页铺开说明
   check('首屏有首次提示行', /class="first-tip"/.test(wxmlSrc));
-  check('提示行含"看示例"入口', /catchtap="playDemo"/.test(wxmlSrc));
+  check('提示行含"看示例"入口', /catchtap="startDemo"/.test(wxmlSrc));
   check('提示行仅在未填写时出现', /first-tip" wx:if="\{\{!everFilled && !showStart\}\}"/.test(wxmlSrc));
   // 示例 = 逐步自动演示(动效引导), 复用现有 nextSchool/nextStart/addTrip/onPlan
   const demoFn = jsSrc2.match(/playDemo\(fast\)\s*\{[\s\S]*?\n  \},/);
@@ -328,6 +328,9 @@ const flow = async () => {
   check('_demoFillAll 已实现', !!fillFn);
   if (fillFn) check('补齐路径复用 onPlan', /this\.onPlan\(\)/.test(fillFn[0]));
   check('演示可跳过(skipDemo)', /skipDemo\(\)/.test(jsSrc2));
+  // 防回归: catchtap 会传事件对象, 若直接当 fast 会跳步; 必须只认显式 true
+  check('playDemo 只认显式 true 作为 fast', /fast = \(fast === true\)/.test(jsSrc2));
+  check('存在独立入口 startDemo(传 false)', /startDemo\(\)\s*\{\s*this\.playDemo\(false\)/.test(jsSrc2));
   check('演示条在 WXML 中', /class="demo-bar"/.test(wxmlSrc));
   check('步骤卡片有 pulse 高亮位', /pulseStep===\d\?'pulse'/.test(wxmlSrc));
   // 无登录/无账号体系(3.3.4 不适用) 且无网络请求
@@ -343,7 +346,7 @@ const flow = async () => {
   // 逐步演示的中间状态: 起始应 pulse 步骤1 且未出结果
   const p12b = inst();
   await p12b.onLoad.call(p12b); await sync();
-  p12b.playDemo.call(p12b, false); await sync();
+  p12b.startDemo.call(p12b, { type: 'tap' }); await sync();   // 模拟真实点击(传事件对象)
   check('演示开始: pulse 步骤1 且未规划', p12b.data.pulseStep === 1 && p12b.data.planned === false, p12b.data.pulseStep);
   check('演示开始: 显示演示条', p12b.data.demoPlaying === true);
   p12b.skipDemo.call(p12b); await sync();
