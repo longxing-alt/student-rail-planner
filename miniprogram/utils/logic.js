@@ -589,10 +589,14 @@ function chainV2(S, H, stList, rStart, rEnd, fast) {
       // 首段 发站→T 两端在区间内; T→终到 段放行(含例外区/超带远站); 计次=全程1次(实测武汉→拉萨经郑州)
       let bestT = null, bestVia = Infinity;
       for (const sc of STATIONS) {
-        if (sc[4] !== 1) continue; // 12306 中转站=枢纽级
         const T = { name: sc[0], city: sc[1], lat: sc[2], lon: sc[3] };
-        if (T.name === A.name || T.name === B.name || T.name === H.name || T.name === S.name) continue;
-        if (T.city === A.city || T.city === B.city || T.city === S.city || T.city === H.city) continue; // 同城=没换地方, 不算中转
+        // 中转站资格: 枢纽级 或 区间端点本身
+        // (实测 滁州⇄蚌埠→徐州东: 经蚌埠(非枢纽, 但是区间端点)可出, 且绕行148km < 经南京南352km)
+        const isEnd = (T.name === H.name || T.name === S.name);
+        if (sc[4] !== 1 && !isEnd) continue;   // 非枢纽且非端点 → 不作中转(实测: 信阳东被排除)
+        if (T.name === A.name || T.name === B.name) continue;   // 起终点自身不算中转
+        if (T.city === A.city || T.city === B.city) continue;   // 与起终点同城=没换地方
+        if (!isEnd && (T.city === S.city || T.city === H.city)) continue; // 端点按站名判定, 不按同城排除
         if (!bandOK(S, H, T)) continue;
         const via = dist(A, T) + dist(T, B);
         if (via < bestVia) { bestVia = via; bestT = T.name; }
