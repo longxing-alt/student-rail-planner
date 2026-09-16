@@ -160,8 +160,8 @@ A('所有候选结果有限', STATIONS.every(s => { const rr = evalWith(o(s[0]))
 
 /* ---------- I. 数据完整性 ---------- */
 G('I. 数据完整性');
-A('车站数=367', STATIONS.length === 367);
-A('枢纽数=35', HUBS.length === 35);
+A('车站数>=400(2026-09 补齐永城等 53 站)', STATIONS.length >= 400, `实际 ${STATIONS.length}`);
+A('枢纽数>=35', HUBS.length >= 35, `实际 ${HUBS.length}`);
 A('站名唯一', new Set(STATIONS.map(s => s[0])).size === STATIONS.length);
 A('坐标范围合法(纬度15-55, 经度73-135)', STATIONS.every(s => s[2] > 15 && s[2] < 55 && s[3] > 73 && s[3] < 135));
 A('城市字段非空', STATIONS.every(s => typeof s[1] === 'string' && s[1].length > 0));

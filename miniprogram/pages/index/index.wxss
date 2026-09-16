@@ -165,7 +165,13 @@ page { background: #F0F2F5; }
 .dest.ok .status { color: #15803D; }
 .dest.edge .status { color: #C2410C; }
 .dest.bad .status { color: #B91C1C; }
-.x { flex: 0 0 auto; color: #C4C4CC; font-size: 26rpx; padding: 6rpx 10rpx; margin-left: auto; }
+.x {
+  flex: 0 0 auto; color: #C4C4CC; font-size: 30rpx; margin-left: auto;
+  /* 删除热区: 实测“叉点不了” → 至少 64rpx 方可稳定点中 */
+  min-width: 64rpx; height: 64rpx; line-height: 64rpx; text-align: center;
+  border-radius: 99rpx;
+  display: flex; align-items: center; justify-content: center;
+}
 .dest .status + .x { margin-left: 0; }
 
 /* 中转候选 */
@@ -255,7 +261,14 @@ page { background: #F0F2F5; }
   box-shadow: 0 24rpx 70rpx rgba(0,0,0,.28); animation: fadeInUp .3s ease-out both;
 }
 .dialog-title { font-size: 32rpx; font-weight: 800; color: #111827; margin-bottom: 22rpx; position: relative; }
-.dialog-close { position: absolute; right: 0; top: -6rpx; font-size: 30rpx; color: #9CA3AF; padding: 8rpx 12rpx; }
+
+/* 弹窗关闭: 原为 <text> 节点, 点击热区仅字宽(实测“叉点不了”) → 改为 view + 至少 72rpx 点击热区 */
+.dialog-close {
+  position: absolute; right: -12rpx; top: -14rpx;
+  min-width: 72rpx; height: 72rpx; line-height: 68rpx; text-align: center;
+  font-size: 34rpx; color: #9CA3AF; border-radius: 99rpx;
+}
+.dialog-close:active { background: #F3F4F6; }
 .m-line { font-size: 27rpx; line-height: 1.85; color: #4B5563; }
 .m-line b { color: #111827; }
 .m-line .red { color: #EF4444; font-weight: 600; }

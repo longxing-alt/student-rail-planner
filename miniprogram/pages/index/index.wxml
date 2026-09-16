@@ -53,6 +53,10 @@
     </block>
     <block wx:else>
       <view class="ro-row"><text class="ro-name">{{startName}}</text><text class="ro-tag">行程起点</text></view>
+      <view class="sub-row">
+        <text class="sub-txt">本次行程从这里出发（优惠区间端点不受影响）</text>
+        <text class="link" catchtap="changeDepart">修改出发地</text>
+      </view>
     </block>
   </view>
 
@@ -97,7 +101,7 @@
             <text class="name" style="flex:0 0 auto;font-size:30rpx;font-weight:600;color:#111827">{{item.text}}</text>
             <text class="tkt" wx:if="{{item.tkt}}" style="flex:1;min-width:0;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;font-size:22rpx;color:#9CA3AF;margin-left:16rpx">{{item.tkt}}</text>
             <text class="status" wx:if="{{item.status}}" style="flex:0 0 auto;font-size:22rpx;color:#6B7280;margin-left:auto;padding-left:12rpx">{{item.status}}</text>
-            <text class="x" data-id="{{item.id}}" catchtap="removeTrip" style="flex:0 0 auto;padding:4rpx 0 4rpx 16rpx;font-size:28rpx;color:#C4C4CC">✕</text>
+            <view class="x" data-id="{{item.id}}" catchtap="removeTrip" hover-class="bh">✕</view>
           </view>
           <view wx:if="{{item.hubs.length}}" style="width:100%;margin-top:14rpx">
             <text style="font-size:22rpx;color:#9CA3AF">中转可选：</text>
@@ -155,7 +159,7 @@
   <!-- ============ 弹窗: 区间优化建议 ============ -->
   <view class="mask" wx:if="{{modal.show}}" bindtap="closeModal">
     <view class="dialog" catchtap="noop">
-      <view class="dialog-title">🎯 区间优化建议<text class="dialog-close" catchtap="closeModal">✕</text></view>
+      <view class="dialog-title">🎯 区间优化建议<view class="dialog-close" catchtap="closeModal" hover-class="bh">✕</view></view>
       <view class="dialog-body">
         <block wx:if="{{modal.suggest}}">
           <view class="m-line">你的优惠区间<b>太小了</b>，有些想去的地方买不了学生票（<text class="b2">红</text>）或要中途换车（<text class="e2">橙</text>）。</view>
@@ -183,7 +187,7 @@
   <!-- ============ 弹窗: 次数明细 ============ -->
   <view class="mask" wx:if="{{cntTip.show}}" bindtap="closeCntTip">
     <view class="dialog" catchtap="noop">
-      <view class="dialog-title">🎫 次数明细<text class="dialog-close" catchtap="closeCntTip">✕</text></view>
+      <view class="dialog-title">🎫 次数明细<view class="dialog-close" catchtap="closeCntTip" hover-class="bh">✕</view></view>
       <view class="dialog-body">
         <view class="m-line" wx:for="{{cntTip.lines}}" wx:key="*this">{{item}}</view>
         <view class="m-note">每程=1张票：直达到达计 1 次，中转联程（同一程内）仍计该程 1 次。区间外程不计学生优惠。</view>
@@ -198,7 +202,7 @@
   <!-- ============ 弹窗: 中转购买说明 ============ -->
   <view class="mask" wx:if="{{tfm.show}}" bindtap="closeTfm">
     <view class="dialog" catchtap="noop">
-      <view class="dialog-title">⇄ 中转购买说明<text class="dialog-close" catchtap="closeTfm">✕</text></view>
+      <view class="dialog-title">⇄ 中转购买说明<view class="dialog-close" catchtap="closeTfm" hover-class="bh">✕</view></view>
       <view class="dialog-body" wx:if="{{tfm.step===1}}">
         <view class="m-line"><b>区间不用改</b>：保持<b>优惠区间 {{tfm.S}} ⇄ {{tfm.H}}</b> 不变，只做中转。</view>
       </view>
@@ -227,7 +231,7 @@
   <!-- ============ 弹窗: 分享图片(海报) ============ -->
   <view class="mask" wx:if="{{poster.show}}" bindtap="closePoster">
     <view class="dialog poster-dialog" catchtap="noop">
-      <view class="dialog-title">🖼 分享图片<text class="dialog-close" catchtap="closePoster">✕</text></view>
+      <view class="dialog-title">🖼 分享图片<view class="dialog-close" catchtap="closePoster" hover-class="bh">✕</view></view>
       <view class="poster-wrap">
         <image wx:if="{{poster.path}}" class="poster-img" src="{{poster.path}}" mode="widthFix"/>
         <view wx:else class="poster-loading">正在生成海报…</view>

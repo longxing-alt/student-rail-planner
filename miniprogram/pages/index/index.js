@@ -362,6 +362,21 @@ Page({
     });
   },
 
+  /* 修改出发地(行程起点): 一键规划后也能改 —— 之前只有只读行, 用户反馈"点了规划不能再改出发地"。
+   * 与"修改学校"不同: 出发地不是优惠区间端点, 只影响行程起点, 无需合规二次确认。 */
+  changeDepart() {
+    logOp("修改出发地");
+    const cur = state.depart ? state.depart.name : '';
+    this.setData({
+      showDepart: false,
+      departInput: cur,
+      planned: false,
+      focusNow: 2,
+    });
+    this.renderAll();
+    this.setStatus('修改出发地：清空则默认从学校（' + (state.school ? state.school.name : '学校') + '）出发');
+  },
+
   /* ---------- 图片分享(海报): 生成 → 预览 → 保存相册 ---------- */
   openPoster() {
     if (!state.school || (!state.depart && !state.home)) { this.setStatus('先完成学校与出发地，再生成海报'); return; }
@@ -566,7 +581,12 @@ Page({
   /* 输入 */
   onSchoolInput(e) { this.setData({ schoolInput: e.detail.value }); },
   onDepartInput(e) { this.setData({ departInput: e.detail.value }); },
-  onTripInput(e) { this.setData({ tripInput: e.detail.value }); },
+  /* 输入目的地时自动收起建议弹窗: 规划后弹窗会盖住页面, 用户想继续添加会点不到输入框 */
+  onTripInput(e) {
+    const patch = { tripInput: e.detail.value };
+    if (this.data.modal && this.data.modal.show) patch['modal.show'] = false;
+    this.setData(patch);
+  },
 
   /* 步骤1 学校 → 步骤2 出发地 */
   async nextSchool() {
@@ -620,7 +640,12 @@ Page({
   },
   removeTrip(e) {
     logOp("删除目的地");
-    state.trips = state.trips.filter(t => t.id !== e.currentTarget.dataset.id);
+    // WXML dataset 回传的是字符串, 而 trip.id 是数字 —— 必须显式转换, 否则 filter 永不命中(实测点不掉)
+    const id = Number(e && e.currentTarget && e.currentTarget.dataset ? e.currentTarget.dataset.id : NaN);
+    if (!isFinite(id)) return;
+    const before = state.trips.length;
+    state.trips = state.trips.filter(t => Number(t.id) !== id);
+    if (state.trips.length === before) return; // 未命中(异常 dataset) → 不做无意义重绘
     this.setData({ planned: false });
     this.renderAll();
     this.setStatus('已删除（改动后请重新【一键规划】）');
