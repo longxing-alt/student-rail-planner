@@ -20,3 +20,4 @@ verify-data/rules-notes.md
 railgo/config.local.js
 railgo/.env
 railgo/*.local.js
+.work/
