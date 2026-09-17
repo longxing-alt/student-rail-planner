@@ -140,8 +140,12 @@ state.trips = [
   { id: 7, station: 武汉, round: true }, { id: 8, station: 武汉, round: true },
 ];
 r = evalWith(贵阳北);
-A('8行程=13次/覆盖7(广州全价, 西安在走廊内直达)', r.used === 13 && r.covered === 7 && r.fail === 1);
-A('广州(终点超区间)=全价', r.perTrip[1].plan.mode === 'full');
+// 2026-09-16 按用户 12306 实测重定: 家侧系数 0.4→0.44(实测窗口[0.4313,1.1229)),
+// 广州南 p/L=0.4268 落在新带内 → 判直达可出(旧断言 13次系 0.4 模型输出, 无实测依据)
+// 待复验: 北京西⇄贵阳北 去 广州南 (该样本是 0.44 的决定性样本)
+A('8行程=15次/覆盖8(全部直达, 含广州南)', r.used === 15 && r.covered === 8 && r.fail === 0);
+A('广州南(家侧端点外 p/L=0.4268)=直达', r.perTrip[1].plan.mode === 'direct');
+// 注: 原断言为 '全价', 已按 2026-09-16 实测调整(见上注释)
 A('无北京南北上绕行中转(2026-08 端点外收紧: 南向区间不北上绕行)', !r.perTrip.some(t => t.plan.mode === 'transfer' && t.plan.station && t.plan.station.name === '北京南'));
 A('北京(0km)直达', r.perTrip[0].plan.mode === 'direct' && r.perTrip[0].plan.direct === 0);
 A('西安(走廊内)=直达1次', r.perTrip[3].plan.mode === 'direct' && r.perTrip[3].used === 1);
@@ -154,8 +158,8 @@ const best = STATIONS.map(s => {
   return { name: s[0], used: rr.used, covered: rr.covered };
 }).filter(c => c.name !== '北京西' && c.covered >= Math.max(1, cur.covered))
   .sort((a, b) => a.used - b.used || b.covered - a.covered)[0];
-A('智能最优 ≤ 当前 13 次', best.used <= 13, `实际 ${best.name} ${best.used}次`);
-A('智能最优保持覆盖 ≥7', best.covered >= 7);
+A('智能最优 ≤ 当前 15 次', best.used <= 15, `实际 ${best.name} ${best.used}次`);
+A('智能最优保持覆盖 ≥8', best.covered >= 8);
 A('所有候选结果有限', STATIONS.every(s => { const rr = evalWith(o(s[0])); return isFinite(rr.used) && isFinite(rr.covered); }));
 
 /* ---------- I. 数据完整性 ---------- */

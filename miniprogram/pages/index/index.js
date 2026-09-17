@@ -908,17 +908,33 @@ Page({
     // 消耗次数(联程: 全程可出=1次/往返2次)
     const okN = cc ? cc.okN : 0;
     const badN = cc ? cc.segs.length - cc.okN : 0;
-    // 计次: 连续可出段=同一趟行程(无绕路,非往返)→1次; 区间外断程会切分行程; 往返×2
+    // 计次规则(实测 N1+N2: 往返=两张单程=合计 2 次):
+    //   同一趟联程内无折返 -> 合并计 1 次
+    //   折返(下一段方向回头) -> 断开成新行程, 各自 1 次
+    //   区间外段 -> 不计次且断开行程
+    //   整条标往返 -> ×2
     const roundAll = state.trips.some(t => t.round);
     const runs = [];
     let cur = [];
     if (cc) cc.segs.forEach((sg, i) => {
-      if (i < state.trips.length && sg.ok) { cur.push(i); }
-      else if (cur.length) { runs.push(cur); cur = []; }
+      const segOk = i < state.trips.length && sg.ok;
+      if (!segOk) { if (cur.length) { runs.push(cur); cur = []; } return; }
+      // 折返检测: 本段方向与上一段相反(点积<0) → 不能并成同一趟联程
+      let fold = false;
+      if (i > 0) {
+        const p = cc.segs[i - 1];
+        if (p && p.a && p.b && sg.b) {
+          fold = (p.b.lon - p.a.lon) * (sg.b.lon - p.b.lon)
+               + (p.b.lat - p.a.lat) * (sg.b.lat - p.b.lat) < 0;
+        }
+      }
+      if (fold && cur.length) { runs.push(cur); cur = []; }
+      cur.push(i);
     });
     if (cur.length) runs.push(cur);
     this._ticketRuns = runs;
-    const used = Math.max(1, runs.length) * (roundAll ? 2 : 1);
+    // 无可出段 -> 0 次(原 Math.max(1,·) 会误报 1 次)
+    const used = runs.length * (roundAll ? 2 : 1);
     this.setData({
       ivS: S ? S.name : '学校', ivH: H ? H.name : '出发地', ivDots,
       startName: state.depart ? state.depart.name : '出发地',

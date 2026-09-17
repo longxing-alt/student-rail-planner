@@ -117,6 +117,31 @@ const flow = async () => {
   const closeCss = (wxss.match(/\.dialog-close\s*\{[^}]*\}/) || [''])[0];
   check(' 点击热区 >= 64rpx(实测好点)', /min-width:\s*(6[4-9]|[7-9]\d|\d{3,})rpx/.test(closeCss) && /height:\s*(6[4-9]|[7-9]\d|\d{3,})rpx/.test(closeCss), closeCss.replace(/\s+/g, ' '));
 
+  console.log('\n== ⑤ 计次: 往返不能误算成 1 次 ==');
+  // 用例来自用户反馈"有些往返被记成了一次"
+  {
+    reset();
+    const q = inst();
+    await q.onLoad.call(q); await sync();
+    q.setData({ schoolInput: '厦门' }); await q.nextSchool.call(q); await sync();
+    const sjz = logic.stToObj(logic.stationOf('石家庄'));
+    logic.state.home = sjz;
+    q.setData({ departInput: '厦门' }); await q.nextStart.call(q); await sync();
+
+    const plan = async (names) => {
+      logic.state.trips = []; q.setData({ planned: false });
+      for (const n of names) { q.setData({ tripInput: n }); await q.addTrip.call(q); await sync(); }
+      q.onPlan.call(q); await sync();
+      return q.data.used;
+    };
+    const single = await plan(['石家庄']);
+    check('单程(厦门→石家庄) = 1 次', single === 1, single);
+    const round = await plan(['石家庄', '厦门']);
+    check('往返(厦门→石家庄→厦门) = 2 次', round === 2, round);
+    const three = await plan(['石家庄', '武汉', '厦门']);
+    check('三程折返(厦门→石→武汉→厦门) = 2 次', three === 2, three);
+  }
+
   console.log('\n结果: ' + passed + ' 通过, ' + failed + ' 失败');
   process.exit(failed ? 1 : 0);
 };
