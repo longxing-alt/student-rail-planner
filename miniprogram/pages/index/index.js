@@ -123,22 +123,29 @@ function hubsOf(S, H, dep) {
   return out.slice(0, 8);
 }
 
-/* 联程路由(与网页 routeChainAt 一致): 出发地=起点; 单程不回程; 全程往返才回程 */
-function mpChain(S, H, trips, fast) {
+/* 联程路由(与网页 routeChainAt 一致): 出发地=起点; 单程不回程; 全程往返才回程
+ * robust=true 时段判定走稳健口径(不走极短区间同城圈捷径), 供区间推荐排序 */
+function mpChain(S, H, trips, fast, robust) {
   const dep = state.depart || H;
   const hasRound = Array.isArray(trips) && trips.length && trips[0] && typeof trips[0]==='object' && 'round' in trips[0] ? trips.some(t=>t.round) : false;
   const arr = (Array.isArray(trips) && trips.length && trips[0] && trips[0].station) ? trips.map(t=>t.station) : trips;
-  if (hasRound) return logic.chainV2(S, H, arr, dep, dep, fast);
-  if (!arr || !arr.length) return logic.chainV2(S, H, [], dep, dep, fast);
-  return logic.chainV2(S, H, arr.slice(0,-1), dep, arr[arr.length-1], fast);
+  if (hasRound) return logic.chainV2(S, H, arr, dep, dep, fast, robust);
+  if (!arr || !arr.length) return logic.chainV2(S, H, [], dep, dep, fast, robust);
+  return logic.chainV2(S, H, arr.slice(0,-1), dep, arr[arr.length-1], fast, robust);
 }
 
 /* 最优区间端点(联程): 枚举全部车站, 联程段覆盖(okN)优先 → 平局按 段端点p/L最小 → 距当前端点近
+ * 排序分两级口径(2026-09-19 实测 郑州⇄新乡→天津 被拦 后引入):
+ *   coverR = 稳健覆盖: 不依赖"极短区间同城圈600km"退化分支(chainV2 robust 口径) —— 可作为推荐依据
+ *   coverL = 展示覆盖: 界面同一口径(含同城圈/中转兜底)
+ * 排序: 稳健覆盖 → 展示覆盖 → 直达段多 → 区间短(改家就近不绕远) → p/L小 → 距当前家近
+ *   (旧版 p/L 平局在前, 长区间 p/L 被摊薄 → 曾推荐 牡丹江/新乡 这类"覆盖数字好看但实际买不了"的端点)
+ * lowConf = 稳健覆盖 < 展示覆盖: 推荐依赖退化分支, 弹窗降级提示"把握较低"
  * 排除项: 学校同城 / 当前家同城 / 任意目的地同城 —— 把"家"安在想去的地方语义错误,
  *        只是让覆盖数字变好看, 会让用户误以为区间变大就都能买 */
 function smartBest(S, H, trips) {
-  const sts = trips.map(t => t.station);
-  const curCover = mpChain(S, H, trips, true).okN;
+  const cur = mpChain(S, H, trips, true);
+  const curCover = cur ? cur.okN : 0;
   const destCities = {};
   trips.forEach(t => { if (t.station && t.station.city) destCities[t.station.city] = 1; });
   let best = null;
@@ -149,19 +156,24 @@ function smartBest(S, H, trips) {
     if (S && s[1] === S.city) continue; // 家不能与学校同城(北京⇄北京 无法认定); 推荐跨城端点
     if (destCities[s[1]]) continue;     // 不推荐目的地作为"家"(否则会建议把家安在想去的城市)
     const H2 = { name: s[0], city: s[1], lat: s[2], lon: s[3] };
-    const cc = mpChain(S, H2, trips, true);
-    const cover = cc ? cc.okN : 0;
-    if (cover < curCover) continue;
+    const ccR = mpChain(S, H2, trips, true, true);  // 稳健口径
+    const coverR = ccR ? ccR.okN : 0;
+    const ccL = mpChain(S, H2, trips, true);        // 展示口径
+    const coverL = ccL ? ccL.okN : 0;
+    if (coverL < curCover) continue;    // 不推荐比当前展示覆盖更差的端点
     const Lh = dist(S, H2);
     let pMax = 0, dirN = 0;
-    for (const sg of (cc ? cc.segs : [])) {
+    for (const sg of (ccR ? ccR.segs : [])) {
       if (sg.inInt) { dirN++; const { p } = corridor(S, H2, sg.b); pMax = Math.max(pMax, p / (Lh || 1)); }
     }
     const km = dist({ lat: s[2], lon: s[3] }, { lat: H.lat, lon: H.lon });
-    // 覆盖→直达段多→p/L小→距家近 (优先满足直达, 中转兜底)
-    if (!best || cover > best.cover || (cover === best.cover && (dirN > best.dirN || (dirN === best.dirN && (pMax < best.pMax || (pMax === best.pMax && km < best.km)))))) {
-      best = { st: { name: s[0], city: s[1], lat: s[2], lon: s[3] }, cover, dirN, pMax };
-    }
+    const better = !best || coverR > best.coverR
+      || (coverR === best.coverR && (coverL > best.coverL
+        || (coverL === best.coverL && (dirN > best.dirN
+          || (dirN === best.dirN && (Lh < best.Lh
+            || (Lh === best.Lh && (pMax < best.pMax
+              || (pMax === best.pMax && km < best.km)))))))));
+    if (better) best = { st: { name: s[0], city: s[1], lat: s[2], lon: s[3] }, coverR, coverL, dirN, pMax, Lh, lowConf: coverR < coverL };
   }
   return best;
 }
@@ -733,9 +745,9 @@ Page({
     const sts = state.trips.map(t => t.station);
     const cc0 = mpChain(S, H, state.trips, true);
     const N = cc0 ? cc0.segs.length : 0;
-    // 推荐区间端点(联程段覆盖)
+    // 推荐区间端点(联程段覆盖; 稳健口径优先, lowConf=依赖退化分支时降级提示)
     const best = smartBest(S, H, state.trips);
-    const suggest = best && best.st.name !== H.name ? best.st : null;
+    const suggest = best && best.st.name !== H.name ? Object.assign({}, best.st, { lowConf: !!best.lowConf }) : null;
     let modal = { show: true, suggest: null, g2: 0, e2: 0, b2: 0, dests: [] };
     this.setData({ 'modalFlag': '' });
     let ccAfterSuggest = null;

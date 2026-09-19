@@ -138,17 +138,17 @@ const flow = async () => {
   check('判定: 1绿5红(联程6段·按输入顺序)', p.data.okN === 1 && p.data.badN === 5);
   check('框体已着色(无空白)', p.data.rows.some(r => r.boxCls === 'bad' || r.boxCls === 'edge') && p.data.rows.every(r => r.boxCls !== ''));
   check('规划后: 行展开(圆点+状态出现)', p.data.rows.every(r => r.ring !== '' || r.status !== '' || r.hub !== '') && p.data.rows.some(r => r.status !== ''));
-  check('弹窗推荐弹出', p.data.modal.show === true && p.data.modal.suggest && p.data.modal.suggest.name === '南宁');
+  check('弹窗推荐弹出', p.data.modal.show === true && p.data.modal.suggest && p.data.modal.suggest.name === '桂林北');
   console.log('  推荐:', p.data.modal.suggest.name, '| 预览:', p.data.modal.g2 + '绿/' + p.data.modal.e2 + '橙/' + p.data.modal.b2 + '红', '| 顺序:', p.data.rows.map(r => r.text).join('→')); // 注: cap带宽(0.55L≤450km)后推荐由南宁东→崇左南
 
   console.log('== 场景3: 采用推荐区间(只改端点) ==');
   const departBefore = logic.state.depart.name;
   p.applySuggestion.call(p); await sync();
-  check('区间端点变为南宁', logic.state.home && logic.state.home.name === '南宁');
+  check('区间端点变为桂林北(2026-09-19 排序修正: 稳健覆盖优先+区间短优先, 同覆盖平局由南宁改判桂林北; 模型输出无实测依据)', logic.state.home && logic.state.home.name === '桂林北');
   check('出发地保持不变', logic.state.depart.name === departBefore);
   check('弹窗关闭', p.data.modal.show === false);
   check('颜色按新区间: 4绿0橙2红(联程6段·含2中转)', p.data.okN === 4 && p.data.edgeN === 0 && p.data.badN === 2);
-  check('区间线右端更新', p.data.ivH === '南宁');
+  check('区间线右端更新', p.data.ivH === '桂林北');
 
   console.log('== 场景4: 规划后可添加(卡片回灰) + 清空 ==');
   p.setData({ tripInput: '苏州' });
@@ -366,6 +366,28 @@ const flow = async () => {
   p12.changeSchool.call(p12); await sync();
   check('修改学校后 everFilled 保持 true(首次提示不重现)', p12.data.everFilled === true);
   check('修改学校后聚焦步骤1', p12.data.focusNow === 1, p12.data.focusNow);
+
+  console.log('== 场景9: 郑州/郑州 → 天津/青岛/日照 推荐(2026-09-19 用户实测回归) ==');
+  // 用户实测: 线上版推荐"把家改到新乡", 但区间 郑州⇄新乡 买不了 郑州→天津(12306 拦"区间不符")
+  // 根因: 极短区间"同城圈600km"退化分支被推荐当覆盖依据 + 排序 p/L 平局偏向长区间(牡丹江)
+  // 修复: smartBest 稳健口径(coverR)优先 → 期望推荐 烟台(稳健覆盖3段, 区间最短)
+  resetState();
+  const p13 = inst();
+  await p13.onLoad.call(p13); await sync();
+  p13.setData({ schoolInput: '郑州' }); await p13.nextSchool.call(p13); await sync();
+  p13.setData({ departInput: '郑州' }); await p13.nextStart.call(p13); await sync();
+  for (const c of ['天津', '青岛', '日照']) {
+    p13.setData({ tripInput: c });
+    await p13.addTrip.call(p13); await sync();
+  }
+  p13.onPlan.call(p13); await sync();
+  const sgg = p13.data.modal.suggest;
+  check('弹窗推荐存在', !!sgg, p13.data.modal);
+  check('推荐不落在同城圈退化候选(新乡/开封/兰考)', !!sgg && !['新乡东', '新乡', '开封北', '开封', '兰考南', '兰考'].includes(sgg.name), sgg && sgg.name);
+  check('推荐不落在长区间摊薄候选(牡丹江)', !!sgg && sgg.city !== '牡丹江', sgg && sgg.name);
+  check('推荐为稳健覆盖端点 烟台(模型锁定, 非实测; 实测依据=走廊带0.44L边界样本)', !!sgg && sgg.city === '烟台', sgg && sgg.name);
+  check('推荐不标低把握(稳健覆盖=展示覆盖)', !!sgg && !sgg.lowConf, sgg && sgg.lowConf);
+  check('预览: 3 个能买直达', p13.data.modal.g2 === 3 && p13.data.modal.b2 === 0, p13.data.modal.g2 + '/' + p13.data.modal.b2);
 
   console.log('\n结果: ' + passed + ' 通过, ' + failed + ' 失败');
   process.exit(failed ? 1 : 0);

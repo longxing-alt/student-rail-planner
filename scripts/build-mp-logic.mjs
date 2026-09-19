@@ -17,7 +17,7 @@ const out = body + `
 module.exports = {
   STATIONS, HUBS, state,
   hav, dist, corridor, inIntervalBelt, directCovered,
-  bandOK, chanOK, beltV2, railAdj, nearOK, chainV2,
+  bandOK, chanOK, beltV2, bandOKStrict, chanOKStrict, beltV2Robust, railAdj, nearOK, chainV2,
   planTrip, transferPlan, planOneWay, evalWith, evalAll,
   chainEval, chainEndPoint, chainMidStations, chainEvalCurrent, planGroups, foldBackBadStation,
   cleanCity, stationOf, nearestStation, stToObj,

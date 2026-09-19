@@ -271,4 +271,27 @@ A('M8 终点=家锚点 → 1组1次', m8.groups.length === 1 && m8.used === 1);
 
 A('M9 空链 → null', planGroups(null) === null);
 
+/* ---------- N. BLK2 区间级例外 + 稳健口径（2026-09-19 实测） ---------- */
+G('N. BLK2 例外 + beltV2Robust 稳健口径');
+const { beltV2, beltV2Robust } = new Function(code[1] + '\nreturn { beltV2, beltV2Robust };')();
+// 实测: 区间 郑州⇄新乡(67km), 票面 郑州→天津(578km≤600) 12306 拦"区间不符"
+// —— 推翻"极短区间同城圈600km"普适性, 走 BLK2(依据见 verify-data/rules-notes.md 2026-09-19 节)
+A('N1 郑州⇄新乡 → 天津 拦(BLK2, 用户实测)', beltV2(o('郑州东'), o('新乡东'), o('天津')) === 0);
+A('N2 稳健口径同判: beltV2Robust(郑州⇄新乡,天津)=0', beltV2Robust(o('郑州东'), o('新乡东'), o('天津'), true) === 0);
+// 稳健口径只应收紧、不得放宽: L≥105 时与 beltV2 完全一致(下列样本区间均 ≥300km)
+const ROBUST_PAIRS = [
+  ['郑州东', '武汉', '广州南'], ['武汉', '长沙南', '广州南'],
+  ['北京西', '贵阳北', '广州南'],
+];
+let robSame = true;
+for (const [s, h, d] of ROBUST_PAIRS) {
+  if (beltV2Robust(o(s), o(h), o(d), true) !== beltV2(o(s), o(h), o(d), true)) robSame = false;
+}
+A('N3 L≥105 样本 beltV2Robust 与 beltV2 一致(不放宽)', robSame);
+// 同城圈实测样本在 beltV2(展示口径) 下保持原判(广佛/苏沪 放行未被误伤)
+A('N4 苏州⇄上海 → 武汉 仍判可出(实测可出, 展示口径不变)', beltV2(o('苏州'), o('上海'), o('武汉')) === 2);
+A('N4b 广州⇄佛山西 → 深圳 仍判可出(实测可出, 展示口径不变)', beltV2(o('广州'), o('佛山西'), o('深圳')) === 2);
+A('N5 稳健口径收紧: 郑州⇄新乡 → 日照西 不再因600km捷径判可出(旧版=2)', beltV2Robust(o('郑州东'), o('新乡东'), o('日照西'), true) === 0);
+A('N6 BLK2 不误伤同区间其它目的地', beltV2(o('郑州东'), o('新乡东'), o('新乡东')) === 2);
+
 done();

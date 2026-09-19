@@ -457,6 +457,10 @@ const BLK2 = [
   // 2026-09-16 实测: 区间 成都⇄黄石, 票面 黄石→哈尔滨 经 武汉/合肥/北京/襄阳 全拒(区间不符)
   //   destT=1.981, destP=1771km —— 目的地远超端点, 中转也救不了
   ['成都', '黄石', '哈尔滨'],
+  // 2026-09-19 实测: 区间 郑州⇄新乡(L=67km), 票面 郑州→天津(距端点578km≤600) 12306 拦"区间不符"
+  //   推翻"极短区间同城圈600km"的普适性: 苏沪→武汉596 可出 / 郑新乡→天津578 拦, 无半径阈值可同时满足
+  //   固执反例按惯例走 BLK2; 区间推荐排序改用 beltV2Robust(不依赖该退化分支)
+  ['郑州', '新乡', '天津'],
 ];
 const RAIL_LINES = [
   ['哈尔滨', '长春', '沈阳', '北京'],                         // 京哈
@@ -644,6 +648,35 @@ function beltV2(S, H, P, fast) {
   if (isBlack(S, H, P)) return 0;
   if (dist(S, P) <= 40 || dist(H, P) <= 40) return 2; // 端点近邻/同城(实测 长株潭25/广佛25km; 50→40 防虎门→深圳北41km 泄漏)
   if (bandOK(S, H, P) && chanOK(S, H, P)) return 2;
+  return (!fast && nearOK(S, H).has(P.name)) ? 2 : 0;
+}
+
+/* ---------- 稳健口径(仅供区间推荐排序, 不替代出票判定 beltV2) ----------
+ * bandOK 的 L<105 分支("极短区间同城圈": 端点600km内放行)仅由 广佛/苏沪 两组实测支撑,
+ * 2026-09-19 用户实测 郑州⇄新乡(L=67km)→天津(578km≤600) 被 12306 拦"区间不符" ——
+ * 该退化分支不能作为"改家建议"的覆盖依据。稳健口径 = 同一套 t/p 走廊带 + 通道网,
+ * 但不走极短区间捷径; 只会比 beltV2 更严(L≥105 时与 beltV2 完全一致)。 */
+function bandOKStrict(S, H, P) {
+  const L = dist(S, H);
+  if (L < 15) return dist(S, P) <= 50;
+  const { t, p } = corridor(S, H, P);
+  if (t > 1.2) return false;
+  if (t < -0.15 && dist(S, P) > 150) return false;
+  const w = (t < 0) ? Math.max(250, 0.2 * L)
+    : (t > 1) ? Math.max(75, 0.44 * L)
+    : Math.max(60, 0.55 * L);
+  return p <= w;
+}
+function chanOKStrict(S, H, P) {
+  if (dist(S, H) < 150) return bandOKStrict(S, H, P); // chanOK 在 L<150 时退化为 bandOK(含600km捷径) → 换稳健空间带
+  return chanOK(S, H, P);
+}
+function beltV2Robust(S, H, P, fast) {
+  if (!S || !H || !P) return 0;
+  if (isBlack(S, H, P)) return 0;
+  if (dist(S, P) <= 40 || dist(H, P) <= 40) return 2;
+  if (dist(S, H) >= 105) return beltV2(S, H, P, fast); // L≥105 本就无捷径, 直接复用
+  if (bandOKStrict(S, H, P) && chanOKStrict(S, H, P)) return 2;
   return (!fast && nearOK(S, H).has(P.name)) ? 2 : 0;
 }
 
@@ -836,18 +869,21 @@ function nearestStation(pt, maxKm) {
   return best;
 }
 function stToObj(s) { return s ? { name: s[0], city: s[1], lat: s[2], lon: s[3], hub: !!s[4] } : null; }
-/* 联程路线判定(实测v2): 起点→…→终点 逐段两端均须在区间内(beltV2); 锚点站同样判定 */
-function chainV2(S, H, stList, rStart, rEnd, fast) {
+/* 联程路线判定(实测v2): 起点→…→终点 逐段两端均须在区间内(beltV2); 锚点站同样判定
+ * robust=true 时用稳健口径 beltV2Robust/bandOKStrict(不走极短区间捷径, 供区间推荐排序) */
+function chainV2(S, H, stList, rStart, rEnd, fast, robust) {
   if (!S || !H) return null;
+  const belt = robust ? beltV2Robust : beltV2;
+  const band = robust ? bandOKStrict : bandOK;
   const start = rStart || S, end = rEnd || H;
   const pts = [start, ...(stList || []), end];
   const segs = [];
   for (let i = 0; i < pts.length - 1; i++) {
     const A = pts[i], B = pts[i + 1];
     const seg = { a: A, b: B, km: dist(A, B), inInt: false, hub: null };
-    if (beltV2(S, H, A, fast) === 2 && beltV2(S, H, B, fast) === 2) {
+    if (belt(S, H, A, fast) === 2 && belt(S, H, B, fast) === 2) {
       seg.inInt = true; // 直达: 两端均区间内
-    } else if (beltV2(S, H, A, fast) === 2 && !isBLK2(S, H, B)) {
+    } else if (belt(S, H, A, fast) === 2 && !isBLK2(S, H, B)) {
       // 中转可出(17点实测): 发站在区间内 + 唯一中转站T∈空间带(bandOK; 图外襄阳/武昌同城亦可用)
       // 首段 发站→T 两端在区间内; T→终到 段放行(含例外区/超带远站); 计次=全程1次(实测武汉→拉萨经郑州)
       let bestT = null, bestVia = Infinity;
@@ -860,7 +896,7 @@ function chainV2(S, H, stList, rStart, rEnd, fast) {
         if (T.name === A.name || T.name === B.name) continue;   // 起终点自身不算中转
         if (T.city === A.city || T.city === B.city) continue;   // 与起终点同城=没换地方
         if (!isEnd && (T.city === S.city || T.city === H.city)) continue; // 端点按站名判定, 不按同城排除
-        if (!bandOK(S, H, T)) continue;
+        if (!band(S, H, T)) continue;
         const via = dist(A, T) + dist(T, B);
         if (via < bestVia) { bestVia = via; bestT = T.name; }
       }
