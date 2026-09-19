@@ -506,9 +506,11 @@ function beltV2Robust(S, H, P, fast) {
   if (!S || !H || !P) return 0;
   if (isBlack(S, H, P)) return 0;
   if (dist(S, P) <= 40 || dist(H, P) <= 40) return 2;
-  if (dist(S, H) >= 105) return beltV2(S, H, P, fast); // L≥105 本就无捷径, 直接复用
-  if (bandOKStrict(S, H, P) && chanOKStrict(S, H, P)) return 2;
-  return (!fast && nearOK(S, H).has(P.name)) ? 2 : 0;
+  // L≥105 本就无捷径, 直接复用(fast=true 跳过 nearOK 传播, 口径统一从严)
+  if (dist(S, H) >= 105) return beltV2(S, H, P, true);
+  // 不走 nearOK 传播: 其种子来自宽松 bandOK(含同城圈捷径), 会把退化覆盖漏进稳健口径
+  //   (实测: 小程序打包后 xhs 链 fast 为空, 开封北 经 nearOK 重新拿满 3 段 —— 2026-09-19)
+  return (bandOKStrict(S, H, P) && chanOKStrict(S, H, P)) ? 2 : 0;
 }
 
 /* 端点内(t∈[0,1])允许宽带; 越出端点(t>1或t<0)仅允许贴线(实测: 越过端点偏离即拦截, 如 武汉↔广州→深圳) */
