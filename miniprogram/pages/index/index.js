@@ -411,20 +411,34 @@ Page({
       const info = res && res[0];
       if (!info || !info.node) { self.setStatus('海报生成失败(画布不可用)'); return; }
       const canvas = info.node;
-      const W = 600, H = this._posterH((this.data.rows || []).slice(0, 6).length); // 设计尺寸(px)
-      const dpr = (wx.getWindowInfo && wx.getWindowInfo().dpr) || 2;
-      canvas.width = W * dpr; canvas.height = H * dpr;
-      const ctx = canvas.getContext('2d');
-      ctx.scale(dpr, dpr);
-      self._posterCanvas = canvas;
-      self.paintPoster(ctx, W, H, () => {
-        wx.canvasToTempFilePath({
-          canvas: canvas,
-          success: r => self.setData({ 'poster.path': r.tempFilePath }),
-          fail: () => self.setStatus('海报导出失败，请重试'),
+      // 先预载码图再绘制: paintPoster 内同步画码, done 时必已画完, 无异步竞态
+      self._ensureQr(canvas, () => {
+        const W = 600, H = self._posterH((self.data.rows || []).slice(0, 6).length); // 设计尺寸(px)
+        const dpr = (wx.getWindowInfo && wx.getWindowInfo().dpr) || 2;
+        canvas.width = W * dpr; canvas.height = H * dpr;
+        const ctx = canvas.getContext('2d');
+        ctx.scale(dpr, dpr);
+        self._posterCanvas = canvas;
+        self.paintPoster(ctx, W, H, () => {
+          wx.canvasToTempFilePath({
+            canvas: canvas,
+            success: r => self.setData({ 'poster.path': r.tempFilePath }),
+            fail: () => self.setStatus('海报导出失败，请重试'),
+          });
         });
       });
     });
+  },
+  /* 码图预载: createImage 直接用包内路径(不走 getImageInfo —— 它返回的临时路径
+   * 被页面实例缓存后, 重新编译/临时文件过期会让码图静默消失, 2026-09-19 实测);
+   * 图像对象按 canvas 缓存复用, 失败时 paintPoster 以白底+文字兜底 */
+  _ensureQr(canvas, cb) {
+    if (this._qrImg && this._qrCanvas === canvas) return cb();
+    const img = canvas.createImage ? canvas.createImage() : null;
+    if (!img) return cb();
+    img.onload = () => { this._qrImg = img; this._qrCanvas = canvas; cb(); };
+    img.onerror = () => cb();
+    img.src = '/images/qrcode.png';
   },
 
   /* 海报 v2(2026-09-19): 按分享卡片设计稿重绘 —— 总次数显示 + 区间大字 + 紧凑时间线, 减少留白 */
@@ -553,27 +567,23 @@ Page({
       const t = (state.trips.map(x2 => x2.text).join(' → ')) || '（未添加目的地）';
       ctx.fillText(t.length > 22 ? t.slice(0, 22) + '…' : t, cx, rowsY0 + 20);
     }
-    // 底部: 免责声明 + 小程序码
+    // 底部: 免责声明 + 小程序码(码图已由 _ensureQr 预载, 此处同步绘制)
     ctx.fillStyle = 'rgba(255,255,255,.92)'; ctx.font = '15px sans-serif';
     ctx.fillText('判定基于实测数据推算', 36, H - 60);
     ctx.fillText('实际以 12306 出票为准', 36, H - 36);
     ctx.fillStyle = '#ffffff';
     this._rr(ctx, qx, qy, qr, qr, 18); ctx.fill();
-    this.loadQr(canvas, img => {
-      if (img) {
-        ctx.fillStyle = '#ffffff';
-        this._rr(ctx, qx, qy, qr, qr, 18); ctx.fill();
-        try { ctx.drawImage(img, qx + 6, qy + 6, qr - 12, qr - 12); } catch (e) { /* 绘制失败保留白底 */ }
-      } else {
-        ctx.fillStyle = '#d4d4d8'; ctx.font = '14px sans-serif'; ctx.textAlign = 'center';
-        ctx.fillText('小程序码', qx + qr / 2, qy + qr / 2 + 5);
-        ctx.textAlign = 'left';
-      }
-      ctx.fillStyle = 'rgba(255,255,255,.85)'; ctx.font = '13px sans-serif'; ctx.textAlign = 'center';
-      ctx.fillText('长按识别小程序', qx + qr / 2, qy + qr + 18);
+    if (this._qrImg) {
+      try { ctx.drawImage(this._qrImg, qx + 6, qy + 6, qr - 12, qr - 12); } catch (e) { /* 绘制失败保留白底 */ }
+    } else {
+      ctx.fillStyle = '#d4d4d8'; ctx.font = '14px sans-serif'; ctx.textAlign = 'center';
+      ctx.fillText('小程序码', qx + qr / 2, qy + qr / 2 + 5);
       ctx.textAlign = 'left';
-      if (done) done();
-    });
+    }
+    ctx.fillStyle = 'rgba(255,255,255,.85)'; ctx.font = '13px sans-serif'; ctx.textAlign = 'center';
+    ctx.fillText('长按识别小程序', qx + qr / 2, qy + qr + 18);
+    ctx.textAlign = 'left';
+    if (done) done();
   },
 
   /* 圆角矩形路径(quadraticCurveTo 兜底, 不依赖 ctx.roundRect/arcTo) */
@@ -592,27 +602,6 @@ Page({
     ctx.closePath();
   },
 
-  /* 载入小程序码: 先用 getImageInfo 解析包内路径(缓存), 再按当前 canvas 建图片对象
-   * canvas 2d 的图片对象与 canvas 绑定, 换 canvas 必须重建, 故只缓存路径 */
-  loadQr(canvas, cb) {
-    const mk = (p, retry) => {
-      const img = canvas && canvas.createImage ? canvas.createImage() : null;
-      if (!img) return cb(null);
-      img.onload = () => cb(img);
-      img.onerror = () => { if (retry) mk(retry, null); else cb(null); };
-      img.src = p;
-    };
-    if (this._qrPath) return mk(this._qrPath, null);
-    const direct = '/images/qrcode.png';
-    if (!wx.getImageInfo) return mk(direct, null);
-    wx.getImageInfo({
-      src: direct,
-      success: r => { this._qrPath = (r && r.path) || direct; mk(this._qrPath, direct); },
-      fail: () => mk(direct, null),
-    });
-  },
-
-  /* 保存海报到相册(含授权处理) */
   savePoster() {
     const self = this;
     const path = this.data.poster.path;
