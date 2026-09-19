@@ -398,6 +398,12 @@ Page({
   closePoster() { this.setData({ 'poster.show': false }); },
 
   /* 用 canvas 2d 绘制方案海报(纯本地绘制, 不联网) */
+  /* 海报高度随内容自适应: 目的地少时整张变短(预览 image 用 widthFix, 位图变矮即真实变矮) */
+  _posterH(rowsN) {
+    const rowsTotal = rowsN ? rowsN * (56 + 10) - 10 : 40;   // rowH+rowGap, 与 paintPoster 保持一致
+    const cardBottom = 132 + 232 + rowsTotal + 24;           // cardTop+PAD..gap4 段高(232) + padB
+    return Math.max(660, Math.min(900, cardBottom + 170 + 30)); // + 底部落款区(码118+注18+间距) + 余量
+  },
   drawPoster() {
     const self = this;
     const q = wx.createSelectorQuery();
@@ -405,7 +411,7 @@ Page({
       const info = res && res[0];
       if (!info || !info.node) { self.setStatus('海报生成失败(画布不可用)'); return; }
       const canvas = info.node;
-      const W = 600, H = 900;                 // 设计尺寸(px)
+      const W = 600, H = this._posterH((this.data.rows || []).slice(0, 6).length); // 设计尺寸(px)
       const dpr = (wx.getWindowInfo && wx.getWindowInfo().dpr) || 2;
       canvas.width = W * dpr; canvas.height = H * dpr;
       const ctx = canvas.getContext('2d');
@@ -428,6 +434,7 @@ Page({
     const planned = this.data.planned;
     const used = this.data.used;
     const rowsAll = (this.data.rows || []).slice(0, 6);
+    H = this._posterH(rowsAll.length);
     const ivSname = S ? S.name : '学校';
     const ivHname = state.home ? state.home.name : ((state.depart || state.home) ? (state.depart || state.home).name : '出发地');
     // 背景: 对角渐变 + 光晕(同心圆近似) + 点阵
@@ -475,8 +482,8 @@ Page({
     const fs = Math.max(22, Math.floor(42 * Math.min(1, maxHalf / Math.max(wS, wH2, 1))));
     ctx.font = 'bold ' + fs + 'px sans-serif'; ctx.fillStyle = '#111827';
     ctx.textAlign = 'center';
-    ctx.fillText(ivSname, cardX + PAD + maxHalf, ivBase);
-    ctx.fillText(ivHname, cardX + cardW - PAD - maxHalf, ivBase);
+    ctx.fillText(ivSname, cardX + PAD + maxHalf / 2, ivBase);
+    ctx.fillText(ivHname, cardX + cardW - PAD - maxHalf / 2, ivBase);
     ctx.textAlign = 'left';
     const mpX = cardX + cardW / 2 - midW / 2, mpY = ivBase - 32;
     ctx.fillStyle = '#ffffff'; ctx.strokeStyle = '#DBEAFE'; ctx.lineWidth = 2;

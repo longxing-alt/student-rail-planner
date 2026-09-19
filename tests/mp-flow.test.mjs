@@ -259,6 +259,7 @@ const flow = async () => {
   check('小程序码已绘制到海报上', fakeWx._drawn.length >= 1, fakeWx._drawn.length);
   check('海报显示总次数(计次 v3)', fakeWx._texts.some(t => /总次数：/.test(t)), fakeWx._texts.filter(t => /总次数/.test(t)));
   check('海报区间大字绘制(学校名+家端点名)', fakeWx._texts.some(t => t === '北京西') && fakeWx._texts.some(t => t === '武汉'), fakeWx._texts.slice(0, 8));
+  check('海报高度随内容自适应(1 目的地更短, 5 目的更高)', p10._posterH(1) <= 700 && p10._posterH(5) > p10._posterH(1), p10._posterH(1) + '/' + p10._posterH(5));
   check('码图绘制区域为 106x106 方块(留白边)', fakeWx._drawn.length >= 1 && fakeWx._drawn[0][3] === 106 && fakeWx._drawn[0][4] === 106, fakeWx._drawn[0] && fakeWx._drawn[0].slice(3));
   let saved = false;
   fakeWx.saveImageToPhotosAlbum = o => { saved = true; o.success && o.success({ errMsg: 'ok' }); };
