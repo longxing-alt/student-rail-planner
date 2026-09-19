@@ -818,7 +818,9 @@ function chainEvalCurrent() {
   return chainEval(S, H, chainMidStations(), start, end);
 }
 /* 最优分段规划: 整条无法联程时, 切成 连续区间内段(每组合1次联程) + 全价段, 总次数最少
-   组断开条件: 段超区间 / 段间折返(方向回头) / 组内累计绕行超 ratio */
+   组断开条件: 段超区间 / 段间折返(方向回头) / 组内累计绕行超 ratio
+   计次 v3(2026-09-19): 闭环组(终点回到本组起点≤40km, 三角形/环形)按往返计 2;
+   chainRound 仍整体 ×2(网页端回程段不入链, 维持原口径) */
 function planGroups(cc) {
   const c = cc || chainEvalCurrent();
   if (!c) return null;
@@ -834,17 +836,21 @@ function planGroups(cc) {
       fold = (A.lon - p0.lon) * (B.lon - A.lon) + (A.lat - p0.lat) * (B.lat - A.lat) < 0;
     }
     if (!sg.inInt) { cur = null; full.push(sg); return; }
-    if (fold) { // 折返: 不能与前段合并, 但本段可自成一组联程
-      if (sg.km / dist(S, B) <= state.ratio) { cur = { segs: [sg], total: sg.km }; groups.push(cur); }
+    if (fold) { // 折返: 不能与前段合并, 但本段可自成一组联程(分母=本段起点→终点; 回程段 B≈S 时旧分母为 0)
+      if (sg.km / (dist(A, B) || 1) <= state.ratio) { cur = { segs: [sg], total: sg.km, i0: i, i1: i }; groups.push(cur); }
       else { cur = null; full.push(sg); }
       return;
     }
-    const ratioOk = ((cur ? cur.total : 0) + sg.km) / dist(S, B) <= state.ratio;
-    if (cur && ratioOk) { cur.segs.push(sg); cur.total += sg.km; return; }
-    if (sg.km / dist(S, B) <= state.ratio) { cur = { segs: [sg], total: sg.km }; groups.push(cur); }
+    const ratioOk = ((cur ? cur.total : 0) + sg.km) / ((cur ? dist(pts[cur.i0], B) : dist(A, B)) || 1) <= state.ratio;
+    if (cur && ratioOk) { cur.segs.push(sg); cur.total += sg.km; cur.i1 = i; return; }
+    if (sg.km / (dist(A, B) || 1) <= state.ratio) { cur = { segs: [sg], total: sg.km, i0: i, i1: i }; groups.push(cur); }
     else { cur = null; full.push(sg); }
   });
-  return { groups, full, used: groups.length * (state.chainRound ? 2 : 1) };
+  const used = groups.reduce((s, g) => {
+    const pA = pts[g.i0], pB = pts[g.i1 + 1];
+    return s + (pA && pB && dist(pA, pB) <= 40 ? 2 : 1);
+  }, 0) * (state.chainRound ? 2 : 1);
+  return { groups, full, used };
 }
 function foldBackBadStation(c) {
   /* 折返能否靠排序修复: 按投影顺路排序后仍折返 → 返回出问题的站名(排序救不了); 否则 null(可排序修复) */
@@ -1092,14 +1098,25 @@ function renderResult(){
   const hubN=cc.segs.filter(sg=>sg.hub).length;
   const dirN=cc.segs.filter(sg=>sg.inInt).length;
   // 计次: 连续可出段=同一趟行程(无绕路,非往返)→1次; 区间外断程切分; 往返×2
+  /* 计次 v3(2026-09-19): 涉及往返一律 2 次 —— 回程段参与切分计次(去1+回1=往返2),
+     折返切分各趟各1(A→C+C→B=2), 闭环趟(终点≈本趟起点≤40km, 三角形/环形)计 2, 区间外段不计次断开 */
   const okRuns = [];
   let curR = [];
   cc.segs.forEach((sg, i) => {
-    if (i < state.trips.length && sg.ok) curR.push(i);
-    else if (curR.length) { okRuns.push(curR); curR = []; }
+    if (!sg.ok) { if (curR.length) { okRuns.push(curR); curR = []; } return; }
+    let fold = false;
+    if (curR.length) {
+      const p = cc.segs[curR[curR.length - 1]];
+      fold = (p.b.lon - p.a.lon) * (sg.b.lon - p.b.lon) + (p.b.lat - p.a.lat) * (sg.b.lat - p.b.lat) < 0;
+    }
+    if (fold) { okRuns.push(curR); curR = []; }
+    curR.push(i);
   });
   if (curR.length) okRuns.push(curR);
-  used = Math.max(1, okRuns.length) * (roundAny() ? 2 : 1);
+  used = okRuns.reduce((s, run) => {
+    const a0 = cc.segs[run[0]].a, bN = cc.segs[run[run.length - 1]].b;
+    return s + (a0 && bN && dist(a0, bN) <= 40 ? 2 : 1);
+  }, 0);
   remain = Math.max(0, state.budget - used);
   tfmHubs=cc.segs.map(sg=>sg.hub?hubsInBand(S,H):[]);
   const hubLineHtml=hubN?('<div style="font-size:11px;color:var(--warn);font-weight:600;margin-top:2px">中转 '+hubN+' 段：'+cc.segs.map((sg,i)=>sg.hub?('第'+(i+1)+'程 经'+esc(sg.hub)):null).filter(Boolean).join('、')+'</div>'):'';
@@ -1108,7 +1125,7 @@ function renderResult(){
     '<div class="sum">'+
     (cc.okAll?(cc.segs.some(s=>s.lowConf)?'联程全程可出 · ⚠含未实测近邻中转':'联程全程可出'):'<b>'+okN+'/'+N+'</b> 段可出 · '+(N-okN)+' 段需另购')+
     hubLineHtml+
-    '<div style="font-size:11px;color:var(--ok);font-weight:600;margin-top:2px">连续联程（无绕路·非往返）：'+okRuns.length+' 趟行程 · 共 '+used+' 次'+(roundAny()?'（往返×2）':'')+' · 剩余 '+remain+' 次</div>'+
+    '<div style="font-size:11px;color:var(--ok);font-weight:600;margin-top:2px">联程 '+okRuns.length+' 趟行程 · 共 '+used+' 次'+(roundAny()?'（含往返）':'')+' · 剩余 '+remain+' 次</div>'+
     '<div style="font-size:11.5px;color:var(--mut);font-weight:500;margin-top:2px">其中 直达 '+dirN+' 段 · 数优先直达，实在没有才用中转</div>'+
     '</div><div class="note">出发地 '+esc((state.depart||H).name)+' · 区间 '+esc(S.name)+' ⇄ '+esc(H.name)+' · '+
     (cc.okAll?'全程联程 <b>'+used+'</b> 次 · 剩余 <b>'+remain+'</b> 次':'按 分段/搭桥 另计')+'</div>';
@@ -1164,11 +1181,13 @@ function renderResult(){
       const segs = run.map(j => cc.segs[j]);
       const path = segs.map(x => esc(x.a.name) + '→' + esc(x.b.name)).join('→');
       const tags = segs.map(x => x.inInt ? '直达' : '中转·经' + esc(x.hub)).join(' / ');
-      return '<div class="mini-row"><div class="n">行程' + (ri + 1) + ' ' + path + '</div><div class="d">全程联程（无绕路）· 计 1 次（' + tags + '）</div></div>';
+      const a0 = segs[0].a, bN = segs[segs.length - 1].b;
+      const closed = a0 && bN && dist(a0, bN) <= 40;
+      return '<div class="mini-row"><div class="n">行程' + (ri + 1) + ' ' + path + '</div><div class="d">' + (closed ? '闭环往返 · 计 2 次' : '全程联程（无绕路）· 计 1 次') + '（' + tags + '）</div></div>';
     }).join('') +
     cc.segs.filter((sg, i) => i < state.trips.length && !sg.ok).map(sg =>
       '<div class="mini-row"><div class="n">区间外 ' + esc(sg.a.name) + '→' + esc(sg.b.name) + '</div><div class="d">需购成人票（此段断开行程）</div></div>').join('') +
-    '<div style="font-size:11.5px;color:var(--mut);margin-top:6px">规则：同一趟连续行程（不折返、不往返）无论分几张票/几次中转，全程计 1 次；勾全程往返则 ×2；区间外段需成人票并断开行程。</div>'+
+    '<div style="font-size:11.5px;color:var(--mut);margin-top:6px">规则：连续行程计 1 次；往返（回程/折返/闭环）合计 2 次；区间外段需成人票并断开行程。</div>'+
     '</details>';
   html+='<details><summary>更多家端点（区间优化）</summary>'+optRows()+'</details>';
   html+='<details><summary>参数：绕远倍数（通道判定上限）</summary>'+paramHTML()+'</details>';

@@ -819,7 +819,9 @@ function chainEvalCurrent() {
   return chainEval(S, H, chainMidStations(), start, end);
 }
 /* 最优分段规划: 整条无法联程时, 切成 连续区间内段(每组合1次联程) + 全价段, 总次数最少
-   组断开条件: 段超区间 / 段间折返(方向回头) / 组内累计绕行超 ratio */
+   组断开条件: 段超区间 / 段间折返(方向回头) / 组内累计绕行超 ratio
+   计次 v3(2026-09-19): 闭环组(终点回到本组起点≤40km, 三角形/环形)按往返计 2;
+   chainRound 仍整体 ×2(网页端回程段不入链, 维持原口径) */
 function planGroups(cc) {
   const c = cc || chainEvalCurrent();
   if (!c) return null;
@@ -835,17 +837,21 @@ function planGroups(cc) {
       fold = (A.lon - p0.lon) * (B.lon - A.lon) + (A.lat - p0.lat) * (B.lat - A.lat) < 0;
     }
     if (!sg.inInt) { cur = null; full.push(sg); return; }
-    if (fold) { // 折返: 不能与前段合并, 但本段可自成一组联程
-      if (sg.km / dist(S, B) <= state.ratio) { cur = { segs: [sg], total: sg.km }; groups.push(cur); }
+    if (fold) { // 折返: 不能与前段合并, 但本段可自成一组联程(分母=本段起点→终点; 回程段 B≈S 时旧分母为 0)
+      if (sg.km / (dist(A, B) || 1) <= state.ratio) { cur = { segs: [sg], total: sg.km, i0: i, i1: i }; groups.push(cur); }
       else { cur = null; full.push(sg); }
       return;
     }
-    const ratioOk = ((cur ? cur.total : 0) + sg.km) / dist(S, B) <= state.ratio;
-    if (cur && ratioOk) { cur.segs.push(sg); cur.total += sg.km; return; }
-    if (sg.km / dist(S, B) <= state.ratio) { cur = { segs: [sg], total: sg.km }; groups.push(cur); }
+    const ratioOk = ((cur ? cur.total : 0) + sg.km) / ((cur ? dist(pts[cur.i0], B) : dist(A, B)) || 1) <= state.ratio;
+    if (cur && ratioOk) { cur.segs.push(sg); cur.total += sg.km; cur.i1 = i; return; }
+    if (sg.km / (dist(A, B) || 1) <= state.ratio) { cur = { segs: [sg], total: sg.km, i0: i, i1: i }; groups.push(cur); }
     else { cur = null; full.push(sg); }
   });
-  return { groups, full, used: groups.length * (state.chainRound ? 2 : 1) };
+  const used = groups.reduce((s, g) => {
+    const pA = pts[g.i0], pB = pts[g.i1 + 1];
+    return s + (pA && pB && dist(pA, pB) <= 40 ? 2 : 1);
+  }, 0) * (state.chainRound ? 2 : 1);
+  return { groups, full, used };
 }
 function foldBackBadStation(c) {
   /* 折返能否靠排序修复: 按投影顺路排序后仍折返 → 返回出问题的站名(排序救不了); 否则 null(可排序修复) */

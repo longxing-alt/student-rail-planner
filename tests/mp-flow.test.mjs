@@ -257,7 +257,9 @@ const flow = async () => {
   check('canvas 绘制后导出临时图片', p10.data.poster.path === '/tmp/poster.png', p10.data.poster.path);
   check('海报请求加载小程序码 /images/qrcode.png', fakeWx._drawnSrc.indexOf('/images/qrcode.png') >= 0, fakeWx._drawnSrc);
   check('小程序码已绘制到海报上', fakeWx._drawn.length >= 1, fakeWx._drawn.length);
-  check('码图绘制区域为 150x150 方块', fakeWx._drawn.length >= 1 && fakeWx._drawn[0][3] === 150 && fakeWx._drawn[0][4] === 150, fakeWx._drawn[0] && fakeWx._drawn[0].slice(3));
+  check('海报显示总次数(计次 v3)', fakeWx._texts.some(t => /总次数：/.test(t)), fakeWx._texts.filter(t => /总次数/.test(t)));
+  check('海报区间大字绘制(学校名+家端点名)', fakeWx._texts.some(t => t === '北京西') && fakeWx._texts.some(t => t === '武汉'), fakeWx._texts.slice(0, 8));
+  check('码图绘制区域为 106x106 方块(留白边)', fakeWx._drawn.length >= 1 && fakeWx._drawn[0][3] === 106 && fakeWx._drawn[0][4] === 106, fakeWx._drawn[0] && fakeWx._drawn[0].slice(3));
   let saved = false;
   fakeWx.saveImageToPhotosAlbum = o => { saved = true; o.success && o.success({ errMsg: 'ok' }); };
   p10.savePoster.call(p10); await sync();
@@ -277,8 +279,8 @@ const flow = async () => {
   check('该场景确实需要中转(前置条件)', !!(p10b.data.rows[0] && p10b.data.rows[0].hub), p10b.data.rows[0] && p10b.data.rows[0].hub);
   fakeWx._drawn = []; fakeWx._drawnSrc = []; fakeWx._texts = [];
   p10b.openPoster.call(p10b); await sync(); await sync();
-  const hubTxt = fakeWx._texts.filter(t => /中转经/.test(t));
-  check('海报绘制了中转行(含"中转经"+枢纽名)', hubTxt.length >= 1, hubTxt);
+  const hubTxt = fakeWx._texts.filter(t => /· 经/.test(t));
+  check('海报绘制了中转注记(含"· 经"+枢纽名)', hubTxt.length >= 1, hubTxt);
   check('中转行内容与 Core 判定一致', hubTxt.some(t => t.indexOf(p10b.data.rows[0].hub) >= 0), hubTxt + ' vs ' + p10b.data.rows[0].hub);
   p10b.closePoster.call(p10b);
 
@@ -388,6 +390,34 @@ const flow = async () => {
   check('推荐为稳健覆盖端点 烟台(模型锁定, 非实测; 实测依据=走廊带0.44L边界样本)', !!sgg && sgg.city === '烟台', sgg && sgg.name);
   check('推荐不标低把握(稳健覆盖=展示覆盖)', !!sgg && !sgg.lowConf, sgg && sgg.lowConf);
   check('预览: 3 个能买直达', p13.data.modal.g2 === 3 && p13.data.modal.b2 === 0, p13.data.modal.g2 + '/' + p13.data.modal.b2);
+
+  console.log('== 场景12: 计次 v3(涉及往返一律 2 次) ==');
+  // 旧口径: 回程段不计次 + 整条 ×2 —— 去程含折返时往返被算成 4 次
+  // v3: 回程段参与切分计次(去1+回1=2), 闭环趟(三角形/环形, 终点≈本趟起点≤40km)计 2
+  const mk = async (school, home, depart, trips, round) => {
+    resetState();
+    const q = inst();
+    await q.onLoad.call(q); await sync();
+    q.setData({ schoolInput: school }); await q.nextSchool.call(q); await sync();
+    if (home) logic.state.home = logic.stToObj(logic.STATIONS.find(s => s[0] === home)) || logic.state.home; // 小程序无直接输入家的入口, 测试直接设区间端点
+    q.setData({ departInput: depart }); await q.nextStart.call(q); await sync();
+    for (const c of trips) { q.setData({ tripInput: c }); await q.addTrip.call(q); await sync(); }
+    if (round) logic.state.trips.forEach(t => { t.round = true; });
+    q.onPlan.call(q); await sync();
+    return q;
+  };
+  const r1 = await mk('郑州', '商丘', '郑州', ['商丘'], true);
+  check('① 简单往返(勾选往返) = 2 次', r1.data.used === 2, r1.data.used);
+  const r2 = await mk('郑州', '商丘', '郑州', ['开封北', '商丘'], true);
+  check('② 去程含折返的往返 = 2 次(旧口径 bug: 4 次)', r2.data.used === 2, r2.data.used);
+  const r3 = await mk('厦门北', '石家庄', '石家庄', ['郑州东'], true);
+  check('③ 区间内往返 = 2 次', r3.data.used === 2, r3.data.used);
+  const r4 = await mk('郑州', '济南', '郑州', ['天津', '青岛', '济南'], true);
+  check('④ 三角形线路(含回程) = 2 次', r4.data.used === 2, r4.data.used);
+  const r5 = await mk('北京', '武汉', '北京', ['石家庄', '长沙'], false);
+  check('⑤ 多目的地单程 = 1 次(不变)', r5.data.used === 1, r5.data.used);
+  const r6 = await mk('郑州', '商丘', '郑州', ['开封北', '商丘'], false);
+  check('⑥ 单程不勾往返 = 1 次(不变)', r6.data.used === 1, r6.data.used);
 
   console.log('\n结果: ' + passed + ' 通过, ' + failed + ' 失败');
   process.exit(failed ? 1 : 0);

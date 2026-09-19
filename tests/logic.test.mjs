@@ -271,6 +271,12 @@ A('M8 终点=家锚点 → 1组1次', m8.groups.length === 1 && m8.used === 1);
 
 A('M9 空链 → null', planGroups(null) === null);
 
+/* 计次 v3(2026-09-19): 往返链(含返回段) → 2 次; 分母修正(§十二①)后回程段不再误入全价 */
+const m10 = pg(chainEval(o('武汉'), o('北京西'), [o('郑州东')], o('武汉'), o('武汉')));
+A('M10 往返链(含返回段) → 2 次(计次 v3)', m10.used === 2, `used=${m10.used}`);
+const m10b = pg(chainEval(o('武汉'), o('北京西'), [o('郑州东')]));
+A('M10b 单程仍 = 1 次', m10b.used === 1, `used=${m10b.used}`);
+
 /* ---------- N. BLK2 区间级例外 + 稳健口径（2026-09-19 实测） ---------- */
 G('N. BLK2 例外 + beltV2Robust 稳健口径');
 const { beltV2, beltV2Robust } = new Function(code[1] + '\nreturn { beltV2, beltV2Robust };')();
