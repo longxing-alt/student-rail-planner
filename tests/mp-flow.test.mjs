@@ -307,7 +307,9 @@ const flow = async () => {
   check('输入框字号 >= 28rpx(打字看得清)', fsIpt >= 28, fsIpt);
   const wxml = fs.readFileSync(path.join(root, 'miniprogram/pages/index/index.wxml'), 'utf8');
   check('三处输入框均用 .ipt(样式统一生效)', (wxml.match(/class="ipt"/g) || []).length === 3, (wxml.match(/class="ipt"/g) || []).length);
-  check('海报绘制未残留旧的 _qrImg 缓存写法', !/this\._qrImg/.test(pageSrc));
+  // 2026-09-19: 码图改 _ensureQr 预载(canvas.createImage 包内路径直读), 旧 getImageInfo 临时路径缓存已移除
+  check('码图不再经 getImageInfo 临时路径(防码图消失回归)', !/getImageInfo/.test(pageSrc) && !/this\._qrPath/.test(pageSrc));
+  check('码图预载缓存写法就位(_qrImg/_ensureQr)', /this\._qrImg/.test(pageSrc) && /_ensureQr/.test(pageSrc));
 
   console.log('\n== 场景12: 首次进入可完整体验(审核合规) ==');
   const wxmlSrc = fs.readFileSync(path.join(root, 'miniprogram/pages/index/index.wxml'), 'utf8');
